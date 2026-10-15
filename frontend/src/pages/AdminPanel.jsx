@@ -16,6 +16,9 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState('');
 
+  // Batch Operations Scope
+  const [batchScope, setBatchScope] = useState('ALL');
+
   // Filtering for Solutions & Judge Control Tab
   const [selectedDomain, setSelectedDomain] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
@@ -146,7 +149,11 @@ export default function AdminPanel() {
   };
 
   // Unique domains
-  const domains = ['ALL', ...Array.from(new Set(solutions.map(s => s.domain).filter(Boolean)))];
+  const domains = ['ALL', ...Array.from(new Set((solutions.length ? solutions : cases).map(s => s.domain).filter(Boolean)))];
+
+  const targetScopeCount = batchScope === 'ALL'
+    ? (solutions.length || cases.length)
+    : (solutions.filter(s => s.domain === batchScope).length || cases.filter(c => c.domain === batchScope).length);
 
   // Filtered solutions
   const filteredSolutions = solutions.filter(s => {
@@ -188,6 +195,177 @@ export default function AdminPanel() {
             {statusMsg}
           </div>
         )}
+      </div>
+
+      {/* BATCH DOMAIN & ANTI-CHEAT OPERATIONS HUB (PERMANENTLY VISIBLE) */}
+      <div className="bg-forensic-900 border border-forensic-750 rounded-xl p-5 shadow-2xl space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-forensic-800">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-amber-400" />
+              <h2 className="text-base font-bold font-mono text-white tracking-wide">
+                BATCH DOMAIN & ANTI-CHEAT OPERATIONS HUB
+              </h2>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950/80 border border-amber-600/60 text-amber-300">
+                GLOBAL CONTROLS
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 font-mono mt-1">
+              One-click batch operations for strict anti-cheat clipboard lockdown, sandboxed judge execution, and test feedback policies.
+            </p>
+          </div>
+
+          {/* Scope Selector */}
+          <div className="flex flex-wrap items-center gap-2 bg-forensic-950 px-3.5 py-2 rounded-lg border border-forensic-800">
+            <span className="text-xs text-slate-400 font-mono whitespace-nowrap">Target Scope:</span>
+            <select
+              value={batchScope}
+              onChange={(e) => setBatchScope(e.target.value)}
+              className="bg-forensic-900 text-forensic-cyan font-mono text-xs font-bold px-3 py-1.5 rounded border border-forensic-700 focus:outline-none focus:border-cyan-400"
+            >
+              <option value="ALL">ALL (All {cases.length} Problems - Platform-wide Exam Lockdown)</option>
+              {domains.filter(d => d !== 'ALL').map(d => (
+                <option key={d} value={d}>
+                  Domain: {d} ({cases.filter(c => c.domain === d).length} problems)
+                </option>
+              ))}
+            </select>
+            <span className="text-[11px] font-mono font-bold text-cyan-300 bg-cyan-950/80 px-2.5 py-1 rounded border border-cyan-800 whitespace-nowrap">
+              Affects: {targetScopeCount} Problems
+            </span>
+          </div>
+        </div>
+
+        {/* 3 Main Action Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono">
+          
+          {/* Card 1: Strict Anti-Cheat Clipboard Lockdown */}
+          <div className="bg-forensic-950/90 border border-forensic-800 rounded-lg p-4 flex flex-col justify-between space-y-3 hover:border-red-900/50 transition">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-red-400 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Lock className="w-3.5 h-3.5" />
+                  1. Anti-Cheat: Clipboard Restriction
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-red-950 text-red-300 border border-red-800">
+                  Exam Defense
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                Strictly blocks Ctrl+C, Ctrl+V, Ctrl+Shift+C/V, right-click context menu, and browser extensions in Monaco editor.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleBatchJudge(batchScope, null, null, false)}
+                  className="px-3 py-2.5 rounded bg-red-950/90 hover:bg-red-900 border border-red-600 text-red-200 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-red-950/50"
+                  title={`Lock clipboard for ${batchScope}`}
+                >
+                  <Lock className="w-3.5 h-3.5 text-red-400" />
+                  <span>Lock Clipboard</span>
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(batchScope, null, null, true)}
+                  className="px-3 py-2.5 rounded bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-600 text-emerald-200 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/50"
+                  title={`Allow clipboard for ${batchScope}`}
+                >
+                  <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Allow Clipboard</span>
+                </button>
+              </div>
+              <div className="text-[10px] text-slate-500 text-center font-mono">
+                Scope: <span className="text-amber-400 font-bold">{batchScope === 'ALL' ? 'ALL 80 CASES' : batchScope}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 2: Isolated Judge Worker Sandbox */}
+          <div className="bg-forensic-950/90 border border-forensic-800 rounded-lg p-4 flex flex-col justify-between space-y-3 hover:border-emerald-900/50 transition">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Cpu className="w-3.5 h-3.5" />
+                  2. Judge Worker Execution
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                  Execution
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                Toggle automated sandboxed code execution and test verification across selected domain problems.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleBatchJudge(batchScope, true, null, null)}
+                  className="px-3 py-2.5 rounded bg-emerald-950/90 hover:bg-emerald-900 border border-emerald-600 text-emerald-200 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-950/50"
+                  title={`Enable judge worker for ${batchScope}`}
+                >
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Enable Judge</span>
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(batchScope, false, null, null)}
+                  className="px-3 py-2.5 rounded bg-red-950/90 hover:bg-red-900 border border-red-600 text-red-200 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-red-950/50"
+                  title={`Disable judge worker for ${batchScope}`}
+                >
+                  <X className="w-3.5 h-3.5 text-red-400" />
+                  <span>Disable Judge</span>
+                </button>
+              </div>
+              <div className="text-[10px] text-slate-500 text-center font-mono">
+                Scope: <span className="text-amber-400 font-bold">{batchScope === 'ALL' ? 'ALL 80 CASES' : batchScope}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Feedback Mode (Practice vs Contest) */}
+          <div className="bg-forensic-950/90 border border-forensic-800 rounded-lg p-4 flex flex-col justify-between space-y-3 hover:border-cyan-900/50 transition">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Eye className="w-3.5 h-3.5" />
+                  3. Test Feedback Mode
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded font-bold bg-cyan-950 text-cyan-300 border border-cyan-800">
+                  Transparency
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                Practice Mode reveals failing test inputs/expected outputs; Contest Mode hides hidden tests.
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleBatchJudge(batchScope, null, true, null)}
+                  className="px-3 py-2.5 rounded bg-cyan-950/90 hover:bg-cyan-900 border border-cyan-600 text-cyan-200 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-950/50"
+                  title={`Enable Practice mode for ${batchScope}`}
+                >
+                  <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Practice Mode</span>
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(batchScope, null, false, null)}
+                  className="px-3 py-2.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-bold text-xs transition flex items-center justify-center gap-1.5 shadow-lg"
+                  title={`Enable Contest mode for ${batchScope}`}
+                >
+                  <Lock className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Contest Mode</span>
+                </button>
+              </div>
+              <div className="text-[10px] text-slate-500 text-center font-mono">
+                Scope: <span className="text-amber-400 font-bold">{batchScope === 'ALL' ? 'ALL 80 CASES' : batchScope}</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
 
       {/* Navigation Tabs */}
@@ -243,8 +421,8 @@ export default function AdminPanel() {
       {activeTab === 'solutions' && (
         <div className="space-y-6">
           
-          {/* Controls Bar & Batch Actions */}
-          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-5 space-y-4 font-mono text-xs">
+          {/* Search, Filter & Stats Toolbar */}
+          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-4 space-y-3 font-mono text-xs">
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
               
               {/* Search & Domain Filter */}
@@ -263,71 +441,22 @@ export default function AdminPanel() {
                 <select
                   value={selectedDomain}
                   onChange={(e) => setSelectedDomain(e.target.value)}
-                  className="px-3 py-2 bg-forensic-950 border border-forensic-800 rounded-lg text-forensic-cyan focus:outline-none focus:border-cyan-500"
+                  className="px-3 py-2 bg-forensic-950 border border-forensic-800 rounded-lg text-forensic-cyan focus:outline-none focus:border-cyan-500 font-bold"
                 >
                   {domains.map(d => (
                     <option key={d} value={d}>
-                      Domain: {d}
+                      Filter Domain: {d}
                     </option>
                   ))}
                 </select>
               </div>
 
-              {/* Batch Actions */}
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => handleBatchJudge(selectedDomain, true, null)}
-                  className="px-3 py-1.5 rounded bg-emerald-950/80 border border-emerald-600 text-emerald-300 hover:bg-emerald-900 transition flex items-center gap-1.5"
-                >
-                  <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                  Enable Judge ({selectedDomain})
-                </button>
-                <button
-                  onClick={() => handleBatchJudge(selectedDomain, false, null)}
-                  className="px-3 py-1.5 rounded bg-red-950/80 border border-red-600 text-red-300 hover:bg-red-900 transition flex items-center gap-1.5"
-                >
-                  <Cpu className="w-3.5 h-3.5 text-red-400" />
-                  Disable Judge
-                </button>
-                <button
-                  onClick={() => handleBatchJudge(selectedDomain, null, true)}
-                  className="px-3 py-1.5 rounded bg-cyan-950/80 border border-cyan-600 text-cyan-300 hover:bg-cyan-900 transition flex items-center gap-1.5"
-                >
-                  <Eye className="w-3.5 h-3.5 text-cyan-400" />
-                  Reveal Failed Tests
-                </button>
-                <button
-                  onClick={() => handleBatchJudge(selectedDomain, null, false, null)}
-                  className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5"
-                >
-                  <Lock className="w-3.5 h-3.5" />
-                  Hide Tests (Contest)
-                </button>
-                <button
-                  onClick={() => handleBatchJudge(selectedDomain, null, null, false)}
-                  className="px-3 py-1.5 rounded bg-red-950/80 border border-red-600 text-red-300 hover:bg-red-900 transition flex items-center gap-1.5"
-                  title="Lock clipboard for all cases in domain (Strict Anti-Cheat)"
-                >
-                  <Lock className="w-3.5 h-3.5 text-red-400" />
-                  Lock Clipboard ({selectedDomain})
-                </button>
-                <button
-                  onClick={() => handleBatchJudge(selectedDomain, null, null, true)}
-                  className="px-3 py-1.5 rounded bg-emerald-950/80 border border-emerald-600 text-emerald-300 hover:bg-emerald-900 transition flex items-center gap-1.5"
-                  title="Allow copy/paste for all cases in domain"
-                >
-                  <Unlock className="w-3.5 h-3.5 text-emerald-400" />
-                  Allow Clipboard
-                </button>
+              <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-4">
+                <span className="text-cyan-400 font-bold">Showing {filteredSolutions.length} of {solutions.length} cases</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Judge Enabled</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Practice Mode</span>
+                <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-400"></span> Anti-Cheat Locked</span>
               </div>
-
-            </div>
-
-            <div className="text-[11px] text-slate-400 flex items-center gap-4 pt-2 border-t border-forensic-800">
-              <span>Showing {filteredSolutions.length} of {solutions.length} cases</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Judge Enabled</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Practice Mode (Failed test inputs visible)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span> Clipboard Locked (Anti-Cheat)</span>
             </div>
           </div>
 
