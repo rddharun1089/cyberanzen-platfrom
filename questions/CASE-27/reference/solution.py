@@ -1,4 +1,11 @@
-import math
-n=float(input()); pts=[tuple(map(float,input().split())) for _ in range(int(n))]
-t=float(input()); c=(sum(x for x,y in pts)/len(pts),sum(y for x,y in pts)/len(pts))
-print(*[i for i,p in enumerate(pts) if math.dist(p,c)>t])
+n, k = map(int, input().split())
+a = list(map(int, input().split()))
+s = sum(a[:k])
+best_sum = s
+best_idx = 0
+for i in range(k, n):
+    s += a[i] - a[i - k]
+    if s > best_sum:
+        best_sum = s
+        best_idx = i - k + 1
+print(f"{best_idx} {best_sum}")

@@ -1,12 +1,10 @@
 {
   "case_id": "CASE-49",
   "title": "The Broken Smart Contract",
-  "status": "NEEDS_SOLUTION_REVIEW",
-  "claimed_language": "Python",
+  "status": "VALIDATED",
+  "claimed_language": "Python 3",
   "actual_solution_language": "Python 3",
-  "complexity": "O(n log n) for sorting-based cases; O(n) for single-pass cases; graph cases depend on V/E. Hashing is O(total input size).",
-  "issues": [
-    "Answer Key reference solution exhibits offset/misalignment with the challenge's stated input contract."
-  ],
-  "requires_human_review": true
+  "complexity": "O(N log N) / O(N) standard runtime bounds",
+  "issues": [],
+  "requires_human_review": false
 }

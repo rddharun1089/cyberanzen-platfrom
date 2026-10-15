@@ -1,6 +1,20 @@
-from collections import defaultdict,deque
-n,m=map(int,input().split()); g=[[] for _ in range(n)]; deg=[0]*n
-for _ in range(m):
-    a,b=map(int,input().split());g[a].append(b);deg[b]+=1
-order=list(map(int,input().split())); pos={v:i for i,v in enumerate(order)}
-print("VALID" if len(order)==n and all(pos[u]<pos[v] for u in range(n) for v in g[u]) else "INVALID")
+n = int(input())
+vals = []
+weights = []
+for _ in range(n):
+    v, w = map(float, input().split())
+    vals.append(v)
+    weights.append(w)
+total_w = sum(weights)
+base_mean = sum(vals[i] * weights[i] for i in range(n)) / total_w
+best_idx = 0
+max_diff = -1.0
+for i in range(n):
+    rem_w = total_w - weights[i]
+    if rem_w > 0:
+        rem_mean = (sum(vals[j] * weights[j] for j in range(n) if j != i)) / rem_w
+        diff = abs(rem_mean - base_mean)
+        if diff > max_diff:
+            max_diff = diff
+            best_idx = i
+print(best_idx)

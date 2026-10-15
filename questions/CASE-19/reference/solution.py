@@ -1,3 +1,8 @@
-n=int(input()); a=[input().split() for _ in range(n)]
-v=[float(x) for x,y in a if float(x)>=.9]
-print(round(sum(int(y) for x,y in a if float(x)>=.9)/len(v),4) if v else 0)
+n = int(input())
+a = [input().split() for _ in range(n)]
+filtered = [int(y) for x, y in a if float(x) >= 0.9]
+if filtered:
+    acc = sum(filtered) / len(filtered)
+    print(f"{acc:.4f}")
+else:
+    print("0.0000")

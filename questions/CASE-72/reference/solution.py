@@ -1,5 +1,10 @@
-# Matrix contradiction detector: input n, then n*n integers. Print conflicting row indices.
-n=int(input()); A=[list(map(int,input().split())) for _ in range(n)]
+n = int(input())
+min_b = list(map(float, input().split()))
+max_b = list(map(float, input().split()))
 for i in range(n):
-    for j in range(i+1,n):
-        if A[i][j] != A[j][i]: print(i,j)
+    vals = list(map(float, input().split()))
+    if any(vals[j] < min_b[j] or vals[j] > max_b[j] for j in range(3)):
+        print(i)
+        break
+else:
+    print("-1")

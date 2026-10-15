@@ -1,11 +1,21 @@
 from collections import defaultdict
-import math
-n=int(input()); d=defaultdict(lambda:[0,0,0])
+n = int(input())
+d = defaultdict(lambda: [0, 0, 0])
 for _ in range(n):
-    a,p,g=input().split(); a=int(a);p=int(p); d[g][0]+=a; d[g][1]+=p; d[g][2]+=1
-best=None; score=2
-for g,(tp,pp,N) in d.items():
-    fn=N-tp; fp=pp-tp
-    f=0 if 2*tp+fp+fn==0 else 2*tp/(2*tp+fp+fn)
-    if f<score: score=f;best=g
-print(best,round(score,4))
+    a, p, g = input().split()
+    a, p = int(a), int(p)
+    if a == 1 and p == 1:
+        d[g][0] += 1
+    if p == 1:
+        d[g][1] += 1
+    if a == 1:
+        d[g][2] += 1
+best = None
+min_f1 = 2.0
+for g in sorted(d.keys()):
+    tp, pred_pos, act_pos = d[g]
+    f1 = (2 * tp / (pred_pos + act_pos)) if (pred_pos + act_pos) > 0 else 0.0
+    if f1 < min_f1:
+        min_f1 = f1
+        best = g
+print(f"{best} {min_f1:.4f}")

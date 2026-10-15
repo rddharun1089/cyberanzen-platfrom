@@ -1,7 +1,10 @@
-from collections import defaultdict
-n=int(input()); seen=set(); y=0;n0=0
-for _ in range(n):
-    u,v=input().split()
-    if u in seen: continue
-    seen.add(u); y+=v=="YES"; n0+=v=="NO"
-print("YES" if y>n0 else "NO")
+import hashlib
+n = int(input())
+for i in range(n):
+    data, h, p = input().split()
+    calc = hashlib.sha256((data + p).encode()).hexdigest()
+    if calc != h:
+        print(i)
+        break
+else:
+    print("VALID")

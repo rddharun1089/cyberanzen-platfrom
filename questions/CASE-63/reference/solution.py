@@ -1,5 +1,4 @@
-n,k=map(int,input().split()); a=list(map(float,input().split()))
-for i in range(k,n+1):
-    w=a[i-k:i];m=sum(w)/k;s=(sum((x-m)**2 for x in w)/k)**.5
-    if a[i-1]>m+3*s: print(i-1);break
-else: print(-1)
+n = int(input())
+a = sorted(map(int, input().split()))
+missing = [str(x) for x in range(a[0], a[-1] + 1) if x not in set(a)]
+print(" ".join(missing) if missing else "NONE")

@@ -1,6 +1,23 @@
-from functools import lru_cache
-n=int(input()); g=[list(map(int,input().split())) for _ in range(n)]
-@lru_cache(None)
-def f(u):
-    return max([0]+[1+f(v) for v in g[u] if v<n])
-print(max(f(i) for i in range(n)))
+n = int(input())
+events = []
+for _ in range(n):
+    t, d, eid = input().split()
+    events.append((int(t), d.upper()))
+events.sort()
+found = False
+for i in range(n):
+    t_start = events[i][0]
+    domains = {events[i][1]}
+    for j in range(i, n):
+        if events[j][0] - t_start <= 60:
+            domains.add(events[j][1])
+            if {"CYBER", "IOT", "ROBOT"}.issubset(domains):
+                print(events[j][0])
+                found = True
+                break
+        else:
+            break
+    if found:
+        break
+if not found:
+    print("NONE")

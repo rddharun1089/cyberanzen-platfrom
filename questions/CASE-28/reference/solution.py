@@ -1,6 +1,9 @@
-n=int(input()); rows=[list(map(float,input().split())) for _ in range(n)]
-best=[0,0]
-for j in (1,2):
-    v=sum(abs(rows[i][j]-rows[i-1][j]) for i in range(1,n))
-    if v>best[1]: best=[j,v]
-print(best[0],best[1])
+import math
+a = list(map(float, input().split()))
+b = list(map(float, input().split()))
+n = len(a)
+ma = sum(a) / n
+mb = sum(b) / n
+num = sum((a[i] - ma) * (b[i] - mb) for i in range(n))
+den = math.sqrt(sum((x - ma) ** 2 for x in a) * sum((x - mb) ** 2 for x in b))
+print(f"{round(num / den, 4):.4f}" if den else "0.0000")

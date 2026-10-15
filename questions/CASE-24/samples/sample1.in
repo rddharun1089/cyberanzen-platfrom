@@ -1,4 +1,4 @@
 3
-1 2
-2 3
-3 4
+SHIP1 PortA PortB 10
+SHIP1 PortC PortD 20
+SHIP2 Dock1 Dock2 5

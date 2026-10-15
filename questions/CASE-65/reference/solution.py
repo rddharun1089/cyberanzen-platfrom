@@ -1,5 +1,10 @@
-n=int(input()); lo=list(map(float,input().split())); hi=list(map(float,input().split()))
+import math
+n = int(input())
+T = float(input())
 for i in range(n):
-    x=list(map(float,input().split()))
-    if any(x[j]<lo[j] or x[j]>hi[j] for j in range(3)): print(i);break
-else: print(-1)
+    px, py, ax, ay = map(float, input().split())
+    if math.hypot(px - ax, py - ay) > T:
+        print(i)
+        break
+else:
+    print("-1")

@@ -14,6 +14,6 @@
     "python3"
   ],
   "flag_format": "FLAG{CASE_52_<COMPUTED_RESULT>}",
-  "validation_status": "NEEDS_SOLUTION_REVIEW",
-  "publication_status": "DRAFT"
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
 }

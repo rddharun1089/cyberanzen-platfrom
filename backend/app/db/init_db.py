@@ -158,6 +158,9 @@ def init_db(db: Session):
                 db.add(tc_sample)
 
             # 2. Hidden tests
+            p_total = meta["points"]
+            p1 = p_total // 2
+            p2 = p_total - p1
             for t_idx, t_name in [(1, "test1"), (2, "test2")]:
                 tin = os.path.join(qdir, "tests", f"{t_name}.in")
                 tout = os.path.join(qdir, "tests", f"{t_name}.out")
@@ -168,7 +171,7 @@ def init_db(db: Session):
                         test_index=t_idx,
                         input_data=open(tin, encoding="utf-8").read(),
                         expected_output=open(tout, encoding="utf-8").read(),
-                        points=int(meta["points"] * 0.5)
+                        points=p1 if t_idx == 1 else p2
                     )
                     db.add(tc_hidden)
 

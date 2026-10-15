@@ -1,9 +1,15 @@
-n=int(input()); g={}
+n = int(input())
+g = {}
+order = []
 for _ in range(n):
-    d,m=input().split(); g.setdefault(d,[]).append(m)
-s=next(iter(g),None); seen=set(); st=[s]
-while st:
-    u=st.pop()
-    if u in seen: continue
-    seen.add(u); print(u,end=" ")
-    st+=g.get(u,[])
+    d, m = input().split()
+    if d not in g:
+        order.append(d)
+    g.setdefault(d, []).append(m)
+res = []
+for d in order:
+    res.append(d)
+    for m in g[d]:
+        if m not in res:
+            res.append(m)
+print(" ".join(res))

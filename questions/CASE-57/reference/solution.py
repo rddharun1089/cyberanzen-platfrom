@@ -1,6 +1,9 @@
-import heapq
-n=int(input()); h=[]
-for _ in range(n):
-    t,p,r=input().split(); heapq.heappush(h,(int(t),-int(p),r))
-while h:
-    t,p,r=heapq.heappop(h);print(t,r)
+n = int(input())
+exp = input().split()
+obs = input().split()
+for i in range(n):
+    if exp[i] != obs[i]:
+        print(i)
+        break
+else:
+    print("-1")

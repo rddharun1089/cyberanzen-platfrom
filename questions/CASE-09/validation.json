@@ -2,9 +2,9 @@
   "case_id": "CASE-09",
   "title": "The Phantom DNS",
   "status": "VALIDATED",
-  "claimed_language": "Python",
+  "claimed_language": "Python 3",
   "actual_solution_language": "Python 3",
-  "complexity": "O(n log n) for sorting-based cases; O(n) for single-pass cases; graph cases depend on V/E. Hashing is O(total input size).",
+  "complexity": "O(N log N) / O(N) standard runtime bounds",
   "issues": [],
   "requires_human_review": false
 }

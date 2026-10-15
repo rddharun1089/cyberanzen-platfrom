@@ -28,3 +28,17 @@ Use deterministic processing. Preserve input order where timestamps tie. Do not 
 
 ### Evidence Token / Flag
 `FLAG{CASE_11_<COMPUTED_RESULT>}`
+
+### Sample Investigation Case
+
+#### Sample Input 1
+```text
+ceo@corp.local
+ceo@corp.local
+ceo@corp.local
+```
+
+#### Sample Output 1
+```text
+1
+```

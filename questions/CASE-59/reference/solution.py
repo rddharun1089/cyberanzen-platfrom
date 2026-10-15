@@ -1,5 +1,7 @@
-n=int(input()); a=list(map(int,input().split())); first={}
-for i,x in enumerate(a):
-    if x in first: print(x,i-first[x]);break
-    first[x]=i
-else: print("NONE")
+import statistics
+n = int(input())
+a = list(map(float, input().split()))
+m = statistics.mean(a)
+s = statistics.pstdev(a)
+out = [str(i) for i, x in enumerate(a) if s > 0 and x > m + 2 * s]
+print(" ".join(out) if out else "NONE")

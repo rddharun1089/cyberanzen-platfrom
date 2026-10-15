@@ -1,7 +1,17 @@
-from collections import Counter
-n=int(input()); tp=fp=fn=0
+n = int(input())
+recs = []
 for _ in range(n):
-    y,p=input().split();y=int(y);p=int(p)
-    tp+=y==p==1;fp+=y==0 and p==1;fn+=y==1 and p==0
-prec=tp/(tp+fp) if tp+fp else 0;rec=tp/(tp+fn) if tp+fn else 0
-print(round(2*prec*rec/(prec+rec),4) if prec+rec else 0)
+    t, b = map(int, input().split())
+    recs.append((t, b))
+recs.sort()
+max_bytes = 0
+s = 0
+l = 0
+for r in range(n):
+    s += recs[r][1]
+    while recs[r][0] - recs[l][0] > 60:
+        s -= recs[l][1]
+        l += 1
+    if s > max_bytes:
+        max_bytes = s
+print(max_bytes)

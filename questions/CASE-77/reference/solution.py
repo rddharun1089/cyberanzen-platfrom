@@ -1,4 +1,9 @@
-n=int(input()); d={}
-for _ in range(n):
-    user,dev,t=input().split();d.setdefault(user,set()).add(dev)
-for u,v in d.items(): print(u,len(v))
+n = int(input())
+exp = input().split()
+obs = input().split()
+for i in range(n):
+    if exp[i] != obs[i]:
+        print(i)
+        break
+else:
+    print("-1")

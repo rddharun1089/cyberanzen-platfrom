@@ -1,11 +1,21 @@
-from collections import defaultdict,deque
-n,m=map(int,input().split()); g=[[] for _ in range(n)]; deg=[0]*n
+from collections import deque
+n, m = map(int, input().split())
+g = [[] for _ in range(n)]
+deg = [0] * n
 for _ in range(m):
-    a,b=map(int,input().split());g[a].append(b);deg[b]+=1
-q=deque(i for i in range(n) if deg[i]==0); o=[]
+    u, v = map(int, input().split())
+    g[u].append(v)
+    deg[v] += 1
+q = deque(i for i in range(n) if deg[i] == 0)
+res = []
 while q:
-    u=q.popleft();o.append(u)
+    u = q.popleft()
+    res.append(str(u))
     for v in g[u]:
-        deg[v]-=1
-        if deg[v]==0:q.append(v)
-print(*o if len(o)==n else ["IMPOSSIBLE"])
+        deg[v] -= 1
+        if deg[v] == 0:
+            q.append(v)
+if len(res) == n:
+    print(" ".join(res))
+else:
+    print("IMPOSSIBLE")

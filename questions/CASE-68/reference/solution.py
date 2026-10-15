@@ -1,7 +1,11 @@
-import hashlib
-n=int(input()); d={}
-for _ in range(n):
-    v,h=input().split();d[v]=h
-for v in sorted(d):
-    if hashlib.sha256(v.encode()).hexdigest()!=d[v]: print(v);break
-else: print("VALID")
+s = input().strip()
+rev = s[::-1]
+out = []
+for c in rev:
+    if 'A' <= c <= 'Z':
+        out.append(chr((ord(c) - ord('A') - 1) % 26 + ord('A')))
+    elif 'a' <= c <= 'z':
+        out.append(chr((ord(c) - ord('a') - 1) % 26 + ord('a')))
+    else:
+        out.append(c)
+print("".join(out))

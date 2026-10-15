@@ -1,2 +1,17 @@
-n=int(input()); a=[float(x) for x in input().split()]; m=sum(a)/n; s=(sum((x-m)**2 for x in a)/n)**.5
-print(*[i for i,x in enumerate(a) if s and abs(x-m)/s>2])
+n = int(input())
+preds = []
+for _ in range(n):
+    t, pid = input().split()
+    preds.append((int(t), pid))
+m = int(input())
+deps = []
+for _ in range(m):
+    s, e, model = input().split()
+    deps.append((int(s), int(e), model))
+for t, pid in preds:
+    matched = "UNKNOWN"
+    for s, e, model in deps:
+        if s <= t <= e:
+            matched = model
+            break
+    print(f"{pid} {matched}")

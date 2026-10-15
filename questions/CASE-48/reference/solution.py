@@ -1,7 +1,10 @@
-from collections import defaultdict
-n=int(input()); d=defaultdict(list)
+n = int(input())
+seen = set()
 for _ in range(n):
-    token,t,tx=input().split(); d[token].append((int(t),tx))
-for k,v in d.items():
-    if len(v)>1: print(k);break
-else: print("NONE")
+    token, t, tx = input().split()
+    if token in seen:
+        print(token)
+        break
+    seen.add(token)
+else:
+    print("NONE")

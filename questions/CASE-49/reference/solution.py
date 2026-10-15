@@ -1,6 +1,4 @@
-import hashlib
-n=int(input()); target=input().strip()
-for _ in range(n):
-    x=input().strip()
-    if hashlib.sha256(x.encode()).hexdigest()==target: print(x);break
-else: print("NOT FOUND")
+n = int(input())
+a = list(map(int, input().split()))
+bad = [str(i) for i, x in enumerate(a) if x * x > 100]
+print(" ".join(bad) if bad else "NONE")

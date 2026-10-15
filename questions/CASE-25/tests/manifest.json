@@ -20,7 +20,7 @@
       "type": "hidden_test",
       "in": "tests/test2.in",
       "out": "tests/test2.out",
-      "points": 37
+      "points": 38
     }
   ]
 }

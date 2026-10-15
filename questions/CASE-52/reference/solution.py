@@ -1,13 +1,14 @@
-n,m=map(int,input().split()); g=[[] for _ in range(n)]
-for _ in range(m):
-    a,b=map(int,input().split());g[a].append(b)
-best=[]
-def dfs(u,p):
-    global best
-    p.append(u)
-    if len(p)>len(best):best=p[:]
-    for v in g[u]:
-        if v not in p: dfs(v,p)
-    p.pop()
-dfs(0,[])
-print(*best)
+n = int(input())
+seen = set()
+yes_cnt = 0
+no_cnt = 0
+for _ in range(n):
+    voter, vote = input().split()
+    if voter in seen:
+        continue
+    seen.add(voter)
+    if vote == "YES":
+        yes_cnt += 1
+    elif vote == "NO":
+        no_cnt += 1
+print("YES" if yes_cnt > no_cnt else "NO")

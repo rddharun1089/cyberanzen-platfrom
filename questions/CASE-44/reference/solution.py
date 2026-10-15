@@ -1,6 +1,10 @@
-n,t=map(int,input().split()); seen=set()
+n = int(input())
+seen = set()
 for _ in range(n):
-    x=int(input().split()[0])
-    if x in seen: print(x);break
-    seen.add(x)
-else: print("NONE")
+    nonce = input().split()[0]
+    if nonce in seen:
+        print(nonce)
+        break
+    seen.add(nonce)
+else:
+    print("NONE")

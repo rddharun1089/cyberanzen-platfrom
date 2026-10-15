@@ -1,5 +1,7 @@
-import heapq
-n=int(input()); h=[]
+n = int(input())
+cmds = []
 for _ in range(n):
-    p,t,s=input().split(); heapq.heappush(h,(-int(p),int(t),s))
-while h: print(heapq.heappop(h)[2],end=" ")
+    p, t, s = input().split()
+    cmds.append((-int(p), int(t), s))
+cmds.sort()
+print(" ".join(s for _, _, s in cmds))
