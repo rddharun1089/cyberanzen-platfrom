@@ -19,10 +19,14 @@ export default function App() {
 
   useEffect(() => {
     // If token exists, refresh profile
-    if (localStorage.getItem('cyberanzen_token')) {
+    const token = localStorage.getItem('enigmatrix_token') || localStorage.getItem('cyberanzen_token');
+    if (token) {
       authService.getProfile()
         .then(data => setUser(data))
-        .catch(() => setUser(null));
+        .catch(() => {
+          authService.logout();
+          setUser(null);
+        });
     }
   }, []);
 

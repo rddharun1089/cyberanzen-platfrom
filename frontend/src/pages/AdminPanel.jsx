@@ -14,6 +14,7 @@ export default function AdminPanel() {
   const [cases, setCases] = useState([]);
   const [solutions, setSolutions] = useState([]);
   const [users, setUsers] = useState([]);
+  const [usersError, setUsersError] = useState('');
   const [adminTeams, setAdminTeams] = useState([]);
   const [health, setHealth] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -50,13 +51,18 @@ export default function AdminPanel() {
 
   async function loadAll() {
     setLoading(true);
+    setUsersError('');
     try {
       const [caseList, solList, healthData, logs, userList, teamList] = await Promise.all([
         adminService.listCases(),
         adminService.listSolutions().catch(() => []),
         adminService.getHealth().catch(() => null),
         adminService.getAuditLogs().catch(() => []),
-        adminService.listUsers().catch(() => []),
+        adminService.listUsers().catch((err) => {
+          const detail = err.response?.data?.detail || err.message || 'Authorization failed';
+          setUsersError(detail);
+          return [];
+        }),
         adminService.listTeams().catch(() => [])
       ]);
       setCases(caseList);
@@ -268,6 +274,12 @@ export default function AdminPanel() {
       s.domain.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesDomain && matchesSearch;
   });
+
+  // Filtered users
+  const displayedUsers = users.filter(u => 
+    u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
+    (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
+  );
 
   if (loading) {
     return (
@@ -1014,6 +1026,26 @@ export default function AdminPanel() {
             </div>
           </div>
 
+          {usersError && (
+            <div className="m-4 p-3.5 rounded-lg bg-red-950/90 border border-red-500 text-red-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
+                <div>
+                  <span className="font-bold uppercase block text-red-300">Administrative Authorization Notice</span>
+                  <span className="text-[11px] text-red-200">
+                    {usersError} — Please sign in with an administrator account to view the full participant directory.
+                  </span>
+                </div>
+              </div>
+              <a
+                href="/login"
+                className="px-3.5 py-1.5 rounded bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wide shrink-0 transition"
+              >
+                Sign In As Admin
+              </a>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-forensic-850/80 border-b border-forensic-800 text-slate-400 uppercase text-[10px]">
@@ -1028,10 +1060,7 @@ export default function AdminPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-forensic-800">
-                {users.filter(u => 
-                  u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
-                  (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
-                ).map((u) => (
+                {displayedUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-forensic-850/60 transition">
                     <td className="py-3.5 px-4 font-bold text-slate-400">#{u.id}</td>
                     <td className="py-3.5 px-4">
@@ -1089,6 +1118,45 @@ export default function AdminPanel() {
                     </td>
                   </tr>
                 ))}
+
+                {displayedUsers.length === 0 && (
+                  <tr>
+                    <td colSpan="7" className="py-12 text-center text-slate-400 font-mono text-xs">
+                      {usersError ? (
+                        <div className="space-y-3 py-4 max-w-md mx-auto">
+                          <p className="text-red-400 font-bold flex items-center justify-center gap-2">
+                            <AlertTriangle className="w-5 h-5 text-red-400" />
+                            Unable to Load User Directory
+                          </p>
+                          <p className="text-slate-400 text-[11px] leading-relaxed">
+                            {usersError}. You may need to log out and re-authenticate as an administrator.
+                          </p>
+                          <a
+                            href="/login"
+                            className="inline-block px-4 py-2 rounded bg-red-950 border border-red-600 text-red-200 hover:bg-red-900 transition font-bold"
+                          >
+                            Sign In with Administrator Account
+                          </a>
+                        </div>
+                      ) : userSearchQuery ? (
+                        <div className="py-6 space-y-2">
+                          <p className="text-slate-300 font-bold">No accounts found matching filter: "{userSearchQuery}"</p>
+                          <button
+                            onClick={() => setUserSearchQuery('')}
+                            className="text-cyan-400 hover:underline text-[11px]"
+                          >
+                            Clear Callsign Filter
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="py-8 text-slate-400 space-y-1">
+                          <p className="font-bold text-slate-300">No registered accounts found in database.</p>
+                          <p className="text-[11px] text-slate-500">New participant registrations will appear here automatically.</p>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -1117,7 +1185,16 @@ export default function AdminPanel() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4">
+          {adminTeams.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 font-mono text-xs bg-forensic-950/60 rounded-xl border border-forensic-800 p-8 space-y-2">
+              <Users className="w-8 h-8 text-slate-600 mx-auto" />
+              <p className="text-slate-300 font-bold text-sm">No Active Squads Formed</p>
+              <p className="text-slate-500 text-[11px]">
+                Participants have not commissioned any investigation units yet. They can form squads in the Squad Room (/team).
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
             {adminTeams.map((t) => (
               <div key={t.id} className="bg-forensic-950 border border-forensic-800 rounded-xl p-4 space-y-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-forensic-800/60 pb-3">
@@ -1201,6 +1278,7 @@ export default function AdminPanel() {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

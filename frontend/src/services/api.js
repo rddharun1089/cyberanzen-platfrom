@@ -37,22 +37,30 @@ export const authService = {
   async login(username, password) {
     const res = await apiClient.post('/auth/login', { username, password });
     localStorage.setItem('enigmatrix_token', res.data.access_token);
-    localStorage.setItem('enigmatrix_user', JSON.stringify({
+    localStorage.setItem('cyberanzen_token', res.data.access_token);
+    const userData = {
+      id: res.data.id,
       username: res.data.username,
       role: res.data.role,
       points: res.data.points
-    }));
+    };
+    localStorage.setItem('enigmatrix_user', JSON.stringify(userData));
+    localStorage.setItem('cyberanzen_user', JSON.stringify(userData));
     return res.data;
   },
 
   async register(username, email, password) {
     const res = await apiClient.post('/auth/register', { username, email, password });
     localStorage.setItem('enigmatrix_token', res.data.access_token);
-    localStorage.setItem('enigmatrix_user', JSON.stringify({
+    localStorage.setItem('cyberanzen_token', res.data.access_token);
+    const userData = {
+      id: res.data.id,
       username: res.data.username,
       role: res.data.role,
       points: res.data.points
-    }));
+    };
+    localStorage.setItem('enigmatrix_user', JSON.stringify(userData));
+    localStorage.setItem('cyberanzen_user', JSON.stringify(userData));
     return res.data;
   },
 
