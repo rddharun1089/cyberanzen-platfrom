@@ -11,7 +11,7 @@ const apiClient = axios.create({
 
 // Interceptor to attach JWT token
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('cyberanzen_token');
+  const token = localStorage.getItem('enigmatrix_token') || localStorage.getItem('cyberanzen_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -24,6 +24,8 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response && error.response.status === 401) {
       // Clear token if expired
+      localStorage.removeItem('enigmatrix_token');
+      localStorage.removeItem('enigmatrix_user');
       localStorage.removeItem('cyberanzen_token');
       localStorage.removeItem('cyberanzen_user');
     }
@@ -34,8 +36,8 @@ apiClient.interceptors.response.use(
 export const authService = {
   async login(username, password) {
     const res = await apiClient.post('/auth/login', { username, password });
-    localStorage.setItem('cyberanzen_token', res.data.access_token);
-    localStorage.setItem('cyberanzen_user', JSON.stringify({
+    localStorage.setItem('enigmatrix_token', res.data.access_token);
+    localStorage.setItem('enigmatrix_user', JSON.stringify({
       username: res.data.username,
       role: res.data.role,
       points: res.data.points
@@ -45,8 +47,8 @@ export const authService = {
 
   async register(username, email, password) {
     const res = await apiClient.post('/auth/register', { username, email, password });
-    localStorage.setItem('cyberanzen_token', res.data.access_token);
-    localStorage.setItem('cyberanzen_user', JSON.stringify({
+    localStorage.setItem('enigmatrix_token', res.data.access_token);
+    localStorage.setItem('enigmatrix_user', JSON.stringify({
       username: res.data.username,
       role: res.data.role,
       points: res.data.points
@@ -55,12 +57,14 @@ export const authService = {
   },
 
   logout() {
+    localStorage.removeItem('enigmatrix_token');
+    localStorage.removeItem('enigmatrix_user');
     localStorage.removeItem('cyberanzen_token');
     localStorage.removeItem('cyberanzen_user');
   },
 
   getCurrentUser() {
-    const data = localStorage.getItem('cyberanzen_user');
+    const data = localStorage.getItem('enigmatrix_user') || localStorage.getItem('cyberanzen_user');
     return data ? JSON.parse(data) : null;
   },
 
@@ -170,6 +174,16 @@ export const adminService = {
 
   async gitPreview(repoPath = null) {
     const res = await apiClient.post('/admin/git/preview', { repo_path: repoPath });
+    return res.data;
+  },
+
+  async listSolutions(params = {}) {
+    const res = await apiClient.get('/admin/solutions', { params });
+    return res.data;
+  },
+
+  async batchJudgeToggle(data) {
+    const res = await apiClient.post('/admin/cases/batch-judge-toggle', data);
     return res.data;
   },
 

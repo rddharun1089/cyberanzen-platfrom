@@ -36,7 +36,7 @@ export default function Navbar({ user, onLogout }) {
           </div>
           <div>
             <span className="font-bold tracking-wider text-white text-lg flex items-center gap-2">
-              CYBER<span className="text-forensic-cyan">ANZEN</span>
+              ENIG<span className="text-forensic-cyan">MATRIX</span>
               <span className="text-[10px] font-mono uppercase bg-cyan-950/80 text-cyan-400 border border-cyan-800 px-1.5 py-0.5 rounded">
                 80-Cases
               </span>

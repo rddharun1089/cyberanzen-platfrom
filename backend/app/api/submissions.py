@@ -26,6 +26,9 @@ def run_sample_tests(req: RunSampleRequest, db: Session = Depends(get_db), curre
     if not case:
         raise HTTPException(status_code=404, detail="Investigation case dossier not found")
 
+    if not case.judge_enabled:
+        raise HTTPException(status_code=403, detail=f"Judge worker execution is disabled by administrator for {case.id} ({case.title})")
+
     sample_tests = db.query(TestCase).filter(
         TestCase.case_id == req.case_id,
         TestCase.test_type == "public_sample"
@@ -51,7 +54,8 @@ def run_sample_tests(req: RunSampleRequest, db: Session = Depends(get_db), curre
         test_cases=test_dicts,
         time_limit_ms=case.time_limit_ms,
         memory_limit_mb=case.memory_limit_mb,
-        is_sample_run=True
+        is_sample_run=True,
+        reveal_failed_tests=bool(case.reveal_failed_tests)
     )
 
     return res
@@ -61,6 +65,9 @@ def submit_solution(req: SubmitSolutionRequest, db: Session = Depends(get_db), c
     case = db.query(Case).filter(Case.id == req.case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Investigation case dossier not found")
+
+    if not case.judge_enabled:
+        raise HTTPException(status_code=403, detail=f"Judge worker execution is disabled by administrator for {case.id} ({case.title})")
 
     # Fetch ALL test cases (samples and hidden)
     all_tests = db.query(TestCase).filter(TestCase.case_id == req.case_id).order_by(TestCase.test_index.asc()).all()
@@ -85,7 +92,8 @@ def submit_solution(req: SubmitSolutionRequest, db: Session = Depends(get_db), c
         test_cases=test_dicts,
         time_limit_ms=case.time_limit_ms,
         memory_limit_mb=case.memory_limit_mb,
-        is_sample_run=False
+        is_sample_run=False,
+        reveal_failed_tests=bool(case.reveal_failed_tests)
     )
 
     verdict_str = eval_res["verdict"]

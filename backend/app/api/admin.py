@@ -20,6 +20,13 @@ class CaseUpdateRequest(BaseModel):
     objective: Optional[str] = None
     input_contract: Optional[str] = None
     required_result: Optional[str] = None
+    judge_enabled: Optional[bool] = None
+    reveal_failed_tests: Optional[bool] = None
+
+class BatchJudgeToggleRequest(BaseModel):
+    domain: Optional[str] = None  # None means all domains
+    judge_enabled: Optional[bool] = None
+    reveal_failed_tests: Optional[bool] = None
 
 class TestCaseCreateRequest(BaseModel):
     test_type: str  # public_sample or hidden_test
@@ -41,10 +48,101 @@ def admin_list_cases(db: Session = Depends(get_db), current_admin: User = Depend
             "publication_status": c.publication_status,
             "validation_status": c.validation_status,
             "validation_notes": c.validation_notes,
+            "judge_enabled": c.judge_enabled,
+            "reveal_failed_tests": c.reveal_failed_tests,
             "test_count": len(c.test_cases)
         }
         for c in cases
     ]
+
+@router.get("/solutions")
+def admin_list_solutions(
+    domain: Optional[str] = None,
+    case_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin)
+):
+    """
+    Returns reference solutions, official answers, flag formats, and all test cases
+    (both public samples and hidden tests) for admin review.
+    """
+    query = db.query(Case)
+    if case_id:
+        query = query.filter(Case.id == case_id)
+    if domain:
+        query = query.filter(Case.domain == domain)
+
+    cases = query.order_by(Case.number.asc()).all()
+    return [
+        {
+            "id": c.id,
+            "number": c.number,
+            "title": c.title,
+            "domain": c.domain,
+            "points": c.points,
+            "difficulty": c.difficulty,
+            "publication_status": c.publication_status,
+            "validation_status": c.validation_status,
+            "judge_enabled": c.judge_enabled,
+            "reveal_failed_tests": c.reveal_failed_tests,
+            "flag_format": c.flag_format,
+            "objective": c.objective,
+            "input_contract": c.input_contract,
+            "required_result": c.required_result,
+            "reference_solution": c.reference_solution,
+            "starter_py": c.starter_py,
+            "starter_cpp": c.starter_cpp,
+            "starter_c": c.starter_c,
+            "test_cases": [
+                {
+                    "id": tc.id,
+                    "type": tc.test_type,
+                    "index": tc.test_index,
+                    "input": tc.input_data,
+                    "output": tc.expected_output,
+                    "points": tc.points
+                }
+                for tc in sorted(c.test_cases, key=lambda t: (0 if t.test_type == "public_sample" else 1, t.test_index))
+            ]
+        }
+        for c in cases
+    ]
+
+@router.post("/cases/batch-judge-toggle")
+def admin_batch_judge_toggle(
+    req: BatchJudgeToggleRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin)
+):
+    query = db.query(Case)
+    if req.domain:
+        query = query.filter(Case.domain == req.domain)
+    cases = query.all()
+
+    for c in cases:
+        if req.judge_enabled is not None:
+            c.judge_enabled = req.judge_enabled
+        if req.reveal_failed_tests is not None:
+            c.reveal_failed_tests = req.reveal_failed_tests
+
+    # Record Audit Log
+    log = AuditLog(
+        user_id=current_admin.id,
+        action="BATCH_JUDGE_TOGGLE",
+        target_type="DOMAIN" if req.domain else "ALL_CASES",
+        target_id=req.domain or "ALL",
+        details=f"Judge toggle by {current_admin.username}: judge_enabled={req.judge_enabled}, reveal_failed={req.reveal_failed_tests}"
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "success": True,
+        "affected_cases": len(cases),
+        "domain": req.domain or "ALL",
+        "judge_enabled": req.judge_enabled,
+        "reveal_failed_tests": req.reveal_failed_tests
+    }
 
 @router.put("/cases/{case_id}")
 def admin_update_case(case_id: str, req: CaseUpdateRequest, db: Session = Depends(get_db), current_admin: User = Depends(get_current_admin)):
@@ -61,6 +159,8 @@ def admin_update_case(case_id: str, req: CaseUpdateRequest, db: Session = Depend
     if req.objective is not None: case.objective = req.objective
     if req.input_contract is not None: case.input_contract = req.input_contract
     if req.required_result is not None: case.required_result = req.required_result
+    if req.judge_enabled is not None: case.judge_enabled = req.judge_enabled
+    if req.reveal_failed_tests is not None: case.reveal_failed_tests = req.reveal_failed_tests
 
     # Record Audit Log
     log = AuditLog(

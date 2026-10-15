@@ -151,3 +151,56 @@ def test_git_sync_preview_admin():
     data = res.json()
     assert "scan_summary" in data
     assert data["scan_summary"]["total_scanned"] == 80
+
+def test_admin_account_enigmatrix():
+    res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "Enigmatrix#Admin2026!"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["role"] == "admin"
+    assert "access_token" in data
+
+def test_admin_solutions_master_key():
+    # Regular user cannot access
+    user_res = client.post("/api/v1/auth/login", json={"username": "cadet_forensic", "password": "Investigator#2026!"})
+    user_token = user_res.json()["access_token"]
+    res_forbidden = client.get("/api/v1/admin/solutions", headers={"Authorization": f"Bearer {user_token}"})
+    assert res_forbidden.status_code == 403
+
+    # Admin CAN access master solutions and answers
+    admin_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "Enigmatrix#Admin2026!"})
+    admin_token = admin_res.json()["access_token"]
+    res_ok = client.get("/api/v1/admin/solutions", headers={"Authorization": f"Bearer {admin_token}"})
+    assert res_ok.status_code == 200
+    sols = res_ok.json()
+    assert len(sols) == 80
+    case_1 = next(s for s in sols if s["id"] == "CASE-01")
+    assert "reference_solution" in case_1
+    assert len(case_1["reference_solution"]) > 0
+    assert len(case_1["test_cases"]) >= 3  # Public sample + hidden tests
+
+def test_judge_worker_toggle():
+    admin_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "Enigmatrix#Admin2026!"})
+    admin_token = admin_res.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    user_res = client.post("/api/v1/auth/login", json={"username": "cadet_forensic", "password": "Investigator#2026!"})
+    user_token = user_res.json()["access_token"]
+    user_headers = {"Authorization": f"Bearer {user_token}"}
+
+    # 1. Disable judge worker on CASE-01
+    patch_res = client.put("/api/v1/admin/cases/CASE-01", json={"judge_enabled": False}, headers=admin_headers)
+    assert patch_res.status_code == 200
+
+    # 2. Submission by user should be blocked with 403
+    sub_res = client.post("/api/v1/submissions/run-sample", json={
+        "case_id": "CASE-01",
+        "language": "python3",
+        "source_code": "print('test')"
+    }, headers=user_headers)
+    assert sub_res.status_code == 403
+    assert "disabled" in sub_res.json()["detail"].lower()
+
+    # 3. Re-enable judge worker on CASE-01
+    patch_back = client.put("/api/v1/admin/cases/CASE-01", json={"judge_enabled": True}, headers=admin_headers)
+    assert patch_back.status_code == 200
+

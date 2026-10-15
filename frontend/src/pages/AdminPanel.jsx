@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, GitBranch, RefreshCw, CheckCircle2, AlertTriangle, Eye, Edit3, Plus, Activity, Lock, Database } from 'lucide-react';
+import { 
+  Shield, GitBranch, RefreshCw, CheckCircle2, AlertTriangle, Eye, Edit3, 
+  Plus, Activity, Lock, Database, Key, Code2, ChevronDown, ChevronUp, 
+  Cpu, Sliders, Search, Check, X
+} from 'lucide-react';
 import { adminService } from '../services/api';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('cases'); // 'cases' | 'git' | 'health' | 'audit'
+  const [activeTab, setActiveTab] = useState('solutions'); // 'solutions' | 'cases' | 'git' | 'health' | 'audit'
   const [cases, setCases] = useState([]);
+  const [solutions, setSolutions] = useState([]);
   const [health, setHealth] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [gitPreview, setGitPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statusMsg, setStatusMsg] = useState('');
 
-  // Editing modal state
-  const [editingCase, setEditingCase] = useState(null);
+  // Filtering for Solutions & Judge Control Tab
+  const [selectedDomain, setSelectedDomain] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedSol, setExpandedSol] = useState({});
+  const [expandedTests, setExpandedTests] = useState({});
 
   useEffect(() => {
     loadAll();
@@ -21,12 +29,14 @@ export default function AdminPanel() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [caseList, healthData, logs] = await Promise.all([
+      const [caseList, solList, healthData, logs] = await Promise.all([
         adminService.listCases(),
+        adminService.listSolutions().catch(() => []),
         adminService.getHealth().catch(() => null),
         adminService.getAuditLogs().catch(() => [])
       ]);
       setCases(caseList);
+      setSolutions(solList);
       setHealth(healthData);
       setAuditLogs(logs);
     } catch (err) {
@@ -41,10 +51,55 @@ export default function AdminPanel() {
     try {
       await adminService.updateCase(caseId, { publication_status: newStatus });
       setCases(cases.map(c => c.id === caseId ? { ...c, publication_status: newStatus } : c));
+      setSolutions(solutions.map(s => s.id === caseId ? { ...s, publication_status: newStatus } : s));
       setStatusMsg(`Updated ${caseId} status to ${newStatus}`);
       setTimeout(() => setStatusMsg(''), 3000);
     } catch (err) {
       alert('Failed to update case: ' + err.message);
+    }
+  };
+
+  const handleToggleJudge = async (caseId, currentVal) => {
+    const nextVal = !currentVal;
+    try {
+      await adminService.updateCase(caseId, { judge_enabled: nextVal });
+      setCases(cases.map(c => c.id === caseId ? { ...c, judge_enabled: nextVal } : c));
+      setSolutions(solutions.map(s => s.id === caseId ? { ...s, judge_enabled: nextVal } : s));
+      setStatusMsg(`Judge worker ${nextVal ? 'ENABLED' : 'DISABLED'} for ${caseId}`);
+      setTimeout(() => setStatusMsg(''), 3000);
+    } catch (err) {
+      alert('Failed to toggle judge: ' + err.message);
+    }
+  };
+
+  const handleToggleReveal = async (caseId, currentVal) => {
+    const nextVal = !currentVal;
+    try {
+      await adminService.updateCase(caseId, { reveal_failed_tests: nextVal });
+      setCases(cases.map(c => c.id === caseId ? { ...c, reveal_failed_tests: nextVal } : c));
+      setSolutions(solutions.map(s => s.id === caseId ? { ...s, reveal_failed_tests: nextVal } : s));
+      setStatusMsg(`Practice test feedback ${nextVal ? 'ENABLED (Visible)' : 'DISABLED (Contest Mode)'} for ${caseId}`);
+      setTimeout(() => setStatusMsg(''), 3000);
+    } catch (err) {
+      alert('Failed to toggle feedback mode: ' + err.message);
+    }
+  };
+
+  const handleBatchJudge = async (domain, judgeEnabled, revealTests) => {
+    const domainText = domain === 'ALL' ? 'all cases' : `domain "${domain}"`;
+    if (!window.confirm(`Apply judge worker settings to ${domainText}?`)) return;
+    try {
+      const payload = {
+        domain: domain === 'ALL' ? null : domain,
+        judge_enabled: judgeEnabled,
+        reveal_failed_tests: revealTests
+      };
+      await adminService.batchJudgeToggle(payload);
+      setStatusMsg(`Batch judge settings applied to ${domainText}`);
+      setTimeout(() => setStatusMsg(''), 3000);
+      loadAll();
+    } catch (err) {
+      alert('Batch update failed: ' + err.message);
     }
   };
 
@@ -68,11 +123,32 @@ export default function AdminPanel() {
     }
   };
 
+  const toggleSolutionExpand = (id) => {
+    setExpandedSol(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleTestsExpand = (id) => {
+    setExpandedTests(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  // Unique domains
+  const domains = ['ALL', ...Array.from(new Set(solutions.map(s => s.domain).filter(Boolean)))];
+
+  // Filtered solutions
+  const filteredSolutions = solutions.filter(s => {
+    const matchesDomain = selectedDomain === 'ALL' || s.domain === selectedDomain;
+    const matchesSearch = !searchQuery || 
+      s.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.domain.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesDomain && matchesSearch;
+  });
+
   if (loading) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center font-mono text-cyan-400 text-xs">
         <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-        INITIALIZING COMMAND CLEARANCE TERMINAL...
+        INITIALIZING ENIGMATRIX COMMAND CLEARANCE TERMINAL...
       </div>
     );
   }
@@ -85,57 +161,298 @@ export default function AdminPanel() {
         <div>
           <h1 className="text-2xl font-bold font-mono text-white flex items-center gap-2">
             <Lock className="w-6 h-6 text-forensic-cyan" />
-            ADMINISTRATOR COMMAND TERMINAL
+            ENIGMATRIX ADMINISTRATOR COMMAND TERMINAL
           </h1>
           <p className="text-xs text-slate-400 font-mono mt-1">
-            Case lifecycle administration, Git question synchronizer, isolated judge diagnostics, and audit logs.
+            Master answer keys & solutions vault, granular judge worker configuration, Git sync, and system telemetry.
           </p>
         </div>
 
         {statusMsg && (
-          <div className="px-3 py-1.5 rounded bg-cyan-950 border border-cyan-500 text-cyan-300 font-mono text-xs">
+          <div className="px-3.5 py-1.5 rounded bg-cyan-950 border border-cyan-500 text-cyan-300 font-mono text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-cyan-400" />
             {statusMsg}
           </div>
         )}
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center space-x-2 border-b border-forensic-800 pb-2">
+      <div className="flex items-center space-x-2 border-b border-forensic-800 pb-2 overflow-x-auto">
+        <button
+          onClick={() => setActiveTab('solutions')}
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+            activeTab === 'solutions' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Key className="w-3.5 h-3.5" />
+          Master Solutions & Judge Control ({solutions.length})
+        </button>
         <button
           onClick={() => setActiveTab('cases')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider transition ${
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'cases' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
+          <Sliders className="w-3.5 h-3.5" />
           Case Catalog ({cases.length})
         </button>
         <button
           onClick={() => setActiveTab('git')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider transition ${
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'git' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
-          Git Question Importer
+          <GitBranch className="w-3.5 h-3.5" />
+          Git Importer
         </button>
         <button
           onClick={() => setActiveTab('health')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider transition ${
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'health' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
-          System Health & Workers
+          <Activity className="w-3.5 h-3.5" />
+          Judge Telemetry
         </button>
         <button
           onClick={() => setActiveTab('audit')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider transition ${
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'audit' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
+          <Database className="w-3.5 h-3.5" />
           Audit Log ({auditLogs.length})
         </button>
       </div>
 
-      {/* Tab 1: Case Catalog */}
+      {/* Tab 1: Master Solutions & Judge Control */}
+      {activeTab === 'solutions' && (
+        <div className="space-y-6">
+          
+          {/* Controls Bar & Batch Actions */}
+          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-5 space-y-4 font-mono text-xs">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              
+              {/* Search & Domain Filter */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    type="text"
+                    placeholder="Search by ID, title, domain..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-4 py-2 bg-forensic-950 border border-forensic-800 rounded-lg text-slate-200 focus:outline-none focus:border-cyan-500 w-64"
+                  />
+                </div>
+
+                <select
+                  value={selectedDomain}
+                  onChange={(e) => setSelectedDomain(e.target.value)}
+                  className="px-3 py-2 bg-forensic-950 border border-forensic-800 rounded-lg text-forensic-cyan focus:outline-none focus:border-cyan-500"
+                >
+                  {domains.map(d => (
+                    <option key={d} value={d}>
+                      Domain: {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Batch Actions */}
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => handleBatchJudge(selectedDomain, true, null)}
+                  className="px-3 py-1.5 rounded bg-emerald-950/80 border border-emerald-600 text-emerald-300 hover:bg-emerald-900 transition flex items-center gap-1.5"
+                >
+                  <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                  Enable Judge ({selectedDomain})
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(selectedDomain, false, null)}
+                  className="px-3 py-1.5 rounded bg-red-950/80 border border-red-600 text-red-300 hover:bg-red-900 transition flex items-center gap-1.5"
+                >
+                  <Cpu className="w-3.5 h-3.5 text-red-400" />
+                  Disable Judge
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(selectedDomain, null, true)}
+                  className="px-3 py-1.5 rounded bg-cyan-950/80 border border-cyan-600 text-cyan-300 hover:bg-cyan-900 transition flex items-center gap-1.5"
+                >
+                  <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                  Reveal Failed Tests
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(selectedDomain, null, false)}
+                  className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5"
+                >
+                  <Lock className="w-3.5 h-3.5" />
+                  Hide Tests (Contest)
+                </button>
+              </div>
+
+            </div>
+
+            <div className="text-[11px] text-slate-400 flex items-center gap-4 pt-2 border-t border-forensic-800">
+              <span>Showing {filteredSolutions.length} of {solutions.length} cases</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Judge Enabled</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Practice Mode (Failed test inputs visible to participants)</span>
+            </div>
+          </div>
+
+          {/* Problem Cards List with Official Answers & Worker Controls */}
+          <div className="space-y-4">
+            {filteredSolutions.map((c) => (
+              <div 
+                key={c.id} 
+                className="bg-forensic-900 border border-forensic-800 rounded-xl overflow-hidden transition font-mono"
+              >
+                {/* Case Top Bar */}
+                <div className="p-4 bg-forensic-850/60 border-b border-forensic-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-bold text-xs">
+                        {c.id}
+                      </span>
+                      <h3 className="text-sm font-bold text-white font-sans">{c.title}</h3>
+                      <span className="text-[10px] text-slate-500 uppercase">({c.domain})</span>
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-mono">
+                      <span>Points: <b className="text-amber-400">{c.points}</b></span> • 
+                      <span className="ml-2">Difficulty: <b className="text-slate-300">{c.difficulty}</b></span> • 
+                      <span className="ml-2">Flag Format: <code className="text-emerald-400">{c.flag_format}</code></span>
+                    </div>
+                  </div>
+
+                  {/* Worker & Feedback Toggles */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Judge Enabled Toggle */}
+                    <button
+                      onClick={() => handleToggleJudge(c.id, c.judge_enabled)}
+                      className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition ${
+                        c.judge_enabled 
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500 hover:bg-emerald-900' 
+                          : 'bg-red-950 text-red-400 border border-red-600 hover:bg-red-900'
+                      }`}
+                      title="Click to enable/disable judge execution for this problem"
+                    >
+                      <Cpu className="w-3.5 h-3.5" />
+                      Judge: {c.judge_enabled ? 'ENABLED' : 'DISABLED'}
+                    </button>
+
+                    {/* Reveal Failed Tests Toggle */}
+                    <button
+                      onClick={() => handleToggleReveal(c.id, c.reveal_failed_tests)}
+                      className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition ${
+                        c.reveal_failed_tests 
+                          ? 'bg-cyan-950 text-cyan-300 border border-cyan-500 hover:bg-cyan-900' 
+                          : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-700'
+                      }`}
+                      title="Toggle whether participants see failed test inputs/outputs"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      {c.reveal_failed_tests ? 'Practice Mode (Revealed)' : 'Contest Mode (Hidden)'}
+                    </button>
+
+                    {/* View Reference Answer Toggle */}
+                    <button
+                      onClick={() => toggleSolutionExpand(c.id)}
+                      className="px-3 py-1.5 rounded bg-amber-950/60 border border-amber-600/60 text-amber-300 hover:bg-amber-900 text-xs font-bold flex items-center gap-1 transition"
+                    >
+                      <Code2 className="w-3.5 h-3.5 text-amber-400" />
+                      Official Answer
+                      {expandedSol[c.id] ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+
+                    {/* View All Test Cases Toggle */}
+                    <button
+                      onClick={() => toggleTestsExpand(c.id)}
+                      className="px-3 py-1.5 rounded bg-forensic-800 border border-slate-700 text-slate-300 hover:bg-forensic-750 text-xs font-bold flex items-center gap-1 transition"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+                      Test Cases ({c.test_cases?.length || 0})
+                      {expandedTests[c.id] ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Collapsible Section 1: Official Reference Solution */}
+                {expandedSol[c.id] && (
+                  <div className="p-4 bg-forensic-950 border-b border-forensic-800 space-y-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-amber-400 font-bold uppercase flex items-center gap-1.5">
+                        <Key className="w-4 h-4 text-amber-400" />
+                        Official Master Solution & Answer Logic
+                      </span>
+                      <span className="text-[11px] text-slate-500">Python 3 Reference Implementation</span>
+                    </div>
+
+                    <pre className="p-3.5 rounded bg-[#1e1e1e] border border-forensic-800 text-emerald-300 overflow-x-auto whitespace-pre-wrap font-mono">
+                      {c.reference_solution || "# No reference solution registered for this case"}
+                    </pre>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] text-slate-400 pt-2 border-t border-forensic-800">
+                      <div>
+                        <span className="text-slate-500 uppercase block mb-1">Objective:</span>
+                        <p className="text-slate-300">{c.objective}</p>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 uppercase block mb-1">Required Result / Expected Verdict:</span>
+                        <p className="text-slate-300">{c.required_result}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Collapsible Section 2: All Test Cases (Public + Hidden) */}
+                {expandedTests[c.id] && (
+                  <div className="p-4 bg-forensic-950 space-y-3 text-xs">
+                    <span className="text-forensic-cyan font-bold uppercase block">
+                      Evaluation Test Cases Suite (Public Samples + Secret Hidden Tests)
+                    </span>
+
+                    <div className="space-y-3">
+                      {c.test_cases?.map((tc, idx) => (
+                        <div key={tc.id} className="p-3 rounded bg-forensic-900 border border-forensic-800 space-y-2">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-2">
+                              <span className={`px-2 py-0.5 rounded font-bold ${
+                                tc.type === 'public_sample' ? 'bg-cyan-950 text-cyan-400 border border-cyan-800' : 'bg-purple-950 text-purple-300 border border-purple-800'
+                              }`}>
+                                {tc.type === 'public_sample' ? 'PUBLIC SAMPLE' : 'HIDDEN TEST'} #{tc.index}
+                              </span>
+                              <span className="text-slate-400">Award: {tc.points} pts</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase block mb-1">Input (stdin):</span>
+                              <pre className="p-2 rounded bg-forensic-950 text-slate-300 overflow-x-auto whitespace-pre-wrap font-mono text-[11px]">
+                                {tc.input || "(empty)"}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-slate-500 uppercase block mb-1">Expected Output (stdout):</span>
+                              <pre className="p-2 rounded bg-forensic-950 text-emerald-400 overflow-x-auto whitespace-pre-wrap font-mono text-[11px]">
+                                {tc.output || "(empty)"}
+                              </pre>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            ))}
+          </div>
+
+        </div>
+      )}
+
+      {/* Tab 2: Case Catalog */}
       {activeTab === 'cases' && (
         <div className="bg-forensic-900 border border-forensic-800 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
@@ -146,7 +463,8 @@ export default function AdminPanel() {
                   <th className="py-3 px-4">Title & Domain</th>
                   <th className="py-3 px-4 text-center">Points</th>
                   <th className="py-3 px-4 text-center">Difficulty</th>
-                  <th className="py-3 px-4 text-center">Validation Status</th>
+                  <th className="py-3 px-4 text-center">Judge Status</th>
+                  <th className="py-3 px-4 text-center">Feedback Mode</th>
                   <th className="py-3 px-4 text-center">Publication</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -162,13 +480,28 @@ export default function AdminPanel() {
                     <td className="py-3 px-4 text-center text-amber-400 font-bold">{c.points}</td>
                     <td className="py-3 px-4 text-center text-slate-300">{c.difficulty}</td>
                     <td className="py-3 px-4 text-center">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        c.validation_status === 'VALIDATED'
-                          ? 'bg-emerald-950 text-emerald-400 border border-emerald-700/60'
-                          : 'bg-amber-950 text-amber-400 border border-amber-700/60'
-                      }`}>
-                        {c.validation_status}
-                      </span>
+                      <button
+                        onClick={() => handleToggleJudge(c.id, c.judge_enabled)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          c.judge_enabled 
+                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-700/60' 
+                            : 'bg-red-950 text-red-400 border border-red-700/60'
+                        }`}
+                      >
+                        {c.judge_enabled ? 'ENABLED' : 'DISABLED'}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => handleToggleReveal(c.id, c.reveal_failed_tests)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          c.reveal_failed_tests 
+                            ? 'bg-cyan-950 text-cyan-300 border border-cyan-700/60' 
+                            : 'bg-slate-800 text-slate-400 border border-slate-700'
+                        }`}
+                      >
+                        {c.reveal_failed_tests ? 'PRACTICE' : 'CONTEST'}
+                      </button>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <button
@@ -200,7 +533,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* Tab 2: Git Importer */}
+      {/* Tab 3: Git Importer */}
       {activeTab === 'git' && (
         <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -269,12 +602,12 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* Tab 3: System Health */}
+      {/* Tab 4: System Health */}
       {activeTab === 'health' && (
         <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 space-y-6">
           <h2 className="text-base font-bold font-mono text-white flex items-center gap-2">
             <Activity className="w-5 h-5 text-emerald-400" />
-            Platform & Judge Worker Telemetry
+            Enigmatrix Platform & Judge Worker Telemetry
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 font-mono text-xs">
@@ -308,7 +641,7 @@ export default function AdminPanel() {
         </div>
       )}
 
-      {/* Tab 4: Audit Logs */}
+      {/* Tab 5: Audit Logs */}
       {activeTab === 'audit' && (
         <div className="bg-forensic-900 border border-forensic-800 rounded-xl overflow-hidden">
           <div className="p-4 border-b border-forensic-800 bg-forensic-850">

@@ -2,10 +2,10 @@ import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "CyberAnzen — Crime Investigation Programming Platform"
+    PROJECT_NAME: str = "Enigmatrix — Crime Investigation Programming Platform"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "cyberanzen-forensic-secret-key-32-chars-long!")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "enigmatrix-forensic-secret-key-32-chars-long!")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     JUDGE_TIMEOUT_SEC: float = 3.0
     JUDGE_MEMORY_LIMIT_MB: int = 256
     JUDGE_MAX_OUTPUT_BYTES: int = 1024 * 1024  # 1 MB
-    JUDGE_TEMP_DIR: str = os.getenv("JUDGE_TEMP_DIR", "/tmp/cyberanzen_judge")
+    JUDGE_TEMP_DIR: str = os.getenv("JUDGE_TEMP_DIR", "/tmp/enigmatrix_judge")
     
     # Project paths
     BASE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))

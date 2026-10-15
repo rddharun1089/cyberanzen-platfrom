@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Start CyberAnzen Platform Server
+# Start Enigmatrix Platform Server
 set -e
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
 echo "================================================================="
-echo "   STARTING CYBERANZEN CRIME INVESTIGATION PLATFORM SERVER       "
+echo "   STARTING ENIGMATRIX CRIME INVESTIGATION PLATFORM SERVER       "
 echo "================================================================="
 
 # Check virtual environment

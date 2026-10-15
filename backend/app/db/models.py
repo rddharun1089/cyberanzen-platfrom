@@ -71,6 +71,9 @@ class Case(Base):
     reference_solution = Column(Text, nullable=True)
     validation_notes = Column(Text, nullable=True)
     
+    judge_enabled = Column(Boolean, default=True, nullable=False)
+    reveal_failed_tests = Column(Boolean, default=True, nullable=False)
+
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     test_cases = relationship("TestCase", back_populates="case", cascade="all, delete-orphan")

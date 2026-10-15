@@ -10,7 +10,8 @@ def evaluate_submission(
     test_cases: List[Dict[str, Any]],  # list of {"id": str, "input": str, "output": str, "points": int, "type": str}
     time_limit_ms: int = 2000,
     memory_limit_mb: int = 256,
-    is_sample_run: bool = False
+    is_sample_run: bool = False,
+    reveal_failed_tests: bool = False
 ) -> Dict[str, Any]:
     """
     Evaluates participant code inside a safe temporary sandbox directory.
@@ -67,8 +68,8 @@ def evaluate_submission(
                 "exec_time_ms": res.exec_time_ms,
                 "points_awarded": awarded
             }
-            # Only reveal stdout/stderr and inputs for public samples or sample runs
-            if tc.get("type") == "public_sample" or is_sample_run:
+            # Only reveal stdout/stderr and inputs for public samples or sample runs, or if admin enabled reveal_failed_tests
+            if tc.get("type") == "public_sample" or is_sample_run or (reveal_failed_tests and not passed):
                 test_info["actual_output"] = res.stdout
                 test_info["error"] = res.stderr
                 test_info["input"] = tc["input"]

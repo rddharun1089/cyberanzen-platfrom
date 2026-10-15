@@ -2,6 +2,7 @@ import os
 import json
 import glob
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.db.session import engine, Base, SessionLocal
 from app.db.models import User, Case, TestCase, UserRole, PublicationStatus, ValidationStatus
 from app.core.security import hash_password
@@ -11,12 +12,38 @@ def init_db(db: Session):
     # Create all tables
     Base.metadata.create_all(bind=engine)
 
-    # 1. Seed Administrator
+    # Ensure columns exist in SQLite database if upgraded
+    with engine.connect() as conn:
+        for col_def in [
+            ("judge_enabled", "BOOLEAN DEFAULT 1"),
+            ("reveal_failed_tests", "BOOLEAN DEFAULT 1")
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE cases ADD COLUMN {col_def[0]} {col_def[1]}"))
+                conn.commit()
+            except Exception:
+                pass  # column already exists
+
+    # 1. Seed Primary Enigmatrix Admin
+    primary_admin = db.query(User).filter(User.username == "admin").first()
+    if not primary_admin:
+        primary_admin = User(
+            username="admin",
+            email="admin@enigmatrix.local",
+            hashed_password=hash_password("Enigmatrix#Admin2026!"),
+            role=UserRole.ADMIN.value,
+            points=0,
+            is_active=True
+        )
+        db.add(primary_admin)
+        print("Created Admin: admin (password: Enigmatrix#Admin2026!)")
+
+    # 1b. Seed Lead Investigator Admin
     admin = db.query(User).filter(User.username == "lead_investigator").first()
     if not admin:
         admin = User(
             username="lead_investigator",
-            email="investigator@cyberanzen.local",
+            email="investigator@enigmatrix.local",
             hashed_password=hash_password("Investigator#2026!"),
             role=UserRole.ADMIN.value,
             points=0,
