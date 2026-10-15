@@ -18,8 +18,9 @@ RUN useradd -m -u 1000 judgeuser
 COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
-# Copy source code, questions, and data
+# Copy source code, frontend build, questions, and data
 COPY backend /app/backend
+COPY frontend/dist /app/frontend/dist
 COPY questions /app/questions
 COPY reports /app/reports
 COPY source_inventory.json /app/source_inventory.json

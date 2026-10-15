@@ -1,0 +1,39 @@
+FROM python:3.12-slim
+
+# Install system compilers and build utilities
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    build-essential \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Create unprivileged judge worker user
+RUN useradd -m -u 1000 judgeuser
+
+# Install Python requirements
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+
+# Copy source code, frontend build, questions, and data
+COPY backend /app/backend
+COPY frontend/dist /app/frontend/dist
+COPY questions /app/questions
+COPY reports /app/reports
+COPY source_inventory.json /app/source_inventory.json
+COPY 80_CTF_Complete_Coding_Answer_Key.docx /app/
+COPY 80_Independent_Crime_CTF_Stories_Connected_Storyline.docx /app/
+
+# Set ownership
+RUN chown -R judgeuser:judgeuser /app
+USER judgeuser
+
+ENV PYTHONPATH=/app/backend
+ENV PYTHONUNBUFFERED=1
+
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
