@@ -12,6 +12,7 @@ import TeamLeaderboard from './pages/TeamLeaderboard';
 import AdminPanel from './pages/AdminPanel';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Landing from './pages/Landing';
 import { authService } from './services/api';
 
 export default function App() {
@@ -48,7 +49,9 @@ export default function App() {
         <Navbar user={user} onLogout={handleLogout} />
         <main className="flex-1 flex flex-col">
           <Routes>
-            <Route path="/" element={<Dashboard user={user} />} />
+            <Route path="/" element={user ? <Dashboard user={user} /> : <Landing />} />
+            <Route path="/landing" element={<Landing />} />
+            <Route path="/dashboard" element={user ? <Dashboard user={user} /> : <Navigate to="/login" />} />
             <Route path="/archive" element={<Archive />} />
             <Route path="/challenges" element={<Archive />} />
             <Route path="/cases/:caseId" element={<Workspace />} />

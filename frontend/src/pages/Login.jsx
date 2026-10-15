@@ -4,8 +4,8 @@ import { Terminal, Shield, Lock, ArrowRight } from 'lucide-react';
 import { authService } from '../services/api';
 
 export default function Login({ onLoginSuccess }) {
-  const [username, setUsername] = useState('lead_investigator');
-  const [password, setPassword] = useState('Investigator#2026!');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
