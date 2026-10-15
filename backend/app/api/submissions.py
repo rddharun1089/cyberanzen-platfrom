@@ -1,9 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from typing import Optional, List
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from app.db.session import get_db
-from app.db.models import Case, TestCase, Submission, User, EvidenceToken, Verdict
+from app.db.models import (
+    Case, TestCase, Submission, User, EvidenceToken, Verdict,
+    Team, TeamMembership, TeamSolvedCase
+)
 from app.api.deps import get_current_user
 from app.judge.worker import evaluate_submission
 from app.services.evidence_engine import compute_evidence_token
@@ -99,9 +104,16 @@ def submit_solution(req: SubmitSolutionRequest, db: Session = Depends(get_db), c
     verdict_str = eval_res["verdict"]
     awarded_points = case.points if verdict_str == "ACCEPTED" else eval_res["score"]
 
+    # Check if user belongs to an active team
+    user_team = None
+    membership = db.query(TeamMembership).filter(TeamMembership.user_id == current_user.id).first()
+    if membership and membership.team and membership.team.is_active:
+        user_team = membership.team
+
     # Save submission record
     sub = Submission(
         user_id=current_user.id,
+        team_id=user_team.id if user_team else None,
         case_id=case.id,
         language=req.language,
         source_code=req.source_code,
@@ -119,7 +131,7 @@ def submit_solution(req: SubmitSolutionRequest, db: Session = Depends(get_db), c
     unlocked_token = None
     # Handle Points & Evidence Token on ACCEPTED
     if verdict_str == "ACCEPTED":
-        # Check if already solved previously to prevent duplicate point farming
+        # 1. Update Personal Points if first solve by user
         prior_ac = db.query(Submission).filter(
             Submission.user_id == current_user.id,
             Submission.case_id == case.id,
@@ -131,7 +143,33 @@ def submit_solution(req: SubmitSolutionRequest, db: Session = Depends(get_db), c
             current_user.points += case.points
             db.commit()
 
-        # Unlock Evidence Token
+        # 2. Update Shared Team Progress & Points (Only once per team per problem)
+        if user_team:
+            existing_team_solve = db.query(TeamSolvedCase).filter(
+                TeamSolvedCase.team_id == user_team.id,
+                TeamSolvedCase.case_id == case.id
+            ).first()
+
+            if not existing_team_solve:
+                try:
+                    now_utc = datetime.now(timezone.utc)
+                    team_solve = TeamSolvedCase(
+                        team_id=user_team.id,
+                        case_id=case.id,
+                        points_awarded=case.points,
+                        solved_by_user_id=current_user.id,
+                        submission_id=sub.id,
+                        solved_at=now_utc
+                    )
+                    db.add(team_solve)
+                    user_team.points += case.points
+                    user_team.updated_at = now_utc
+                    db.commit()
+                except IntegrityError:
+                    # Concurrently handled by DB unique constraint
+                    db.rollback()
+
+        # 3. Unlock Evidence Token
         existing_token = db.query(EvidenceToken).filter(
             EvidenceToken.user_id == current_user.id,
             EvidenceToken.case_id == case.id

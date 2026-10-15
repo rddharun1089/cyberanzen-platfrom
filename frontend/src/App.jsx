@@ -7,6 +7,8 @@ import Workspace from './pages/Workspace';
 import EvidenceVault from './pages/EvidenceVault';
 import Submissions from './pages/Submissions';
 import Leaderboard from './pages/Leaderboard';
+import TeamWorkspace from './pages/TeamWorkspace';
+import TeamLeaderboard from './pages/TeamLeaderboard';
 import AdminPanel from './pages/AdminPanel';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -44,7 +46,10 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Dashboard user={user} />} />
             <Route path="/archive" element={<Archive />} />
+            <Route path="/challenges" element={<Archive />} />
             <Route path="/cases/:caseId" element={<Workspace />} />
+            <Route path="/team" element={user ? <TeamWorkspace user={user} /> : <Navigate to="/login" />} />
+            <Route path="/team-leaderboard" element={<TeamLeaderboard />} />
             <Route path="/vault" element={<EvidenceVault />} />
             <Route path="/submissions" element={<Submissions />} />
             <Route path="/leaderboard" element={<Leaderboard />} />

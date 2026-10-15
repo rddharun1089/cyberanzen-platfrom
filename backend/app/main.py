@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.core.config import settings
-from app.api import auth, cases, submissions, evidence, leaderboard, admin, git_sync
+from app.api import auth, cases, submissions, evidence, leaderboard, admin, git_sync, teams
 from app.db.session import engine, Base
 
 # Ensure all database tables exist on startup
@@ -32,6 +32,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix=settings.API_V1_STR)
 app.include_router(cases.router, prefix=settings.API_V1_STR)
 app.include_router(submissions.router, prefix=settings.API_V1_STR)
+app.include_router(teams.router, prefix=settings.API_V1_STR)
 app.include_router(evidence.router, prefix=settings.API_V1_STR)
 app.include_router(leaderboard.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)

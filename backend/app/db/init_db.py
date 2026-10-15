@@ -25,6 +25,12 @@ def init_db(db: Session):
             except Exception:
                 pass  # column already exists
 
+        try:
+            conn.execute(text("ALTER TABLE submissions ADD COLUMN team_id INTEGER REFERENCES teams(id)"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+
     # 1. Seed Primary Enigmatrix Admin
     primary_admin = db.query(User).filter(User.username == "admin").first()
     if not primary_admin:

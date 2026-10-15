@@ -1,12 +1,16 @@
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, Enum, UniqueConstraint
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
     PARTICIPANT = "participant"
+
+class TeamMemberRole(str, enum.Enum):
+    OWNER = "OWNER"
+    MEMBER = "MEMBER"
 
 class PublicationStatus(str, enum.Enum):
     PUBLISHED = "PUBLISHED"
@@ -42,6 +46,7 @@ class User(Base):
 
     submissions = relationship("Submission", back_populates="user", cascade="all, delete-orphan")
     tokens = relationship("EvidenceToken", back_populates="user", cascade="all, delete-orphan")
+    team_membership = relationship("TeamMembership", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 class Case(Base):
     __tablename__ = "cases"
@@ -110,8 +115,11 @@ class Submission(Base):
     is_sample_run = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
+
     user = relationship("User", back_populates="submissions")
     case = relationship("Case", back_populates="submissions")
+    team = relationship("Team", back_populates="submissions")
 
 class EvidenceToken(Base):
     __tablename__ = "evidence_tokens"
@@ -148,3 +156,52 @@ class GitSyncRecord(Base):
     status = Column(String(50), default="IDLE", nullable=False)
     preview_diff = Column(Text, nullable=True)
     synced_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+class Team(Base):
+    __tablename__ = "teams"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), unique=True, index=True, nullable=False)
+    invitation_code = Column(String(64), unique=True, index=True, nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    points = Column(Integer, default=0, nullable=False, index=True)
+    max_members = Column(Integer, default=4, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+    owner = relationship("User", foreign_keys=[owner_id])
+    memberships = relationship("TeamMembership", back_populates="team", cascade="all, delete-orphan")
+    solved_cases = relationship("TeamSolvedCase", back_populates="team", cascade="all, delete-orphan")
+    submissions = relationship("Submission", back_populates="team")
+
+class TeamMembership(Base):
+    __tablename__ = "team_memberships"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    role = Column(String(20), default=TeamMemberRole.MEMBER.value, nullable=False)
+    joined_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    team = relationship("Team", back_populates="memberships")
+    user = relationship("User", back_populates="team_membership")
+
+class TeamSolvedCase(Base):
+    __tablename__ = "team_solved_cases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    team_id = Column(Integer, ForeignKey("teams.id", ondelete="CASCADE"), nullable=False, index=True)
+    case_id = Column(String(20), ForeignKey("cases.id", ondelete="CASCADE"), nullable=False, index=True)
+    points_awarded = Column(Integer, default=0, nullable=False)
+    solved_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    submission_id = Column(Integer, ForeignKey("submissions.id", ondelete="SET NULL"), nullable=True)
+    solved_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+    team = relationship("Team", back_populates="solved_cases")
+    case = relationship("Case")
+    solved_by = relationship("User")
+
+    __table_args__ = (
+        UniqueConstraint('team_id', 'case_id', name='uq_team_case_solve'),
+    )

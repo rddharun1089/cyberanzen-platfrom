@@ -193,5 +193,94 @@ export const adminService = {
       publish_validated: publishValidated
     });
     return res.data;
+  },
+
+  async listUsers() {
+    const res = await apiClient.get('/admin/users');
+    return res.data;
+  },
+
+  async deleteUser(userId, confirmUsername) {
+    const res = await apiClient.delete(`/admin/users/${userId}`, {
+      params: { confirm_username: confirmUsername }
+    });
+    return res.data;
+  },
+
+  async listTeams() {
+    const res = await apiClient.get('/admin/teams');
+    return res.data;
+  },
+
+  async adminRotateTeamInvite(teamId) {
+    const res = await apiClient.post(`/admin/teams/${teamId}/rotate-invite`);
+    return res.data;
+  },
+
+  async adminRemoveTeamMember(teamId, userId) {
+    const res = await apiClient.delete(`/admin/teams/${teamId}/members/${userId}`);
+    return res.data;
+  },
+
+  async adminTransferTeamOwnership(teamId, newOwnerId) {
+    const res = await apiClient.post(`/admin/teams/${teamId}/transfer-ownership`, {
+      new_owner_id: newOwnerId
+    });
+    return res.data;
+  },
+
+  async adminAdjustTeamScore(teamId, pointsDelta, reason) {
+    const res = await apiClient.post(`/admin/teams/${teamId}/adjust-score`, {
+      points_delta: pointsDelta,
+      reason
+    });
+    return res.data;
+  },
+
+  async adminDeleteTeam(teamId) {
+    const res = await apiClient.delete(`/admin/teams/${teamId}`);
+    return res.data;
+  }
+};
+
+export const teamService = {
+  async createTeam(name) {
+    const res = await apiClient.post('/teams', { name });
+    return res.data;
+  },
+
+  async getMyTeam() {
+    const res = await apiClient.get('/teams/my');
+    return res.data;
+  },
+
+  async joinTeam(invitationCode) {
+    const res = await apiClient.post('/teams/join', { invitation_code: invitationCode });
+    return res.data;
+  },
+
+  async leaveTeam() {
+    const res = await apiClient.post('/teams/leave');
+    return res.data;
+  },
+
+  async rotateInviteCode() {
+    const res = await apiClient.post('/teams/rotate-invite');
+    return res.data;
+  },
+
+  async removeMember(userId) {
+    const res = await apiClient.delete(`/teams/members/${userId}`);
+    return res.data;
+  },
+
+  async transferOwnership(newOwnerId) {
+    const res = await apiClient.post('/teams/transfer-ownership', { new_owner_id: newOwnerId });
+    return res.data;
+  },
+
+  async getTeamLeaderboard() {
+    const res = await apiClient.get('/teams/leaderboard');
+    return res.data;
   }
 };

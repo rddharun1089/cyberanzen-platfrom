@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { 
   Play, Send, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, 
-  AlertTriangle, Key, Terminal, Code2, Lock, Unlock, ShieldAlert 
+  AlertTriangle, Key, Terminal, Code2, Lock, Unlock, ShieldAlert, FileText 
 } from 'lucide-react';
 import { authService, caseService, submissionService } from '../services/api';
 import VerdictBadge from '../components/VerdictBadge';
@@ -28,6 +28,7 @@ export default function Workspace() {
   const currentUser = authService.getCurrentUser();
   const isCopyPasteAllowed = Boolean(caseData?.allow_copy_paste || currentUser?.role === 'admin');
   const [clipboardWarning, setClipboardWarning] = useState('');
+  const [mobileView, setMobileView] = useState('dossier'); // 'dossier' | 'editor'
 
   // Global Keyboard & Clipboard Event Interceptor (Captures Ctrl+Shift+C, Ctrl+V, Shift+Insert, Extensions)
   useEffect(() => {
@@ -256,11 +257,41 @@ export default function Workspace() {
         </div>
       </div>
 
+      {/* Mobile / Tablet View Switcher */}
+      <div className="lg:hidden flex items-center justify-center p-2 bg-forensic-950 border-b border-forensic-800 flex-shrink-0">
+        <div className="flex rounded-lg bg-forensic-900 p-1 border border-forensic-800 w-full max-w-sm">
+          <button
+            onClick={() => setMobileView('dossier')}
+            className={`flex-1 py-1.5 text-xs font-mono font-bold rounded flex items-center justify-center gap-1.5 transition ${
+              mobileView === 'dossier'
+                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Problem Dossier</span>
+          </button>
+          <button
+            onClick={() => setMobileView('editor')}
+            className={`flex-1 py-1.5 text-xs font-mono font-bold rounded flex items-center justify-center gap-1.5 transition ${
+              mobileView === 'editor'
+                ? 'bg-cyan-950 text-cyan-300 border border-cyan-700 shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Code2 className="w-3.5 h-3.5" />
+            <span>Compiler Terminal</span>
+          </button>
+        </div>
+      </div>
+
       {/* Main Split Layout */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
         
         {/* Left Column: Problem Dossier & Narrative */}
-        <div className="w-full lg:w-1/2 border-r border-forensic-800 flex flex-col bg-forensic-900/40 overflow-hidden">
+        <div className={`w-full lg:w-1/2 border-r border-forensic-800 flex flex-col bg-forensic-900/40 overflow-hidden ${
+          mobileView === 'dossier' ? 'flex' : 'hidden lg:flex'
+        }`}>
           {/* Dossier Tabs */}
           <div className="h-10 border-b border-forensic-800 bg-forensic-900 px-4 flex items-center space-x-4 flex-shrink-0">
             <button
@@ -453,7 +484,9 @@ export default function Workspace() {
         </div>
 
         {/* Right Column: Code Editor & Execution HUD */}
-        <div className="w-full lg:w-1/2 flex flex-col bg-forensic-950 overflow-hidden">
+        <div className={`w-full lg:w-1/2 flex flex-col bg-forensic-950 overflow-hidden ${
+          mobileView === 'editor' ? 'flex' : 'hidden lg:flex'
+        }`}>
           
           {/* Editor Header Toolbar */}
           <div className="h-10 border-b border-forensic-800 bg-forensic-900 px-4 flex items-center justify-between flex-shrink-0">

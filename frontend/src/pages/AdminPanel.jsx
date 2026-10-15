@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, GitBranch, RefreshCw, CheckCircle2, AlertTriangle, Eye, Edit3, 
   Plus, Activity, Lock, Unlock, ShieldAlert, Database, Key, Code2, ChevronDown, ChevronUp, 
-  Cpu, Sliders, Search, Check, X
+  Cpu, Sliders, Search, Check, X, UserX, Users, Trophy, Trash2, Crown, UserMinus
 } from 'lucide-react';
 import { adminService } from '../services/api';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('solutions'); // 'solutions' | 'cases' | 'git' | 'health' | 'audit'
+  const [activeTab, setActiveTab] = useState('solutions'); // 'solutions' | 'cases' | 'users' | 'teams' | 'git' | 'health' | 'audit'
   const [cases, setCases] = useState([]);
   const [solutions, setSolutions] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [adminTeams, setAdminTeams] = useState([]);
   const [health, setHealth] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
   const [gitPreview, setGitPreview] = useState(null);
@@ -25,6 +27,17 @@ export default function AdminPanel() {
   const [expandedSol, setExpandedSol] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
 
+  // User Deletion Modal State
+  const [deleteUserModal, setDeleteUserModal] = useState(null);
+  const [confirmUsernameInput, setConfirmUsernameInput] = useState('');
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+
+  // Score Adjustment Modal State
+  const [adjustScoreModal, setAdjustScoreModal] = useState(null);
+  const [pointsDeltaInput, setPointsDeltaInput] = useState(0);
+  const [adjustReasonInput, setAdjustReasonInput] = useState('');
+  const [isAdjustingScore, setIsAdjustingScore] = useState(false);
+
   useEffect(() => {
     loadAll();
   }, []);
@@ -32,16 +45,20 @@ export default function AdminPanel() {
   async function loadAll() {
     setLoading(true);
     try {
-      const [caseList, solList, healthData, logs] = await Promise.all([
+      const [caseList, solList, healthData, logs, userList, teamList] = await Promise.all([
         adminService.listCases(),
         adminService.listSolutions().catch(() => []),
         adminService.getHealth().catch(() => null),
-        adminService.getAuditLogs().catch(() => [])
+        adminService.getAuditLogs().catch(() => []),
+        adminService.listUsers().catch(() => []),
+        adminService.listTeams().catch(() => [])
       ]);
       setCases(caseList);
       setSolutions(solList);
       setHealth(healthData);
       setAuditLogs(logs);
+      setUsers(userList);
+      setAdminTeams(teamList);
     } catch (err) {
       console.error('Failed to load admin data:', err);
     } finally {
@@ -137,6 +154,85 @@ export default function AdminPanel() {
       loadAll();
     } catch (err) {
       alert('Git sync failed: ' + err.message);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!deleteUserModal) return;
+    if (confirmUsernameInput.trim() !== deleteUserModal.username) {
+      alert(`Username confirmation mismatch. You must enter "${deleteUserModal.username}" exactly.`);
+      return;
+    }
+    setIsDeletingUser(true);
+    try {
+      const res = await adminService.deleteUser(deleteUserModal.id, confirmUsernameInput.trim());
+      setStatusMsg(res.message);
+      setDeleteUserModal(null);
+      setConfirmUsernameInput('');
+      setTimeout(() => setStatusMsg(''), 4000);
+      loadAll();
+    } catch (err) {
+      alert(err.response?.data?.detail || err.message);
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
+
+  const handleAdminRotateInvite = async (teamId) => {
+    if (!window.confirm('Rotate invitation code for this squad? Previous tokens will be revoked.')) return;
+    try {
+      const res = await adminService.adminRotateTeamInvite(teamId);
+      setStatusMsg(`Rotated squad #${teamId} invite code: ${res.new_invitation_code}`);
+      setTimeout(() => setStatusMsg(''), 4000);
+      loadAll();
+    } catch (err) {
+      alert('Failed to rotate invite: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleAdminRemoveMember = async (teamId, userId, username) => {
+    if (!window.confirm(`Remove member "${username}" from squad #${teamId}?`)) return;
+    try {
+      const res = await adminService.adminRemoveTeamMember(teamId, userId);
+      setStatusMsg(res.message);
+      setTimeout(() => setStatusMsg(''), 4000);
+      loadAll();
+    } catch (err) {
+      alert('Failed to remove member: ' + (err.response?.data?.detail || err.message));
+    }
+  };
+
+  const handleAdminAdjustScore = async () => {
+    if (!adjustScoreModal) return;
+    setIsAdjustingScore(true);
+    try {
+      const res = await adminService.adminAdjustTeamScore(
+        adjustScoreModal.id,
+        parseInt(pointsDeltaInput, 10),
+        adjustReasonInput.trim() || 'Administrative manual adjustment'
+      );
+      setStatusMsg(`Adjusted squad #${adjustScoreModal.id} score to ${res.new_points} PTS`);
+      setAdjustScoreModal(null);
+      setPointsDeltaInput(0);
+      setAdjustReasonInput('');
+      setTimeout(() => setStatusMsg(''), 4000);
+      loadAll();
+    } catch (err) {
+      alert('Failed to adjust score: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setIsAdjustingScore(false);
+    }
+  };
+
+  const handleAdminDeleteTeam = async (teamId, teamName) => {
+    if (!window.confirm(`Permanently disband and delete squad "${teamName}" (ID #${teamId})? All team solved progress will be cleared, though individual submissions will remain.`)) return;
+    try {
+      const res = await adminService.adminDeleteTeam(teamId);
+      setStatusMsg(res.message);
+      setTimeout(() => setStatusMsg(''), 4000);
+      loadAll();
+    } catch (err) {
+      alert('Failed to delete squad: ' + (err.response?.data?.detail || err.message));
     }
   };
 
@@ -387,6 +483,24 @@ export default function AdminPanel() {
         >
           <Sliders className="w-3.5 h-3.5" />
           Case Catalog ({cases.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+            activeTab === 'users' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <UserX className="w-3.5 h-3.5 text-red-400" />
+          User Management ({users.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('teams')}
+          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+            activeTab === 'teams' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5 text-cyan-400" />
+          Squads & Teams ({adminTeams.length})
         </button>
         <button
           onClick={() => setActiveTab('git')}
@@ -851,6 +965,343 @@ export default function AdminPanel() {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab 6: User Management */}
+      {activeTab === 'users' && (
+        <div className="bg-forensic-900 border border-forensic-800 rounded-xl overflow-hidden font-mono shadow-xl">
+          <div className="p-4 border-b border-forensic-800 bg-forensic-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-xs uppercase text-white font-bold flex items-center gap-2">
+                <UserX className="w-4 h-4 text-red-400" />
+                Participant & Investigator Directory ({users.length} Registered Accounts)
+              </span>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Inspect accounts, squad affiliations, and execute authorized permanent account deletions.
+              </p>
+            </div>
+            <button
+              onClick={loadAll}
+              className="px-3 py-1.5 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs flex items-center gap-1.5 transition w-fit"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-forensic-850/80 border-b border-forensic-800 text-slate-400 uppercase text-[10px]">
+                <tr>
+                  <th className="py-3 px-4 w-16">ID</th>
+                  <th className="py-3 px-4">Callsign & Email</th>
+                  <th className="py-3 px-4 text-center">Role</th>
+                  <th className="py-3 px-4 text-center">Squad</th>
+                  <th className="py-3 px-4 text-center">Submissions</th>
+                  <th className="py-3 px-4 text-center">Score</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-forensic-800">
+                {users.map((u) => (
+                  <tr key={u.id} className="hover:bg-forensic-850/60 transition">
+                    <td className="py-3.5 px-4 font-bold text-slate-400">#{u.id}</td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">{u.username}</span>
+                        {u.is_current_admin && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-950 border border-red-700 text-red-300 font-bold">
+                            YOU (ACTIVE ADMIN)
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-slate-500">{u.email}</span>
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        u.role === 'admin' 
+                          ? 'bg-red-950 text-red-300 border border-red-800' 
+                          : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                      }`}>
+                        {u.role.toUpperCase()}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 text-center">
+                      {u.team ? (
+                        <span className="px-2 py-0.5 rounded bg-forensic-950 border border-slate-700 text-slate-200 text-[11px] font-semibold">
+                          {u.team.team_name} ({u.team.role})
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 italic">No Squad</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-slate-300 font-bold">
+                      {u.submission_count}
+                    </td>
+                    <td className="py-3.5 px-4 text-center text-amber-400 font-bold">
+                      {u.points} PTS
+                    </td>
+                    <td className="py-3.5 px-4 text-right">
+                      <button
+                        onClick={() => {
+                          setDeleteUserModal(u);
+                          setConfirmUsernameInput('');
+                        }}
+                        disabled={u.is_current_admin}
+                        className={`px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1.5 ml-auto ${
+                          u.is_current_admin
+                            ? 'bg-slate-800/50 text-slate-600 border border-slate-800 cursor-not-allowed'
+                            : 'bg-red-950/80 hover:bg-red-900 border border-red-600 text-red-200 shadow-md hover:shadow-red-950'
+                        }`}
+                        title={u.is_current_admin ? "You cannot delete your own active administrator account" : "Permanently delete user"}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete User</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 7: Squads & Teams Management */}
+      {activeTab === 'teams' && (
+        <div className="bg-forensic-900 border border-forensic-800 rounded-xl overflow-hidden font-mono shadow-xl space-y-4 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-forensic-800 pb-4">
+            <div>
+              <span className="text-xs uppercase text-white font-bold flex items-center gap-2">
+                <Users className="w-4 h-4 text-cyan-400" />
+                Active Investigation Squads ({adminTeams.length} Registered Units)
+              </span>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Oversee squad rosters, rotate invitation tokens, adjust scores, and manage team lifecycles.
+              </p>
+            </div>
+            <button
+              onClick={loadAll}
+              className="px-3 py-1.5 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs flex items-center gap-1.5 transition w-fit"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Refresh
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {adminTeams.map((t) => (
+              <div key={t.id} className="bg-forensic-950 border border-forensic-800 rounded-xl p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-forensic-800/60 pb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-800 text-cyan-400 font-bold text-xs">
+                      SQUAD #{t.id}
+                    </span>
+                    <h3 className="text-base font-bold text-white">{t.name}</h3>
+                    <span className="text-xs text-amber-400 font-bold">{t.points} PTS</span>
+                    <span className="text-xs text-slate-400">({t.solved_count} Solved)</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleAdminRotateInvite(t.id)}
+                      className="px-2.5 py-1 rounded bg-forensic-850 hover:bg-forensic-800 border border-slate-700 text-slate-200 text-xs font-bold transition flex items-center gap-1"
+                      title="Rotate invitation code"
+                    >
+                      <RefreshCw className="w-3 h-3 text-cyan-400" />
+                      <span>Rotate Code</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setAdjustScoreModal(t);
+                        setPointsDeltaInput(0);
+                        setAdjustReasonInput('');
+                      }}
+                      className="px-2.5 py-1 rounded bg-amber-950/60 hover:bg-amber-900 border border-amber-600 text-amber-200 text-xs font-bold transition flex items-center gap-1"
+                      title="Adjust score"
+                    >
+                      <Plus className="w-3 h-3 text-amber-400" />
+                      <span>Adjust Score</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleAdminDeleteTeam(t.id, t.name)}
+                      className="px-2.5 py-1 rounded bg-red-950/80 hover:bg-red-900 border border-red-600 text-red-200 text-xs font-bold transition flex items-center gap-1"
+                      title="Disband squad"
+                    >
+                      <Trash2 className="w-3 h-3 text-red-400" />
+                      <span>Disband Squad</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-xs space-y-2">
+                  <div className="flex flex-wrap items-center gap-3 text-slate-400 text-[11px]">
+                    <span>Commander: <b className="text-white">{t.owner?.username}</b></span>
+                    <span>• Invite Token: <code className="text-cyan-300 bg-forensic-900 px-2 py-0.5 rounded">{t.invitation_code}</code></span>
+                    <span>• Commissioned: {new Date(t.created_at).toLocaleDateString()}</span>
+                  </div>
+
+                  {/* Operatives Roster */}
+                  <div className="bg-forensic-900 p-3 rounded-lg border border-forensic-800 space-y-2">
+                    <span className="text-[10px] text-slate-500 uppercase font-bold block">
+                      Operatives Roster ({t.members?.length} / {t.max_members})
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                      {t.members?.map((m) => (
+                        <div key={m.user_id} className="p-2 rounded bg-forensic-950 border border-forensic-800 flex items-center justify-between gap-2">
+                          <div>
+                            <span className="font-bold text-white block">{m.username}</span>
+                            <span className="text-[10px] text-slate-400">{m.role} • {m.points} pts</span>
+                          </div>
+                          {m.role !== 'OWNER' && (
+                            <button
+                              onClick={() => handleAdminRemoveMember(t.id, m.user_id, m.username)}
+                              className="p-1 rounded text-red-400 hover:text-red-300 hover:bg-red-950"
+                              title="Remove operative"
+                            >
+                              <UserMinus className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: Delete User Confirmation */}
+      {deleteUserModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-forensic-900 border border-red-600/80 rounded-xl p-6 max-w-lg w-full space-y-4 font-mono shadow-2xl">
+            <div className="flex items-center gap-2 text-red-400 border-b border-forensic-800 pb-3">
+              <AlertTriangle className="w-6 h-6 text-red-400 shrink-0" />
+              <div>
+                <h3 className="font-bold text-sm uppercase">Irreversible Account Deletion</h3>
+                <span className="text-[10px] text-red-300">ADMINISTRATIVE ACTION REQUIRED</span>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-lg bg-red-950/60 border border-red-700/60 text-red-200 text-xs leading-relaxed space-y-1">
+              <p className="font-bold">⚠️ CRITICAL WARNING:</p>
+              <p>This will permanently purge this account, revoke active JWT authentication sessions, and remove credentials.</p>
+              <p className="text-[11px] text-red-300">• Shared team solved challenges will be preserved with solver anonymized.</p>
+              <p className="text-[11px] text-red-300">• If squad commander, ownership will transfer to the next operative automatically.</p>
+            </div>
+
+            {/* User Target Profile Summary */}
+            <div className="bg-forensic-950 p-3.5 rounded-lg border border-forensic-800 text-xs space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-500 uppercase">Target User ID:</span>
+                <span className="text-white font-bold">#{deleteUserModal.id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 uppercase">Callsign / Username:</span>
+                <span className="text-cyan-400 font-bold">{deleteUserModal.username}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 uppercase">Squad Affiliation:</span>
+                <span className="text-slate-200">{deleteUserModal.team ? `${deleteUserModal.team.team_name} (${deleteUserModal.team.role})` : 'None'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500 uppercase">Submissions / Points:</span>
+                <span className="text-amber-400 font-bold">{deleteUserModal.submission_count} subs • {deleteUserModal.points} PTS</span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-300 uppercase mb-1.5">
+                Type <code className="text-red-400 font-bold select-all bg-forensic-950 px-1.5 py-0.5 rounded border border-red-800">{deleteUserModal.username}</code> to confirm deletion:
+              </label>
+              <input
+                type="text"
+                placeholder="Enter exact username..."
+                value={confirmUsernameInput}
+                onChange={(e) => setConfirmUsernameInput(e.target.value)}
+                className="w-full px-3 py-2 bg-forensic-950 border border-red-700/80 rounded text-red-200 text-xs focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setDeleteUserModal(null)}
+                className="px-4 py-2 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={confirmUsernameInput.trim() !== deleteUserModal.username || isDeletingUser}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-950"
+              >
+                {isDeletingUser ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Confirm Permanent Deletion
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 2: Adjust Team Score */}
+      {adjustScoreModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-forensic-900 border border-amber-600/80 rounded-xl p-6 max-w-md w-full space-y-4 font-mono shadow-2xl">
+            <div className="flex items-center gap-2 text-amber-400 border-b border-forensic-800 pb-3">
+              <Plus className="w-5 h-5 text-amber-400" />
+              <h3 className="font-bold text-sm uppercase">Adjust Squad Score</h3>
+            </div>
+            
+            <p className="text-xs text-slate-300">
+              Modifying points for squad: <b className="text-white">{adjustScoreModal.name}</b> (Current: <b className="text-amber-400">{adjustScoreModal.points} PTS</b>).
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-400 uppercase mb-1">Score Delta (+ / - points)</label>
+                <input
+                  type="number"
+                  placeholder="e.g. 50 or -20"
+                  value={pointsDeltaInput}
+                  onChange={(e) => setPointsDeltaInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-forensic-950 border border-forensic-700 rounded text-amber-300 text-xs focus:outline-none focus:border-amber-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-400 uppercase mb-1">Administrative Audit Reason</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Bonus forensic finding, Penalty for conduct..."
+                  value={adjustReasonInput}
+                  onChange={(e) => setAdjustReasonInput(e.target.value)}
+                  className="w-full px-3 py-2 bg-forensic-950 border border-forensic-700 rounded text-slate-200 text-xs focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3">
+              <button
+                onClick={() => setAdjustScoreModal(null)}
+                className="px-4 py-2 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAdminAdjustScore}
+                disabled={isAdjustingScore || !pointsDeltaInput}
+                className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-black font-bold text-xs"
+              >
+                Apply Score Adjustment
+              </button>
+            </div>
           </div>
         </div>
       )}
