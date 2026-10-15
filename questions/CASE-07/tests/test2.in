@@ -1,0 +1,4 @@
+3
+user1 term1 1 READ
+user1 term2 2 WRITE
+user2 term3 3 READ

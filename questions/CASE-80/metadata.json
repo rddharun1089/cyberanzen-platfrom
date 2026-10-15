@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-80",
+  "number": 80,
+  "title": "THE FINAL CONVERGENCE",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Cross-Domain Grand Crimes",
+  "points": 200,
+  "difficulty": "Expert",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_80_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

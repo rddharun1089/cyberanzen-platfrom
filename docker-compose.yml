@@ -1,0 +1,26 @@
+services:
+  cyberanzen-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: cyberanzen-platform
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=cyberanzen-production-investigation-secret-key-32ch!
+      - DATABASE_URL=sqlite:///./cyberanzen.db
+      - JUDGE_TIMEOUT_SEC=3.0
+      - JUDGE_MEMORY_LIMIT_MB=256
+    volumes:
+      - ./questions:/app/questions:ro
+      - cyberanzen-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  cyberanzen-data:

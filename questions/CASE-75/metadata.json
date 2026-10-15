@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-75",
+  "number": 75,
+  "title": "The Blockchain Black Box",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Cross-Domain Grand Crimes",
+  "points": 100,
+  "difficulty": "Advanced",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_75_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-35",
+  "number": 35,
+  "title": "The Voltage Drop",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "ECE / Embedded Systems",
+  "points": 75,
+  "difficulty": "Intermediate",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_35_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

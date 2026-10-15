@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-25",
+  "number": 25,
+  "title": "The Missing Sensor Day",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Data Science",
+  "points": 75,
+  "difficulty": "Intermediate",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_25_<COMPUTED_RESULT>}",
+  "validation_status": "NEEDS_SOLUTION_REVIEW",
+  "publication_status": "DRAFT"
+}

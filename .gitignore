@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+node_modules/
+frontend/node_modules/
+*.log
+cyberanzen.db
+/tmp/judge_run_*

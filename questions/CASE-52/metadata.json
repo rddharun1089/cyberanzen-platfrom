@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-52",
+  "number": 52,
+  "title": "The DAO Vote",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Blockchain",
+  "points": 100,
+  "difficulty": "Advanced",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_52_<COMPUTED_RESULT>}",
+  "validation_status": "NEEDS_SOLUTION_REVIEW",
+  "publication_status": "DRAFT"
+}

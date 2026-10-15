@@ -1,0 +1,12 @@
+{
+  "case_id": "CASE-35",
+  "title": "The Voltage Drop",
+  "status": "VALIDATED",
+  "claimed_language": "C++",
+  "actual_solution_language": "Python 3",
+  "complexity": "O(n log n) for sorting-based cases; O(n) for single-pass cases; graph cases depend on V/E. Hashing is O(total input size).",
+  "issues": [
+    "Language label in answer key is 'C++', but reference implementation is written in Python."
+  ],
+  "requires_human_review": true
+}

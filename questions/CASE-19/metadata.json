@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-19",
+  "number": 19,
+  "title": "The Confidence Trap",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "AI / Machine Learning",
+  "points": 50,
+  "difficulty": "Beginner",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_19_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

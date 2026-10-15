@@ -1,0 +1,26 @@
+{
+  "case_id": "CASE-67",
+  "test_cases": [
+    {
+      "id": "sample1",
+      "type": "public_sample",
+      "in": "samples/sample1.in",
+      "out": "samples/sample1.out",
+      "points": 0
+    },
+    {
+      "id": "test1",
+      "type": "hidden_test",
+      "in": "tests/test1.in",
+      "out": "tests/test1.out",
+      "points": 50
+    },
+    {
+      "id": "test2",
+      "type": "hidden_test",
+      "in": "tests/test2.in",
+      "out": "tests/test2.out",
+      "points": 50
+    }
+  ]
+}

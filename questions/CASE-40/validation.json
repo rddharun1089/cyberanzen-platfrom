@@ -1,0 +1,10 @@
+{
+  "case_id": "CASE-40",
+  "title": "The Water Plant Override",
+  "status": "VALIDATED",
+  "claimed_language": "Python",
+  "actual_solution_language": "Python 3",
+  "complexity": "O(n log n) for sorting-based cases; O(n) for single-pass cases; graph cases depend on V/E. Hashing is O(total input size).",
+  "issues": [],
+  "requires_human_review": false
+}

@@ -1,0 +1,6 @@
+5
+15 root ssh 50
+25 root sudo 100
+15 root su 50
+40 user vi 10
+50 user cat 10

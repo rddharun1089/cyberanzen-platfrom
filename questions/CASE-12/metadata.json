@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-12",
+  "number": 12,
+  "title": "The Hidden Archive",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Cybersecurity & Digital Forensics",
+  "points": 50,
+  "difficulty": "Beginner",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_12_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

@@ -1,0 +1,4 @@
+3
+acc1 devA 1 READ
+acc1 devA 2 WRITE
+acc2 devB 3 WRITE

@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-30",
+  "number": 30,
+  "title": "The Last Five Minutes",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Data Science",
+  "points": 75,
+  "difficulty": "Intermediate",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_30_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

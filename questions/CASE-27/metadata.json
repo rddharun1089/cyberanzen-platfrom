@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-27",
+  "number": 27,
+  "title": "The Stockroom Pattern",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "Data Science",
+  "points": 75,
+  "difficulty": "Intermediate",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_27_<COMPUTED_RESULT>}",
+  "validation_status": "VALIDATED",
+  "publication_status": "PUBLISHED"
+}

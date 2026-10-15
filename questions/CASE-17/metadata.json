@@ -1,0 +1,19 @@
+{
+  "case_id": "CASE-17",
+  "number": 17,
+  "title": "The Missing Model",
+  "phase": "PHASE I \u2014 THE ARCHIVE UNLOCKS",
+  "domain": "AI / Machine Learning",
+  "points": 50,
+  "difficulty": "Beginner",
+  "time_limit_ms": 2000,
+  "memory_limit_mb": 256,
+  "languages": [
+    "c",
+    "cpp",
+    "python3"
+  ],
+  "flag_format": "FLAG{CASE_17_<COMPUTED_RESULT>}",
+  "validation_status": "NEEDS_SPECIFICATION",
+  "publication_status": "DRAFT"
+}
