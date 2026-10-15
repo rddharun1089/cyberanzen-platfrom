@@ -35,6 +35,12 @@ def set_sandbox_limits(time_limit_sec: int = 3, memory_limit_mb: int = 256):
         # Disable core dumps
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
 
+        # Max open file descriptors (prevent FD leakage/exhaustion)
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+        except (ValueError, OSError):
+            pass
+
     return preexec
 
 class ExecutionResult:

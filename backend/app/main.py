@@ -19,12 +19,47 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import JSONResponse
+
+# Enterprise Security Headers & DoS Payload Size Limiter Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # 1. Payload size check (prevent memory exhaustion DoS)
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > 5 * 1024 * 1024:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Payload Too Large: Maximum allowed upload size is 5MB."}
+            )
+
+        response = await call_next(request)
+
+        # 2. Attach strict defense-in-depth HTTP security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdn.jsdelivr.net; frame-ancestors 'self';"
+
+        # 3. Strip server banner to minimize fingerprinting reconnaissance
+        if "server" in response.headers:
+            del response.headers["server"]
+        if "x-powered-by" in response.headers:
+            del response.headers["x-powered-by"]
+
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
 )
 

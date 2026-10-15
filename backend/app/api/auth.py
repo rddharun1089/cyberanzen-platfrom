@@ -65,20 +65,55 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "points": user.points
     }
 
+import re
+
+USERNAME_REGEX = re.compile(r"^[a-zA-Z0-9_-]{3,30}$")
+REGISTRATION_ATTEMPTS = []
+MAX_REGISTRATIONS_PER_WINDOW = 10
+REGISTRATION_WINDOW_SEC = 300
+
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    # Rate limit account creation to prevent bot spam
+    now = time.time()
+    global REGISTRATION_ATTEMPTS
+    REGISTRATION_ATTEMPTS = [t for t in REGISTRATION_ATTEMPTS if now - t < REGISTRATION_WINDOW_SEC]
+    if len(REGISTRATION_ATTEMPTS) >= MAX_REGISTRATIONS_PER_WINDOW:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Registration rate limit reached. Please wait a few minutes before registering again."
+        )
+
+    clean_username = req.username.strip()
+    if not USERNAME_REGEX.match(clean_username):
+        raise HTTPException(
+            status_code=400,
+            detail="Callsign must be 3-30 characters and contain only letters, numbers, hyphens, and underscores."
+        )
+
     if len(req.password) < 8:
         raise HTTPException(
             status_code=400,
             detail="Security passkey must be at least 8 characters long."
         )
-    if db.query(User).filter(User.username == req.username).first():
+
+    has_letter = any(c.isalpha() for c in req.password)
+    has_digit_or_special = any(not c.isalpha() for c in req.password)
+    if not (has_letter and has_digit_or_special):
+        raise HTTPException(
+            status_code=400,
+            detail="Security passkey must contain both letters and digits or special symbols."
+        )
+
+    if db.query(User).filter(User.username == clean_username).first():
         raise HTTPException(status_code=400, detail="Callsign already assigned to an agent")
     if db.query(User).filter(User.email == req.email).first():
         raise HTTPException(status_code=400, detail="Email address already registered")
 
+    REGISTRATION_ATTEMPTS.append(now)
+
     user = User(
-        username=req.username,
+        username=clean_username,
         email=req.email,
         hashed_password=hash_password(req.password),
         role=UserRole.PARTICIPANT.value,

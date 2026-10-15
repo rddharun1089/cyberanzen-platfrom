@@ -13,6 +13,43 @@ from app.api.deps import get_current_user
 from app.judge.worker import evaluate_submission
 from app.services.evidence_engine import compute_evidence_token
 
+import time
+from collections import defaultdict
+
+MAX_SOURCE_CODE_BYTES = 65536  # 64 KB limit
+USER_LAST_SAMPLE = defaultdict(float)
+USER_LAST_SUBMIT = defaultdict(float)
+
+def check_sample_cooldown_and_size(user_id: int, source_code: str):
+    if len(source_code.encode("utf-8")) > MAX_SOURCE_CODE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Source code exceeds maximum permitted size of 64KB."
+        )
+    now = time.time()
+    last = USER_LAST_SAMPLE[user_id]
+    if now - last < 0.2:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Execution cooldown in effect. Please wait before running samples again."
+        )
+    USER_LAST_SAMPLE[user_id] = now
+
+def check_submit_cooldown_and_size(user_id: int, source_code: str):
+    if len(source_code.encode("utf-8")) > MAX_SOURCE_CODE_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail="Source code exceeds maximum permitted size of 64KB."
+        )
+    now = time.time()
+    last = USER_LAST_SUBMIT[user_id]
+    if now - last < 0.2:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Submission cooldown in effect. Please wait before submitting again."
+        )
+    USER_LAST_SUBMIT[user_id] = now
+
 router = APIRouter(prefix="/submissions", tags=["Coding Workspace & Submissions"])
 
 class RunSampleRequest(BaseModel):
@@ -27,6 +64,7 @@ class SubmitSolutionRequest(BaseModel):
 
 @router.post("/run-sample")
 def run_sample_tests(req: RunSampleRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    check_sample_cooldown_and_size(current_user.id, req.source_code)
     case = db.query(Case).filter(Case.id == req.case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Investigation case dossier not found")
@@ -67,6 +105,7 @@ def run_sample_tests(req: RunSampleRequest, db: Session = Depends(get_db), curre
 
 @router.post("/submit")
 def submit_solution(req: SubmitSolutionRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    check_submit_cooldown_and_size(current_user.id, req.source_code)
     case = db.query(Case).filter(Case.id == req.case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="Investigation case dossier not found")
