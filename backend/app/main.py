@@ -5,10 +5,16 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.core.config import settings
 from app.api import auth, cases, submissions, evidence, leaderboard, admin, git_sync, teams
-from app.db.session import engine, Base
+from app.db.session import engine, Base, SessionLocal
+from app.db.init_db import init_db
 
-# Ensure all database tables exist on startup
+# Ensure all database tables exist and default data (admin, users, 80 cases) is seeded on startup
 Base.metadata.create_all(bind=engine)
+try:
+    with SessionLocal() as db_session:
+        init_db(db_session)
+except Exception as e:
+    print(f"[STARTUP] Notice during automatic database bootstrap: {e}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
