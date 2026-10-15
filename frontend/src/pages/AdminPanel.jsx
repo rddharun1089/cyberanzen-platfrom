@@ -7,7 +7,10 @@ import {
 import { adminService } from '../services/api';
 
 export default function AdminPanel() {
-  const [activeTab, setActiveTab] = useState('solutions'); // 'solutions' | 'cases' | 'users' | 'teams' | 'git' | 'health' | 'audit'
+  const [activeTab, setActiveTab] = useState(() => {
+    const p = new URLSearchParams(window.location.search).get('tab');
+    return p || 'users';
+  });
   const [cases, setCases] = useState([]);
   const [solutions, setSolutions] = useState([]);
   const [users, setUsers] = useState([]);
@@ -24,12 +27,15 @@ export default function AdminPanel() {
   // Filtering for Solutions & Judge Control Tab
   const [selectedDomain, setSelectedDomain] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [userSearchQuery, setUserSearchQuery] = useState('');
   const [expandedSol, setExpandedSol] = useState({});
   const [expandedTests, setExpandedTests] = useState({});
 
   // User Deletion Modal State
   const [deleteUserModal, setDeleteUserModal] = useState(null);
   const [confirmUsernameInput, setConfirmUsernameInput] = useState('');
+  const [confirmDeleteCheckbox, setConfirmDeleteCheckbox] = useState(false);
+  const [deleteModalError, setDeleteModalError] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
 
   // Score Adjustment Modal State
@@ -159,20 +165,22 @@ export default function AdminPanel() {
 
   const handleDeleteUser = async () => {
     if (!deleteUserModal) return;
-    if (confirmUsernameInput.trim() !== deleteUserModal.username) {
-      alert(`Username confirmation mismatch. You must enter "${deleteUserModal.username}" exactly.`);
+    if (confirmUsernameInput.trim() !== deleteUserModal.username && !confirmDeleteCheckbox) {
+      setDeleteModalError(`Please type "${deleteUserModal.username}" or check the confirmation checkbox.`);
       return;
     }
     setIsDeletingUser(true);
+    setDeleteModalError('');
     try {
-      const res = await adminService.deleteUser(deleteUserModal.id, confirmUsernameInput.trim());
+      const res = await adminService.deleteUser(deleteUserModal.id, deleteUserModal.username);
       setStatusMsg(res.message);
       setDeleteUserModal(null);
       setConfirmUsernameInput('');
-      setTimeout(() => setStatusMsg(''), 4000);
+      setConfirmDeleteCheckbox(false);
+      setTimeout(() => setStatusMsg(''), 5000);
       loadAll();
     } catch (err) {
-      alert(err.response?.data?.detail || err.message);
+      setDeleteModalError(err.response?.data?.detail || err.message);
     } finally {
       setIsDeletingUser(false);
     }
@@ -467,67 +475,73 @@ export default function AdminPanel() {
       {/* Navigation Tabs */}
       <div className="flex items-center space-x-2 border-b border-forensic-800 pb-2 overflow-x-auto">
         <button
+          onClick={() => setActiveTab('users')}
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+            activeTab === 'users' ? 'bg-red-950/80 text-red-200 border-b-2 border-red-500 shadow-md shadow-red-950' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <UserX className="w-4 h-4 text-red-400" />
+          <span>User Directory & Deletion ({users.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('teams')}
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+            activeTab === 'teams' ? 'bg-cyan-950/80 text-cyan-200 border-b-2 border-cyan-400 shadow-md shadow-cyan-950' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Users className="w-4 h-4 text-cyan-400" />
+          <span>Squads & Rosters ({adminTeams.length})</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('solutions')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'solutions' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Key className="w-3.5 h-3.5" />
-          Master Solutions & Judge Control ({solutions.length})
+          <Key className="w-4 h-4 text-amber-400" />
+          <span>Judge & Anti-Cheat Controls ({solutions.length})</span>
         </button>
+
         <button
           onClick={() => setActiveTab('cases')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'cases' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Sliders className="w-3.5 h-3.5" />
-          Case Catalog ({cases.length})
+          <Sliders className="w-4 h-4" />
+          <span>Case Catalog ({cases.length})</span>
         </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
-            activeTab === 'users' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <UserX className="w-3.5 h-3.5 text-red-400" />
-          User Management ({users.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('teams')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
-            activeTab === 'teams' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <Users className="w-3.5 h-3.5 text-cyan-400" />
-          Squads & Teams ({adminTeams.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('git')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
-            activeTab === 'git' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <GitBranch className="w-3.5 h-3.5" />
-          Git Importer
-        </button>
+
         <button
           onClick={() => setActiveTab('health')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'health' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Activity className="w-3.5 h-3.5" />
-          Judge Telemetry
+          <Activity className="w-4 h-4 text-emerald-400" />
+          <span>Judge Telemetry</span>
         </button>
+
         <button
           onClick={() => setActiveTab('audit')}
-          className={`px-4 py-2 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
             activeTab === 'audit' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Database className="w-3.5 h-3.5" />
-          Audit Log ({auditLogs.length})
+          <Database className="w-4 h-4 text-purple-400" />
+          <span>Audit Log ({auditLogs.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('git')}
+          className={`px-4 py-2.5 rounded-t font-mono text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition ${
+            activeTab === 'git' ? 'bg-forensic-850 text-forensic-cyan border-b-2 border-cyan-400' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <GitBranch className="w-4 h-4" />
+          <span>Git Importer</span>
         </button>
       </div>
 
@@ -982,13 +996,22 @@ export default function AdminPanel() {
                 Inspect accounts, squad affiliations, and execute authorized permanent account deletions.
               </p>
             </div>
-            <button
-              onClick={loadAll}
-              className="px-3 py-1.5 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs flex items-center gap-1.5 transition w-fit"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Refresh
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Filter by callsign or email..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                className="px-3 py-1.5 rounded-lg bg-forensic-950 border border-forensic-750 text-slate-200 text-xs focus:outline-none focus:border-red-500 w-48 sm:w-64"
+              />
+              <button
+                onClick={loadAll}
+                className="px-3 py-1.5 rounded-lg bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs flex items-center gap-1.5 transition shrink-0"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Refresh
+              </button>
+            </div>
           </div>
 
           <div className="overflow-x-auto">
@@ -1005,7 +1028,10 @@ export default function AdminPanel() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-forensic-800">
-                {users.map((u) => (
+                {users.filter(u => 
+                  u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) || 
+                  (u.email && u.email.toLowerCase().includes(userSearchQuery.toLowerCase()))
+                ).map((u) => (
                   <tr key={u.id} className="hover:bg-forensic-850/60 transition">
                     <td className="py-3.5 px-4 font-bold text-slate-400">#{u.id}</td>
                     <td className="py-3.5 px-4">
@@ -1217,33 +1243,67 @@ export default function AdminPanel() {
               </div>
             </div>
 
+            {deleteModalError && (
+              <div className="p-3 rounded-lg bg-red-950 border border-red-500 text-red-300 text-xs">
+                {deleteModalError}
+              </div>
+            )}
+
             <div>
-              <label className="block text-xs text-slate-300 uppercase mb-1.5">
-                Type <code className="text-red-400 font-bold select-all bg-forensic-950 px-1.5 py-0.5 rounded border border-red-800">{deleteUserModal.username}</code> to confirm deletion:
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs text-slate-300 uppercase">
+                  Confirm Target Callsign:
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setConfirmUsernameInput(deleteUserModal.username)}
+                  className="px-2 py-0.5 rounded bg-red-950/80 hover:bg-red-900 border border-red-700 text-red-300 text-[10px] font-bold transition flex items-center gap-1"
+                >
+                  ⚡ Auto-Fill "{deleteUserModal.username}"
+                </button>
+              </div>
               <input
                 type="text"
-                placeholder="Enter exact username..."
+                placeholder={`Type "${deleteUserModal.username}" to confirm...`}
                 value={confirmUsernameInput}
                 onChange={(e) => setConfirmUsernameInput(e.target.value)}
-                className="w-full px-3 py-2 bg-forensic-950 border border-red-700/80 rounded text-red-200 text-xs focus:outline-none focus:border-red-500"
+                className="w-full px-3 py-2 bg-forensic-950 border border-red-700/80 rounded text-red-200 text-xs focus:outline-none focus:border-red-500 font-mono"
               />
             </div>
 
+            <label className="flex items-start gap-2.5 cursor-pointer p-3 rounded-lg bg-red-950/40 border border-red-800/60 text-xs text-red-200 select-none">
+              <input
+                type="checkbox"
+                checked={confirmDeleteCheckbox}
+                onChange={(e) => setConfirmDeleteCheckbox(e.target.checked)}
+                className="w-4 h-4 rounded mt-0.5 accent-red-600 cursor-pointer"
+              />
+              <span>
+                <b>Authorized Executive Confirmation:</b> I confirm permanent deletion of account <b>{deleteUserModal.username}</b>. Active tokens will be revoked immediately.
+              </span>
+            </label>
+
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
-                onClick={() => setDeleteUserModal(null)}
+                type="button"
+                onClick={() => {
+                  setDeleteUserModal(null);
+                  setDeleteModalError('');
+                  setConfirmUsernameInput('');
+                  setConfirmDeleteCheckbox(false);
+                }}
                 className="px-4 py-2 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs"
               >
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleDeleteUser}
-                disabled={confirmUsernameInput.trim() !== deleteUserModal.username || isDeletingUser}
-                className="px-4 py-2 rounded bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-red-950"
+                disabled={!(confirmUsernameInput.trim() === deleteUserModal.username || confirmDeleteCheckbox) || isDeletingUser}
+                className="px-5 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-xs flex items-center gap-2 shadow-lg shadow-red-950 transition"
               >
                 {isDeletingUser ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Confirm Permanent Deletion
+                <span>Permanently Purge User Account</span>
               </button>
             </div>
           </div>

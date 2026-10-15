@@ -49,10 +49,10 @@ export default function App() {
             <Route path="/challenges" element={<Archive />} />
             <Route path="/cases/:caseId" element={<Workspace />} />
             <Route path="/team" element={user ? <TeamWorkspace user={user} /> : <Navigate to="/login" />} />
-            <Route path="/team-leaderboard" element={<TeamLeaderboard />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/team-leaderboard" element={<Leaderboard />} />
             <Route path="/vault" element={<EvidenceVault />} />
             <Route path="/submissions" element={<Submissions />} />
-            <Route path="/leaderboard" element={<Leaderboard />} />
             
             {/* Protected Admin Route */}
             <Route

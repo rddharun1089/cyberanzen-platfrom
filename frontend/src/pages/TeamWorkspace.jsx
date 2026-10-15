@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { 
   Users, Shield, Trophy, UserPlus, Key, Copy, Check, RefreshCw, 
   LogOut, UserMinus, Crown, ArrowRight, AlertTriangle, ShieldCheck, 
-  Terminal, Sparkles, FolderGit2
+  Terminal, Sparkles, FolderGit2, ClipboardCheck, ClipboardPaste, Award
 } from 'lucide-react';
 import { teamService } from '../services/api';
 
@@ -13,6 +13,9 @@ export default function TeamWorkspace({ user }) {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Mode selection when not in team: 'create' | 'join'
+  const [formationTab, setFormationTab] = useState(searchParams.get('join') ? 'join' : 'create');
 
   // Form states
   const [createName, setCreateName] = useState('');
@@ -51,7 +54,7 @@ export default function TeamWorkspace({ user }) {
     setSuccessMsg('');
     try {
       await teamService.createTeam(createName.trim());
-      setSuccessMsg(`Squad "${createName.trim()}" commissioned successfully!`);
+      setSuccessMsg(`Squad "${createName.trim()}" successfully commissioned!`);
       setCreateName('');
       await loadMyTeam();
     } catch (err) {
@@ -79,8 +82,17 @@ export default function TeamWorkspace({ user }) {
     }
   };
 
+  const handlePasteCode = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) setJoinCode(text.trim());
+    } catch (err) {
+      // Browser clipboard permission denied or unsupported
+    }
+  };
+
   const handleLeaveTeam = async () => {
-    if (!window.confirm('Are you sure you want to depart from this squad? If you are the squad commander and other members exist, command will transfer automatically.')) {
+    if (!window.confirm('Depart from this squad? Command will automatically transfer to the next senior operative if you are Commander.')) {
       return;
     }
     setActionLoading(true);
@@ -97,7 +109,7 @@ export default function TeamWorkspace({ user }) {
   };
 
   const handleRotateInvite = async () => {
-    if (!window.confirm('Rotate invitation token? All previously shared invitation codes and links will be invalidated.')) {
+    if (!window.confirm('Rotate invitation token? All previously shared invitation codes will be revoked.')) {
       return;
     }
     setActionLoading(true);
@@ -113,7 +125,7 @@ export default function TeamWorkspace({ user }) {
   };
 
   const handleRemoveMember = async (targetUserId, targetUsername) => {
-    if (!window.confirm(`Discharge operative "${targetUsername}" from the squad?`)) {
+    if (!window.confirm(`Discharge operative "${targetUsername}" from squad?`)) {
       return;
     }
     setActionLoading(true);
@@ -162,7 +174,7 @@ export default function TeamWorkspace({ user }) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center font-mono text-cyan-400 text-xs">
         <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-        INITIALIZING SQUAD TELEMETRY & WORKSPACE MATRIX...
+        INITIALIZING SQUAD TELEMETRY MATRIX...
       </div>
     );
   }
@@ -170,146 +182,231 @@ export default function TeamWorkspace({ user }) {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       
-      {/* Title & Alerts */}
+      {/* Page Header */}
       <div className="border-b border-forensic-800 pb-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-mono text-white flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+            <span className="text-[10px] font-mono uppercase text-cyan-400 tracking-wider font-bold">Multi-Agent Unit Operations</span>
+          </div>
+          <h1 className="text-2xl font-bold font-mono text-white flex items-center gap-2.5">
             <Users className="w-6 h-6 text-forensic-cyan" />
-            TEAM OPERATIONS DECK
+            SQUAD OPERATIONS DECK
           </h1>
           <p className="text-xs text-slate-400 font-mono mt-1">
-            Collaborative investigation squad workspace, invitation management, and shared challenge intelligence.
+            Collaborate with up to 4 operatives to pool intelligence, conquer 80 forensic cases, and compete on the global leaderboard.
           </p>
         </div>
 
         <Link
-          to="/team-leaderboard"
-          className="px-4 py-2 rounded-lg bg-forensic-850 border border-cyan-500/40 text-cyan-300 hover:bg-cyan-950/60 font-mono text-xs font-bold transition flex items-center gap-2 w-fit shadow-lg shadow-cyan-950/30"
+          to="/leaderboard"
+          className="px-4 py-2 rounded-lg bg-forensic-850 hover:bg-forensic-800 border border-amber-500/40 text-amber-300 font-mono text-xs font-bold transition flex items-center gap-2 w-fit shadow-md shadow-amber-950/20"
         >
           <Trophy className="w-4 h-4 text-amber-400" />
-          View Team Leaderboard
+          <span>Global Leaderboard</span>
         </Link>
       </div>
 
+      {/* Notifications */}
       {errorMsg && (
-        <div className="p-4 rounded-lg bg-red-950/80 border border-red-600 text-red-200 font-mono text-xs flex items-center gap-2">
+        <div className="p-4 rounded-xl bg-red-950/90 border border-red-500 text-red-200 font-mono text-xs flex items-center gap-2.5 shadow-lg">
           <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
           <span>{errorMsg}</span>
         </div>
       )}
 
       {successMsg && (
-        <div className="p-4 rounded-lg bg-emerald-950/80 border border-emerald-600 text-emerald-200 font-mono text-xs flex items-center gap-2">
+        <div className="p-4 rounded-xl bg-emerald-950/90 border border-emerald-500 text-emerald-200 font-mono text-xs flex items-center gap-2.5 shadow-lg">
           <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
 
-      {/* STATE 1: User has NO team */}
+      {/* ==================================================================== */}
+      {/* STATE 1: PARTICIPANT HAS NO ACTIVE SQUAD                             */}
+      {/* ==================================================================== */}
       {!team ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-6">
           
-          {/* Card A: Create Team */}
-          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 shadow-xl space-y-4 font-mono">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-cyan-950 border border-cyan-800 text-cyan-400">
-                <Crown className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-base font-bold text-white uppercase tracking-wider">Commission New Squad</h2>
-                <p className="text-xs text-slate-400">Found your own elite unit as Squad Commander.</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleCreateTeam} className="space-y-4 pt-2">
-              <div>
-                <label className="block text-xs text-slate-300 uppercase mb-1.5">Squad Callsign / Team Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. NIGHTHAWKS, ZERO_DAY_DEFENDERS"
-                  value={createName}
-                  onChange={(e) => setCreateName(e.target.value)}
-                  maxLength={50}
-                  required
-                  className="w-full px-4 py-2.5 bg-forensic-950 border border-forensic-700 rounded-lg text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="text-[11px] text-slate-400 bg-forensic-950 p-3 rounded-lg border border-forensic-800 space-y-1">
-                <p className="text-cyan-400 font-bold">• Roster Cap: Maximum 4 Operatives per squad.</p>
-                <p>• Challenge points earned by any teammate count toward shared squad score.</p>
-                <p>• Points for each problem are credited only once to prevent duplicate scoring.</p>
-              </div>
-
-              <button
-                type="submit"
-                disabled={actionLoading || !createName.trim()}
-                className="w-full py-2.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg shadow-cyan-950/50"
-              >
-                {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                Commission Squad
-              </button>
-            </form>
+          {/* Tactical Formation Switcher */}
+          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-2 max-w-md mx-auto flex items-center gap-2 font-mono text-xs">
+            <button
+              onClick={() => setFormationTab('create')}
+              className={`flex-1 py-2.5 rounded-lg font-bold transition flex items-center justify-center gap-2 ${
+                formationTab === 'create'
+                  ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-950'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Crown className="w-4 h-4" />
+              <span>Commission New Squad</span>
+            </button>
+            <button
+              onClick={() => setFormationTab('join')}
+              className={`flex-1 py-2.5 rounded-lg font-bold transition flex items-center justify-center gap-2 ${
+                formationTab === 'join'
+                  ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-950'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Enlist via Code</span>
+            </button>
           </div>
 
-          {/* Card B: Join Existing Team */}
-          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 shadow-xl space-y-4 font-mono">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-lg bg-emerald-950 border border-emerald-800 text-emerald-400">
-                <UserPlus className="w-5 h-5" />
+          {/* Tab 1: Commission Squad Form */}
+          {formationTab === 'create' && (
+            <div className="max-w-2xl mx-auto bg-forensic-900 border border-cyan-500/40 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 font-mono">
+              <div className="flex items-center gap-3 border-b border-forensic-800 pb-4">
+                <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0">
+                  <Crown className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white uppercase tracking-wider">
+                    Found an Elite Investigation Squad
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    You will become the Squad Commander and receive an invitation token for 3 teammates.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-base font-bold text-white uppercase tracking-wider">Enlist via Invitation Token</h2>
-                <p className="text-xs text-slate-400">Enter a cryptographically generated squad invitation code.</p>
-              </div>
+
+              <form onSubmit={handleCreateTeam} className="space-y-5">
+                <div>
+                  <label className="block text-xs uppercase text-slate-300 font-bold mb-2">
+                    Squad Name / Unit Callsign
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. NIGHTHAWKS, ZERO_DAY_CORPS, SHADOW_ROOT"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                    maxLength={50}
+                    required
+                    className="w-full px-4 py-3 bg-forensic-950 border border-forensic-750 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-400 transition"
+                  />
+                  {createName && (
+                    <div className="mt-2 text-[11px] text-slate-400 flex items-center gap-2">
+                      <span>Squad Tag Preview:</span>
+                      <span className="px-2 py-0.5 rounded bg-cyan-950 border border-cyan-700 text-cyan-300 font-bold">
+                        {createName.toUpperCase().replace(/\s+/g, '_')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-forensic-950 p-4 rounded-xl border border-forensic-800 space-y-2 text-xs text-slate-300">
+                  <span className="font-bold text-cyan-400 uppercase block mb-1">Squad Engagement Rules:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span>Max Roster: <b>4 Operatives</b> per squad.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span>Shared Progression: Solutions accepted by any member credit points to the whole team.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span>No Double Scoring: Each problem awards points only once per squad.</span>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading || !createName.trim()}
+                  className="w-full py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-xl shadow-cyan-950/50"
+                >
+                  {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                  <span>Commission Squad Now</span>
+                </button>
+              </form>
             </div>
+          )}
 
-            <form onSubmit={handleJoinTeam} className="space-y-4 pt-2">
-              <div>
-                <label className="block text-xs text-slate-300 uppercase mb-1.5">Invitation Security Token / Code</label>
-                <input
-                  type="text"
-                  placeholder="Paste invitation token received from Commander..."
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value)}
-                  required
-                  className="w-full px-4 py-2.5 bg-forensic-950 border border-forensic-700 rounded-lg text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:border-emerald-400"
-                />
+          {/* Tab 2: Enlist via Invitation Code Form */}
+          {formationTab === 'join' && (
+            <div className="max-w-2xl mx-auto bg-forensic-900 border border-emerald-500/40 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 font-mono">
+              <div className="flex items-center gap-3 border-b border-forensic-800 pb-4">
+                <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
+                  <UserPlus className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white uppercase tracking-wider">
+                    Enlist into Existing Squad
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Enter the cryptographic invitation token generated by your Squad Commander.
+                  </p>
+                </div>
               </div>
 
-              <div className="text-[11px] text-slate-400 bg-forensic-950 p-3 rounded-lg border border-forensic-800 space-y-1">
-                <p className="text-emerald-400 font-bold">• Strict 1-Squad Rule: Participants may belong to 1 squad.</p>
-                <p>• Validates token on server against squad capacity limits.</p>
-                <p>• Immediate synchronization of all shared solved cases upon enlistment.</p>
-              </div>
+              <form onSubmit={handleJoinTeam} className="space-y-5">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-xs uppercase text-slate-300 font-bold">
+                      Invitation Security Token
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handlePasteCode}
+                      className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1 transition"
+                    >
+                      <ClipboardPaste className="w-3.5 h-3.5" />
+                      <span>Paste from Clipboard</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="e.g. j7xK29LaQvM89BwZ..."
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value)}
+                    required
+                    className="w-full px-4 py-3 bg-forensic-950 border border-forensic-750 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-none focus:border-emerald-400 font-mono transition"
+                  />
+                </div>
 
-              <button
-                type="submit"
-                disabled={actionLoading || !joinCode.trim()}
-                className="w-full py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/50"
-              >
-                {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                Enlist In Squad
-              </button>
-            </form>
-          </div>
+                <div className="bg-forensic-950 p-4 rounded-xl border border-forensic-800 space-y-2 text-xs text-slate-300">
+                  <span className="font-bold text-emerald-400 uppercase block mb-1">Enlistment Verification:</span>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span>1-Squad Policy: A participant can only belong to 1 squad at a time.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span>Instant Progress Sync: All previous case unlocks from your squad become available immediately.</span>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={actionLoading || !joinCode.trim()}
+                  className="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-black font-bold text-xs uppercase tracking-wider transition flex items-center justify-center gap-2 shadow-xl shadow-emerald-950/50"
+                >
+                  {actionLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                  <span>Verify Token & Enlist</span>
+                </button>
+              </form>
+            </div>
+          )}
 
         </div>
       ) : (
-        /* STATE 2: User is in a team */
-        <div className="space-y-6">
+        /* ==================================================================== */
+        /* STATE 2: PARTICIPANT HAS ACTIVE SQUAD WORKSPACE                      */
+        /* ==================================================================== */
+        <div className="space-y-6 font-mono">
           
-          {/* Squad Header Banner */}
-          <div className="bg-gradient-to-r from-forensic-900 via-forensic-850 to-forensic-900 border border-cyan-500/30 rounded-xl p-6 shadow-2xl font-mono">
+          {/* Executive Squad Banner */}
+          <div className="bg-gradient-to-r from-forensic-900 via-forensic-850 to-forensic-900 border border-cyan-500/40 rounded-2xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
               
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="px-2.5 py-1 rounded bg-cyan-950 border border-cyan-600 text-cyan-300 font-bold text-xs uppercase tracking-widest">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="px-2.5 py-1 rounded-md bg-cyan-950 border border-cyan-600 text-cyan-300 font-bold text-xs">
                     SQUAD #{team.id}
                   </span>
-                  <h2 className="text-2xl font-bold text-white tracking-wider">{team.name}</h2>
-                  <span className={`px-2.5 py-1 rounded font-bold text-xs flex items-center gap-1 ${
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white tracking-wide">{team.name}</h2>
+                  <span className={`px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1.5 ${
                     team.is_owner ? 'bg-amber-950 text-amber-300 border border-amber-600' : 'bg-slate-800 text-slate-300'
                   }`}>
                     {team.is_owner ? <Crown className="w-3.5 h-3.5 text-amber-400" /> : <Users className="w-3.5 h-3.5 text-cyan-400" />}
@@ -317,28 +414,28 @@ export default function TeamWorkspace({ user }) {
                   </span>
                 </div>
                 <p className="text-xs text-slate-400">
-                  Commissioned on {new Date(team.created_at).toLocaleDateString()} • Lead Commander: <span className="text-white font-bold">{team.owner?.username}</span>
+                  Lead Commander: <b className="text-white">{team.owner?.username}</b> • Commissioned: {new Date(team.created_at).toLocaleDateString()}
                 </p>
               </div>
 
-              {/* Quick Telemetry Counters */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-forensic-950/80 border border-forensic-800 p-3.5 rounded-lg text-center">
+              {/* KPI Score Cards */}
+              <div className="grid grid-cols-3 gap-3 shrink-0">
+                <div className="bg-forensic-950 p-4 rounded-xl border border-forensic-800 text-center">
                   <span className="text-[10px] text-slate-400 uppercase block mb-1">Squad Score</span>
-                  <span className="text-xl font-bold text-amber-400">{team.points}</span>
+                  <span className="text-2xl font-bold text-amber-400">{team.points}</span>
                   <span className="text-[10px] text-slate-500 block">PTS</span>
                 </div>
 
-                <div className="bg-forensic-950/80 border border-forensic-800 p-3.5 rounded-lg text-center">
-                  <span className="text-[10px] text-slate-400 uppercase block mb-1">Cases Solved</span>
-                  <span className="text-xl font-bold text-cyan-400">{team.solved_count}</span>
-                  <span className="text-[10px] text-slate-500 block">/ 80 Cases</span>
+                <div className="bg-forensic-950 p-4 rounded-xl border border-forensic-800 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block mb-1">Solved Cases</span>
+                  <span className="text-2xl font-bold text-emerald-400">{team.solved_count}</span>
+                  <span className="text-[10px] text-slate-500 block">/ 80</span>
                 </div>
 
-                <div className="bg-forensic-950/80 border border-forensic-800 p-3.5 rounded-lg text-center">
-                  <span className="text-[10px] text-slate-400 uppercase block mb-1">Operatives</span>
-                  <span className="text-xl font-bold text-emerald-400">{team.members?.length || 1}</span>
-                  <span className="text-[10px] text-slate-500 block">/ {team.max_members} Max</span>
+                <div className="bg-forensic-950 p-4 rounded-xl border border-forensic-800 text-center">
+                  <span className="text-[10px] text-slate-400 uppercase block mb-1">Roster</span>
+                  <span className="text-2xl font-bold text-cyan-400">{team.members?.length || 1}</span>
+                  <span className="text-[10px] text-slate-500 block">/ 4 Max</span>
                 </div>
               </div>
 
@@ -347,251 +444,226 @@ export default function TeamWorkspace({ user }) {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Column 1: Squad Credentials & Invitations */}
-            <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-5 shadow-xl space-y-4 font-mono text-xs">
-              <div className="flex items-center justify-between border-b border-forensic-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Key className="w-4 h-4 text-cyan-400" />
-                  <h3 className="font-bold text-white uppercase">Invitation Credentials</h3>
-                </div>
-                <span className="text-[10px] text-slate-400">Roster: {team.members?.length || 1}/{team.max_members}</span>
-              </div>
-
-              <div className="space-y-3">
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase block mb-1">Security Token / Invite Code</span>
+            {/* Column 1 & 2: Operatives Roster & Shared Progress */}
+            <div className="lg:col-span-2 space-y-6">
+              
+              {/* Operatives Roster */}
+              <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-forensic-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={team.invitation_code}
-                      className="flex-1 px-3 py-2 bg-forensic-950 border border-forensic-750 rounded text-cyan-300 font-bold text-xs select-all"
-                    />
-                    <button
-                      onClick={copyCodeToClipboard}
-                      className="px-3 py-2 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-600 text-cyan-300 transition flex items-center gap-1"
-                      title="Copy invitation code"
-                    >
-                      {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
+                    <Users className="w-5 h-5 text-cyan-400" />
+                    <h3 className="font-bold text-sm text-white uppercase tracking-wider">
+                      Squad Roster ({team.members?.length || 1} / {team.max_members} Operatives)
+                    </h3>
                   </div>
+                  <span className="text-xs text-slate-400">
+                    {team.max_members - (team.members?.length || 1)} open slot(s)
+                  </span>
                 </div>
 
-                <div className="flex flex-col gap-2 pt-1">
-                  <button
-                    onClick={copyLinkToClipboard}
-                    className="w-full py-2 rounded bg-forensic-850 hover:bg-forensic-800 border border-slate-700 text-slate-200 font-bold text-xs transition flex items-center justify-center gap-2"
-                  >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-cyan-400" />}
-                    <span>{copiedLink ? 'Invite Link Copied!' : 'Copy Direct Enlistment Link'}</span>
-                  </button>
-
-                  {team.is_owner && (
-                    <button
-                      onClick={handleRotateInvite}
-                      disabled={actionLoading}
-                      className="w-full py-2 rounded bg-amber-950/60 hover:bg-amber-900/60 border border-amber-600 text-amber-200 font-bold text-xs transition flex items-center justify-center gap-2"
-                      title="Invalidate old invite codes and issue a new random token"
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {team.members?.map((m) => (
+                    <div 
+                      key={m.user_id}
+                      className="p-4 rounded-xl bg-forensic-950 border border-forensic-800 flex flex-col justify-between space-y-3"
                     >
-                      <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Rotate Security Token</span>
-                    </button>
-                  )}
-                </div>
-
-                <div className="border-t border-forensic-800 pt-3">
-                  <button
-                    onClick={handleLeaveTeam}
-                    disabled={actionLoading}
-                    className="w-full py-2 rounded bg-red-950/60 hover:bg-red-900/80 border border-red-700 text-red-300 font-bold text-xs transition flex items-center justify-center gap-2"
-                  >
-                    <LogOut className="w-3.5 h-3.5 text-red-400" />
-                    <span>Depart from Squad</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Column 2: Squad Operatives Roster */}
-            <div className="lg:col-span-2 bg-forensic-900 border border-forensic-800 rounded-xl p-5 shadow-xl space-y-4 font-mono text-xs">
-              <div className="flex items-center justify-between border-b border-forensic-800 pb-3">
-                <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-cyan-400" />
-                  <h3 className="font-bold text-white uppercase">Operatives Roster ({team.members?.length} / {team.max_members})</h3>
-                </div>
-                {team.is_owner && team.members?.length > 1 && (
-                  <button
-                    onClick={() => setTransferModalOpen(true)}
-                    className="px-2.5 py-1 rounded bg-forensic-850 hover:bg-forensic-800 border border-cyan-700 text-cyan-300 text-[11px] flex items-center gap-1.5 transition"
-                  >
-                    <Crown className="w-3.5 h-3.5 text-amber-400" />
-                    Transfer Command
-                  </button>
-                )}
-              </div>
-
-              <div className="divide-y divide-forensic-800">
-                {team.members?.map((m) => (
-                  <div key={m.user_id} className="py-3 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg border ${
-                        m.role === 'OWNER' ? 'bg-amber-950/80 border-amber-600 text-amber-400' : 'bg-cyan-950/80 border-cyan-800 text-cyan-400'
-                      }`}>
-                        {m.role === 'OWNER' ? <Crown className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                      </div>
-                      <div>
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-white text-sm">{m.username}</span>
-                          {m.is_current_user && (
-                            <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 border border-cyan-700 text-cyan-300 font-bold">
-                              YOU
+                          {m.role === 'OWNER' && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700 text-[10px] font-bold flex items-center gap-1">
+                              <Crown className="w-3 h-3 text-amber-400" />
+                              LEAD
                             </span>
                           )}
                         </div>
-                        <span className="text-[11px] text-slate-400">
-                          Enlisted on {new Date(m.joined_at).toLocaleDateString()} • Role: <b className={m.role === 'OWNER' ? 'text-amber-400' : 'text-slate-300'}>{m.role}</b>
-                        </span>
+                        <span className="text-xs font-bold text-amber-400">{m.points} PTS</span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 border-t border-forensic-850 pt-2">
+                        <span>Joined: {new Date(m.joined_at).toLocaleDateString()}</span>
+                        
+                        {/* Commander Removal Action */}
+                        {team.is_owner && m.role !== 'OWNER' && (
+                          <button
+                            onClick={() => handleRemoveMember(m.user_id, m.username)}
+                            className="text-red-400 hover:text-red-300 font-bold flex items-center gap-1"
+                            title="Discharge operative from squad"
+                          >
+                            <UserMinus className="w-3.5 h-3.5" />
+                            <span>Discharge</span>
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="px-2.5 py-1 rounded bg-forensic-950 border border-forensic-800 text-amber-400 font-bold">
-                        {m.points} PTS
-                      </span>
-
-                      {team.is_owner && !m.is_current_user && (
-                        <button
-                          onClick={() => handleRemoveMember(m.user_id, m.username)}
-                          disabled={actionLoading}
-                          title="Discharge operative"
-                          className="p-1.5 rounded bg-red-950/80 hover:bg-red-900 border border-red-700 text-red-300 transition"
-                        >
-                          <UserMinus className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Section 3: Shared Challenge Progress Board */}
-          <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 shadow-xl space-y-4 font-mono text-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-forensic-800 pb-4">
-              <div>
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <FolderGit2 className="w-5 h-5 text-forensic-cyan" />
-                  SHARED SQUAD INVESTIGATION LOG
-                </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
-                  Real-time record of all forensic cases unlocked and completed by this squad.
-                </p>
-              </div>
-
-              <Link
-                to="/archive"
-                className="px-3.5 py-1.5 rounded bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-600 text-cyan-300 font-bold transition flex items-center gap-1.5 w-fit"
-              >
-                <span>Browse All 80 Cases</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
-
-            {team.solved_cases?.length === 0 ? (
-              <div className="py-12 text-center text-slate-500 space-y-3">
-                <Terminal className="w-8 h-8 mx-auto text-slate-600" />
-                <p className="text-sm">No forensic challenges solved by squad operatives yet.</p>
-                <p className="text-xs text-slate-600">Head to the Case Archive and submit solutions to earn shared team points!</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-forensic-850 border-b border-forensic-800 text-slate-400 uppercase text-[10px]">
-                    <tr>
-                      <th className="py-2.5 px-3">Case ID</th>
-                      <th className="py-2.5 px-3">Title & Domain</th>
-                      <th className="py-2.5 px-3 text-center">Points</th>
-                      <th className="py-2.5 px-3">Cracked By</th>
-                      <th className="py-2.5 px-3 text-right">Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-forensic-800">
-                    {team.solved_cases?.map((sc) => (
-                      <tr key={sc.case_id} className="hover:bg-forensic-850/60 transition">
-                        <td className="py-3 px-3">
-                          <Link to={`/cases/${sc.case_id}`} className="font-bold text-cyan-400 hover:underline">
-                            {sc.case_id}
-                          </Link>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="font-bold text-white block">{sc.case_title}</span>
-                          <span className="text-[10px] text-slate-500">{sc.domain}</span>
-                        </td>
-                        <td className="py-3 px-3 text-center font-bold text-amber-400">
-                          +{sc.points_awarded}
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className="px-2 py-0.5 rounded bg-forensic-950 border border-forensic-800 text-slate-300 font-bold">
-                            {sc.solved_by_username}
-                          </span>
-                        </td>
-                        <td className="py-3 px-3 text-right text-slate-400 text-[11px]">
-                          {new Date(sc.solved_at).toLocaleString()}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Transfer Ownership Modal */}
-          {transferModalOpen && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-              <div className="bg-forensic-900 border border-forensic-750 rounded-xl p-6 max-w-md w-full space-y-4 font-mono shadow-2xl">
-                <div className="flex items-center gap-2 text-amber-400">
-                  <Crown className="w-5 h-5" />
-                  <h3 className="font-bold text-sm uppercase">Transfer Squad Command</h3>
-                </div>
-                <p className="text-xs text-slate-300">
-                  Select an active operative from your roster to become the new Squad Commander:
-                </p>
-
-                <select
-                  value={selectedNewOwner}
-                  onChange={(e) => setSelectedNewOwner(e.target.value)}
-                  className="w-full px-3 py-2 bg-forensic-950 border border-forensic-700 rounded text-slate-200 text-xs focus:outline-none focus:border-amber-400"
-                >
-                  <option value="">-- Select Operative --</option>
-                  {team.members?.filter(m => !m.is_current_user).map(m => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.username} ({m.points} pts)
-                    </option>
                   ))}
-                </select>
+                </div>
 
-                <div className="flex items-center justify-end gap-3 pt-3">
+                {/* Team Commander Actions */}
+                <div className="pt-3 border-t border-forensic-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  {team.is_owner && team.members?.length > 1 && (
+                    <button
+                      onClick={() => setTransferModalOpen(true)}
+                      className="px-3.5 py-2 rounded-lg bg-forensic-850 hover:bg-forensic-800 border border-slate-700 text-slate-200 flex items-center gap-1.5 transition"
+                    >
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Transfer Squad Command</span>
+                    </button>
+                  )}
+
                   <button
-                    onClick={() => setTransferModalOpen(false)}
-                    className="px-4 py-2 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs"
+                    onClick={handleLeaveTeam}
+                    disabled={actionLoading}
+                    className="px-3.5 py-2 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-700 text-red-200 flex items-center gap-1.5 transition ml-auto"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleTransferOwnership}
-                    disabled={!selectedNewOwner || actionLoading}
-                    className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-black font-bold text-xs"
-                  >
-                    Confirm Transfer
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Depart Squad</span>
                   </button>
                 </div>
               </div>
-            </div>
-          )}
 
+              {/* Shared Solved Cases Intelligence */}
+              <div className="bg-forensic-900 border border-forensic-800 rounded-xl p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-forensic-800 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Award className="w-5 h-5 text-emerald-400" />
+                    <h3 className="font-bold text-sm text-white uppercase tracking-wider">
+                      Shared Dossier Solves ({team.solved_count} Cases)
+                    </h3>
+                  </div>
+                  <Link to="/archive" className="text-cyan-400 text-xs hover:underline flex items-center gap-1">
+                    <span>Explore Remaining Dossiers</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+
+                {team.solved_cases?.length === 0 ? (
+                  <div className="py-8 text-center text-slate-500 text-xs">
+                    No cases solved yet. Begin solving forensic challenges to pool squad clearance points!
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {team.solved_cases?.map((sc) => (
+                      <div key={sc.case_id} className="p-3 rounded-lg bg-forensic-950 border border-forensic-800 flex items-center justify-between">
+                        <div>
+                          <span className="font-bold text-white block">{sc.case_id}</span>
+                          <span className="text-[10px] text-slate-400">Solved by: <b className="text-slate-300">{sc.solver_username}</b></span>
+                        </div>
+                        <span className="text-amber-400 font-bold">+{sc.points_awarded} PTS</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+            {/* Column 3: Squad Invitation Deck */}
+            <div className="space-y-6">
+              
+              <div className="bg-forensic-900 border border-cyan-500/40 rounded-xl p-6 shadow-xl space-y-4 text-xs">
+                <div className="flex items-center gap-2 text-cyan-400 border-b border-forensic-800 pb-3">
+                  <Key className="w-4 h-4" />
+                  <h3 className="font-bold uppercase tracking-wider">Operative Invitation Token</h3>
+                </div>
+
+                <p className="text-slate-400">
+                  Share this security token with your teammates to enlist them into your squad (max 4 members).
+                </p>
+
+                {/* Token Box */}
+                <div className="p-3.5 rounded-xl bg-forensic-950 border border-forensic-750 space-y-2">
+                  <span className="text-[10px] uppercase text-slate-500 block">Invitation Code:</span>
+                  <div className="font-mono text-sm font-bold text-cyan-300 break-all select-all">
+                    {team.invitation_code}
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <button
+                    onClick={copyCodeToClipboard}
+                    className="w-full py-2.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-bold flex items-center justify-center gap-2 transition shadow-md shadow-cyan-950"
+                  >
+                    {copiedCode ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    <span>{copiedCode ? 'Token Copied to Clipboard!' : 'Copy Invitation Token'}</span>
+                  </button>
+
+                  <button
+                    onClick={copyLinkToClipboard}
+                    className="w-full py-2.5 rounded-lg bg-forensic-850 hover:bg-forensic-800 border border-slate-700 text-slate-200 font-bold flex items-center justify-center gap-2 transition"
+                  >
+                    {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Sparkles className="w-4 h-4 text-cyan-400" />}
+                    <span>{copiedLink ? 'Direct Link Copied!' : 'Copy Direct Join Link'}</span>
+                  </button>
+                </div>
+
+                {/* Rotate Token Action for Commander */}
+                {team.is_owner && (
+                  <div className="pt-3 border-t border-forensic-800">
+                    <button
+                      onClick={handleRotateInvite}
+                      disabled={actionLoading}
+                      className="w-full py-2 rounded-lg bg-forensic-950 hover:bg-forensic-850 border border-slate-700 text-slate-400 hover:text-white flex items-center justify-center gap-1.5 transition text-[11px]"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Rotate Security Token (Revoke Old)</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
+      {/* Transfer Ownership Modal */}
+      {transferModalOpen && team && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-forensic-900 border border-forensic-750 rounded-xl p-6 max-w-md w-full space-y-4 font-mono shadow-2xl">
+            <div className="flex items-center gap-2 text-amber-400 border-b border-forensic-800 pb-3">
+              <Crown className="w-5 h-5 text-amber-400" />
+              <h3 className="font-bold text-sm uppercase">Transfer Squad Command</h3>
+            </div>
+            
+            <p className="text-xs text-slate-300">
+              Select the operative who will assume command of squad <b className="text-white">{team.name}</b>.
+            </p>
+
+            <div>
+              <label className="block text-xs text-slate-400 uppercase mb-1">New Commander</label>
+              <select
+                value={selectedNewOwner}
+                onChange={(e) => setSelectedNewOwner(e.target.value)}
+                className="w-full px-3 py-2 bg-forensic-950 border border-forensic-700 rounded text-slate-200 text-xs focus:outline-none focus:border-amber-400"
+              >
+                <option value="">Select an operative...</option>
+                {team.members?.filter(m => m.user_id !== team.owner?.id).map(m => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.username} ({m.points} PTS)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3">
+              <button
+                onClick={() => setTransferModalOpen(false)}
+                className="px-4 py-2 rounded bg-forensic-800 hover:bg-forensic-750 text-slate-300 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTransferOwnership}
+                disabled={actionLoading || !selectedNewOwner}
+                className="px-4 py-2 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-black font-bold text-xs"
+              >
+                Confirm Command Transfer
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -209,6 +209,9 @@ def test_clipboard_restriction_toggle():
     admin_token = admin_res.json()["access_token"]
     admin_headers = {"Authorization": f"Bearer {admin_token}"}
 
+    # Ensure baseline is locked (False)
+    client.put("/api/v1/admin/cases/CASE-01", json={"allow_copy_paste": False}, headers=admin_headers)
+
     # 1. Default should be restricted (False)
     detail_res = client.get("/api/v1/cases/CASE-01")
     assert detail_res.status_code == 200

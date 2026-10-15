@@ -17,7 +17,11 @@ export default function Login({ onLoginSuccess }) {
     try {
       const data = await authService.login(username, password);
       onLoginSuccess(data);
-      navigate('/');
+      if (data.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid investigator clearance credentials');
     } finally {

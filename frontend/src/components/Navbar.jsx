@@ -21,16 +21,15 @@ export default function Navbar({ user, onLogout }) {
 
   const navLinks = [
     { to: '/', label: 'Dashboard', icon: Activity },
-    { to: '/archive', label: 'Investigation Archive', icon: FolderGit2 },
-    { to: '/challenges', label: 'Challenges', icon: Terminal },
-    { to: '/team', label: 'Team Workspace', icon: Users },
-    { to: '/team-leaderboard', label: 'Team Leaderboard', icon: Trophy },
-    { to: '/submissions', label: 'My Submissions', icon: FileCode },
+    { to: '/archive', label: 'Cases', icon: FolderGit2 },
+    { to: '/team', label: 'Squad Room', icon: Users },
+    { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },
+    { to: '/submissions', label: 'Submissions', icon: FileCode },
     { to: '/vault', label: 'Evidence Vault', icon: Key },
   ];
 
   if (user && user.role === 'admin') {
-    navLinks.push({ to: '/admin', label: 'Admin Terminal', icon: Lock, isAdmin: true });
+    navLinks.push({ to: '/admin', label: 'Admin Deck', icon: Lock, isAdmin: true });
   }
 
   const isLinkActive = (to) => {
@@ -70,12 +69,14 @@ export default function Navbar({ user, onLogout }) {
                   <Link
                     key={item.to}
                     to={item.to}
-                    className={`flex items-center space-x-1.5 px-2.5 py-2 rounded-md text-xs font-mono uppercase tracking-wider transition ${
+                    className={`flex items-center space-x-1.5 px-3 py-2 rounded-md text-xs font-mono uppercase tracking-wider transition ${
                       active
                         ? item.isAdmin 
-                          ? 'bg-red-950/60 text-red-300 border border-red-500/40 shadow-sm shadow-red-950'
-                          : 'bg-forensic-800 text-forensic-cyan border border-cyan-500/30 shadow-sm shadow-cyan-950'
-                        : 'text-slate-400 hover:text-slate-200 hover:bg-forensic-850'
+                          ? 'bg-red-950/80 text-red-200 border border-red-500/60 shadow-md shadow-red-950'
+                          : 'bg-forensic-800 text-forensic-cyan border border-cyan-500/40 shadow-sm shadow-cyan-950'
+                        : item.isAdmin
+                          ? 'text-red-400 hover:text-red-300 hover:bg-red-950/40 border border-red-800/40'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-forensic-850'
                     }`}
                   >
                     <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -90,20 +91,32 @@ export default function Navbar({ user, onLogout }) {
           <div className="flex items-center space-x-3">
             {user ? (
               <div className="flex items-center space-x-2 sm:space-x-3">
+                {/* Admin Quick Action Button */}
+                {user.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950 border border-red-500 hover:bg-red-900 text-red-200 font-mono text-xs font-bold transition shadow-lg shadow-red-950/50"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse"></span>
+                    <Lock className="w-3.5 h-3.5 text-red-400" />
+                    <span>ADMIN DECK</span>
+                  </Link>
+                )}
+
                 {/* Profile Modal Trigger */}
                 <button
                   onClick={() => setProfileModalOpen(true)}
                   className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-forensic-850 hover:bg-forensic-800 border border-slate-700/80 transition min-h-[44px]"
                   title="View Investigator Profile"
                 >
-                  <div className="p-1 rounded bg-cyan-950 text-cyan-400">
+                  <div className={`p-1 rounded ${user.role === 'admin' ? 'bg-red-950 text-red-400' : 'bg-cyan-950 text-cyan-400'}`}>
                     <User className="w-3.5 h-3.5" />
                   </div>
                   <div className="hidden sm:flex flex-col text-left">
                     <span className="text-xs font-mono text-slate-200 font-bold truncate max-w-[120px]">{user.username}</span>
                     <span className="text-[10px] font-mono text-amber-400 font-semibold flex items-center gap-1">
                       <Shield className="w-2.5 h-2.5 text-amber-400" />
-                      {user.points || 0} PTS
+                      {user.role === 'admin' ? 'ADMIN CLEARANCE' : `${user.points || 0} PTS`}
                     </span>
                   </div>
                 </button>
