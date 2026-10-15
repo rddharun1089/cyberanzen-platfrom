@@ -26,9 +26,10 @@ export default function Workspace() {
   const [activeTab, setActiveTab] = useState('dossier'); // 'dossier' | 'results'
   const [useTouchEditor, setUseTouchEditor] = useState(false);
 
-  // Strict Anti-Cheat & Clipboard Restriction State
+  // Strict Anti-Cheat & Clipboard Restriction State (Administrators always retain full clipboard override)
   const currentUser = authService.getCurrentUser();
-  const isCopyPasteAllowed = Boolean(caseData?.allow_copy_paste || currentUser?.role === 'admin');
+  const isAdmin = Boolean(currentUser && (currentUser.role?.toLowerCase() === 'admin' || currentUser.is_superuser));
+  const isCopyPasteAllowed = Boolean(caseData?.allow_copy_paste || isAdmin);
   const [clipboardWarning, setClipboardWarning] = useState('');
   const [mobileView, setMobileView] = useState('dossier'); // 'dossier' | 'editor'
 
@@ -508,18 +509,18 @@ export default function Workspace() {
               {isCopyPasteAllowed ? (
                 <span 
                   className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-600 flex items-center gap-1 font-semibold whitespace-nowrap"
-                  title="Administrator clearance: Copy/Paste is allowed"
+                  title={isAdmin && !caseData?.allow_copy_paste ? "Admin Clearance: Problem clipboard is locked for students, but unlocked for administrators." : "Copy/Paste is permitted for this challenge."}
                 >
                   <Unlock className="w-3 h-3 text-emerald-400" />
-                  Clipboard: Allowed
+                  Clipboard: {isAdmin && !caseData?.allow_copy_paste ? 'Allowed (Admin Override)' : 'Allowed'}
                 </span>
               ) : (
                 <span 
                   className="px-2 py-0.5 rounded text-[10px] font-mono bg-red-950/90 text-red-300 border border-red-500 flex items-center gap-1 font-bold animate-pulse whitespace-nowrap"
-                  title="Strict Anti-Cheat Enforced: Copy/Paste shortcuts and extensions are blocked by administrator"
+                  title="Strict Anti-Cheat Enforced: Copy/Paste shortcuts and extensions are blocked by administrator for participants."
                 >
                   <ShieldAlert className="w-3 h-3 text-red-400" />
-                  Clipboard: Locked
+                  Clipboard: Locked (Exam Mode)
                 </span>
               )}
             </div>
