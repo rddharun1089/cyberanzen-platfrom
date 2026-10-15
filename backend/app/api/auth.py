@@ -1,3 +1,5 @@
+import time
+from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -7,6 +9,11 @@ from app.core.security import verify_password, hash_password, create_access_toke
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# Brute-force protection: max 5 failed attempts per username within 60s
+FAILED_LOGIN_ATTEMPTS = defaultdict(list)
+LOCKOUT_THRESHOLD = 5
+LOCKOUT_DURATION = 60
 
 class LoginRequest(BaseModel):
     username: str
@@ -26,12 +33,29 @@ class TokenResponse(BaseModel):
 
 @router.post("/login", response_model=TokenResponse)
 def login(req: LoginRequest, db: Session = Depends(get_db)):
+    key = req.username.strip().lower()
+    now = time.time()
+    recent = [t for t in FAILED_LOGIN_ATTEMPTS[key] if now - t < LOCKOUT_DURATION]
+    FAILED_LOGIN_ATTEMPTS[key] = recent
+
+    if len(recent) >= LOCKOUT_THRESHOLD:
+        wait_seconds = int(LOCKOUT_DURATION - (now - recent[0]))
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many failed login attempts. Clearance locked for {max(1, wait_seconds)} seconds."
+        )
+
     user = db.query(User).filter(User.username == req.username).first()
     if not user or not verify_password(req.password, user.hashed_password):
+        FAILED_LOGIN_ATTEMPTS[key].append(now)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid investigator callsign or passkey"
         )
+
+    # Clear failed attempts on success
+    FAILED_LOGIN_ATTEMPTS.pop(key, None)
+
     token = create_access_token({"sub": user.username, "role": user.role, "id": user.id})
     return {
         "access_token": token,
@@ -43,6 +67,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/register", response_model=TokenResponse)
 def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if len(req.password) < 8:
+        raise HTTPException(
+            status_code=400,
+            detail="Security passkey must be at least 8 characters long."
+        )
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=400, detail="Callsign already assigned to an agent")
     if db.query(User).filter(User.email == req.email).first():
