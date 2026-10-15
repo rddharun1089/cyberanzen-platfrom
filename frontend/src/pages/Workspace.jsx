@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
-import { Play, Send, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, AlertTriangle, Key, Terminal, Code2 } from 'lucide-react';
-import { caseService, submissionService } from '../services/api';
+import { 
+  Play, Send, RotateCcw, ChevronLeft, ChevronRight, CheckCircle2, 
+  AlertTriangle, Key, Terminal, Code2, Lock, Unlock, ShieldAlert 
+} from 'lucide-react';
+import { authService, caseService, submissionService } from '../services/api';
 import VerdictBadge from '../components/VerdictBadge';
 
 export default function Workspace() {
@@ -20,6 +23,92 @@ export default function Workspace() {
   const [executionResult, setExecutionResult] = useState(null);
   const [unlockedToken, setUnlockedToken] = useState(null);
   const [activeTab, setActiveTab] = useState('dossier'); // 'dossier' | 'results'
+
+  // Strict Anti-Cheat & Clipboard Restriction State
+  const currentUser = authService.getCurrentUser();
+  const isCopyPasteAllowed = Boolean(caseData?.allow_copy_paste || currentUser?.role === 'admin');
+  const [clipboardWarning, setClipboardWarning] = useState('');
+
+  // Global Keyboard & Clipboard Event Interceptor (Captures Ctrl+Shift+C, Ctrl+V, Shift+Insert, Extensions)
+  useEffect(() => {
+    if (isCopyPasteAllowed) return;
+
+    const triggerWarning = () => {
+      setClipboardWarning('⚠️ STRICT COMPLIANCE: Copying & pasting code (including Ctrl+Shift+C / Ctrl+V / extensions) is restricted by administrator for this challenge.');
+      setTimeout(() => setClipboardWarning(''), 4500);
+    };
+
+    const handleKeyDownCapture = (e) => {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      // Block Ctrl/Cmd + V, C, X
+      // Block Ctrl/Cmd + Shift + C, V
+      // Block Shift + Insert, Ctrl + Insert
+      if (
+        (isCtrlOrCmd && ['v', 'c', 'x'].includes(key)) ||
+        (isCtrlOrCmd && e.shiftKey && ['c', 'v'].includes(key)) ||
+        (e.shiftKey && e.key === 'Insert') ||
+        (isCtrlOrCmd && e.key === 'Insert')
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        triggerWarning();
+      }
+    };
+
+    const handleClipboardEvent = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      triggerWarning();
+    };
+
+    // Attach capture listeners on window to stop browser shortcuts and extensions
+    window.addEventListener('keydown', handleKeyDownCapture, true);
+    window.addEventListener('paste', handleClipboardEvent, true);
+    window.addEventListener('copy', handleClipboardEvent, true);
+    window.addEventListener('cut', handleClipboardEvent, true);
+    window.addEventListener('drop', handleClipboardEvent, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownCapture, true);
+      window.removeEventListener('paste', handleClipboardEvent, true);
+      window.removeEventListener('copy', handleClipboardEvent, true);
+      window.removeEventListener('cut', handleClipboardEvent, true);
+      window.removeEventListener('drop', handleClipboardEvent, true);
+    };
+  }, [isCopyPasteAllowed]);
+
+  // Monaco Editor Specific Mount Interceptor
+  const handleEditorMount = (editor, monaco) => {
+    if (!isCopyPasteAllowed) {
+      const showWarning = () => {
+        setClipboardWarning('⚠️ STRICT COMPLIANCE: Copying & pasting code (including Ctrl+Shift+C / Ctrl+V / extensions) is restricted by administrator for this challenge.');
+        setTimeout(() => setClipboardWarning(''), 4500);
+      };
+
+      // Unbind Monaco Internal Commands
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, showWarning);
+      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Insert, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyC, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyV, showWarning);
+
+      // DOM event listener directly on Monaco's DOM element
+      const editorDom = editor.getDomNode();
+      if (editorDom) {
+        editorDom.addEventListener('paste', (e) => { e.preventDefault(); e.stopPropagation(); showWarning(); }, true);
+        editorDom.addEventListener('copy', (e) => { e.preventDefault(); e.stopPropagation(); showWarning(); }, true);
+        editorDom.addEventListener('cut', (e) => { e.preventDefault(); e.stopPropagation(); showWarning(); }, true);
+        editorDom.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); showWarning(); }, true);
+        editorDom.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); showWarning(); }, true);
+      }
+    }
+  };
 
   useEffect(() => {
     async function loadCase() {
@@ -379,6 +468,25 @@ export default function Workspace() {
                 <option value="cpp">C++17 (g++)</option>
                 <option value="c">C11 (gcc)</option>
               </select>
+
+              {/* Clipboard Anti-Cheat Security Status Badge */}
+              {isCopyPasteAllowed ? (
+                <span 
+                  className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-400 border border-emerald-600 flex items-center gap-1 font-semibold"
+                  title="Administrator clearance: Copy/Paste is allowed"
+                >
+                  <Unlock className="w-3 h-3 text-emerald-400" />
+                  Clipboard: Allowed
+                </span>
+              ) : (
+                <span 
+                  className="px-2 py-0.5 rounded text-[10px] font-mono bg-red-950/90 text-red-300 border border-red-500 flex items-center gap-1 font-bold animate-pulse"
+                  title="Strict Anti-Cheat Enforced: Copy/Paste shortcuts (Ctrl+C, Ctrl+V, Ctrl+Shift+C) and extensions are blocked by administrator"
+                >
+                  <ShieldAlert className="w-3 h-3 text-red-400" />
+                  Clipboard: Locked (Anti-Cheat)
+                </span>
+              )}
             </div>
 
             <button
@@ -393,11 +501,20 @@ export default function Workspace() {
 
           {/* Monaco Editor Container */}
           <div className="flex-1 relative overflow-hidden bg-[#1e1e1e]">
+            {/* High-Visibility Floating Warning Banner on Copy/Paste Attempt */}
+            {clipboardWarning && (
+              <div className="absolute top-3 left-4 right-4 z-50 p-3 rounded-lg bg-red-950/95 border-2 border-red-500 text-red-200 font-mono text-xs flex items-center gap-2.5 shadow-2xl animate-bounce">
+                <ShieldAlert className="w-5 h-5 text-red-400 flex-shrink-0" />
+                <span className="font-semibold">{clipboardWarning}</span>
+              </div>
+            )}
+
             <Editor
               height="100%"
               language={monacoLanguage}
               theme="vs-dark"
               value={sourceCode}
+              onMount={handleEditorMount}
               onChange={(value) => setSourceCode(value || '')}
               options={{
                 minimap: { enabled: false },
@@ -406,7 +523,9 @@ export default function Workspace() {
                 automaticLayout: true,
                 scrollBeyondLastLine: false,
                 lineNumbers: 'on',
-                tabSize: 4
+                tabSize: 4,
+                contextmenu: isCopyPasteAllowed,
+                dragAndDrop: isCopyPasteAllowed
               }}
             />
           </div>

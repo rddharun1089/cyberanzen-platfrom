@@ -22,11 +22,13 @@ class CaseUpdateRequest(BaseModel):
     required_result: Optional[str] = None
     judge_enabled: Optional[bool] = None
     reveal_failed_tests: Optional[bool] = None
+    allow_copy_paste: Optional[bool] = None
 
 class BatchJudgeToggleRequest(BaseModel):
     domain: Optional[str] = None  # None means all domains
     judge_enabled: Optional[bool] = None
     reveal_failed_tests: Optional[bool] = None
+    allow_copy_paste: Optional[bool] = None
 
 class TestCaseCreateRequest(BaseModel):
     test_type: str  # public_sample or hidden_test
@@ -50,6 +52,7 @@ def admin_list_cases(db: Session = Depends(get_db), current_admin: User = Depend
             "validation_notes": c.validation_notes,
             "judge_enabled": c.judge_enabled,
             "reveal_failed_tests": c.reveal_failed_tests,
+            "allow_copy_paste": c.allow_copy_paste,
             "test_count": len(c.test_cases)
         }
         for c in cases
@@ -85,6 +88,7 @@ def admin_list_solutions(
             "validation_status": c.validation_status,
             "judge_enabled": c.judge_enabled,
             "reveal_failed_tests": c.reveal_failed_tests,
+            "allow_copy_paste": c.allow_copy_paste,
             "flag_format": c.flag_format,
             "objective": c.objective,
             "input_contract": c.input_contract,
@@ -124,6 +128,8 @@ def admin_batch_judge_toggle(
             c.judge_enabled = req.judge_enabled
         if req.reveal_failed_tests is not None:
             c.reveal_failed_tests = req.reveal_failed_tests
+        if req.allow_copy_paste is not None:
+            c.allow_copy_paste = req.allow_copy_paste
 
     # Record Audit Log
     log = AuditLog(
@@ -131,7 +137,7 @@ def admin_batch_judge_toggle(
         action="BATCH_JUDGE_TOGGLE",
         target_type="DOMAIN" if req.domain else "ALL_CASES",
         target_id=req.domain or "ALL",
-        details=f"Judge toggle by {current_admin.username}: judge_enabled={req.judge_enabled}, reveal_failed={req.reveal_failed_tests}"
+        details=f"Judge/clipboard toggle by {current_admin.username}: judge_enabled={req.judge_enabled}, reveal_failed={req.reveal_failed_tests}, allow_copy_paste={req.allow_copy_paste}"
     )
     db.add(log)
     db.commit()
@@ -141,7 +147,8 @@ def admin_batch_judge_toggle(
         "affected_cases": len(cases),
         "domain": req.domain or "ALL",
         "judge_enabled": req.judge_enabled,
-        "reveal_failed_tests": req.reveal_failed_tests
+        "reveal_failed_tests": req.reveal_failed_tests,
+        "allow_copy_paste": req.allow_copy_paste
     }
 
 @router.put("/cases/{case_id}")
@@ -161,6 +168,7 @@ def admin_update_case(case_id: str, req: CaseUpdateRequest, db: Session = Depend
     if req.required_result is not None: case.required_result = req.required_result
     if req.judge_enabled is not None: case.judge_enabled = req.judge_enabled
     if req.reveal_failed_tests is not None: case.reveal_failed_tests = req.reveal_failed_tests
+    if req.allow_copy_paste is not None: case.allow_copy_paste = req.allow_copy_paste
 
     # Record Audit Log
     log = AuditLog(

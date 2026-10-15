@@ -204,3 +204,27 @@ def test_judge_worker_toggle():
     patch_back = client.put("/api/v1/admin/cases/CASE-01", json={"judge_enabled": True}, headers=admin_headers)
     assert patch_back.status_code == 200
 
+def test_clipboard_restriction_toggle():
+    admin_res = client.post("/api/v1/auth/login", json={"username": "admin", "password": "Enigmatrix#Admin2026!"})
+    admin_token = admin_res.json()["access_token"]
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    # 1. Default should be restricted (False)
+    detail_res = client.get("/api/v1/cases/CASE-01")
+    assert detail_res.status_code == 200
+    assert "allow_copy_paste" in detail_res.json()
+    assert detail_res.json()["allow_copy_paste"] is False
+
+    # 2. Admin enables copy/paste
+    toggle_res = client.put("/api/v1/admin/cases/CASE-01", json={"allow_copy_paste": True}, headers=admin_headers)
+    assert toggle_res.status_code == 200
+
+    detail_res_2 = client.get("/api/v1/cases/CASE-01")
+    assert detail_res_2.json()["allow_copy_paste"] is True
+
+    # 3. Admin re-locks clipboard
+    toggle_back = client.put("/api/v1/admin/cases/CASE-01", json={"allow_copy_paste": False}, headers=admin_headers)
+    assert toggle_back.status_code == 200
+    assert client.get("/api/v1/cases/CASE-01").json()["allow_copy_paste"] is False
+
+

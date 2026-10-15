@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Shield, GitBranch, RefreshCw, CheckCircle2, AlertTriangle, Eye, Edit3, 
-  Plus, Activity, Lock, Database, Key, Code2, ChevronDown, ChevronUp, 
+  Plus, Activity, Lock, Unlock, ShieldAlert, Database, Key, Code2, ChevronDown, ChevronUp, 
   Cpu, Sliders, Search, Check, X
 } from 'lucide-react';
 import { adminService } from '../services/api';
@@ -85,17 +85,31 @@ export default function AdminPanel() {
     }
   };
 
-  const handleBatchJudge = async (domain, judgeEnabled, revealTests) => {
+  const handleToggleClipboard = async (caseId, currentVal) => {
+    const nextVal = !currentVal;
+    try {
+      await adminService.updateCase(caseId, { allow_copy_paste: nextVal });
+      setCases(cases.map(c => c.id === caseId ? { ...c, allow_copy_paste: nextVal } : c));
+      setSolutions(solutions.map(s => s.id === caseId ? { ...s, allow_copy_paste: nextVal } : s));
+      setStatusMsg(`Clipboard access ${nextVal ? 'ALLOWED' : 'LOCKED (Strict Anti-Cheat)'} for ${caseId}`);
+      setTimeout(() => setStatusMsg(''), 3000);
+    } catch (err) {
+      alert('Failed to toggle clipboard restriction: ' + err.message);
+    }
+  };
+
+  const handleBatchJudge = async (domain, judgeEnabled, revealTests, allowCopyPaste) => {
     const domainText = domain === 'ALL' ? 'all cases' : `domain "${domain}"`;
-    if (!window.confirm(`Apply judge worker settings to ${domainText}?`)) return;
+    if (!window.confirm(`Apply settings to ${domainText}?`)) return;
     try {
       const payload = {
         domain: domain === 'ALL' ? null : domain,
         judge_enabled: judgeEnabled,
-        reveal_failed_tests: revealTests
+        reveal_failed_tests: revealTests,
+        allow_copy_paste: allowCopyPaste
       };
       await adminService.batchJudgeToggle(payload);
-      setStatusMsg(`Batch judge settings applied to ${domainText}`);
+      setStatusMsg(`Batch settings applied to ${domainText}`);
       setTimeout(() => setStatusMsg(''), 3000);
       loadAll();
     } catch (err) {
@@ -283,11 +297,27 @@ export default function AdminPanel() {
                   Reveal Failed Tests
                 </button>
                 <button
-                  onClick={() => handleBatchJudge(selectedDomain, null, false)}
+                  onClick={() => handleBatchJudge(selectedDomain, null, false, null)}
                   className="px-3 py-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   Hide Tests (Contest)
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(selectedDomain, null, null, false)}
+                  className="px-3 py-1.5 rounded bg-red-950/80 border border-red-600 text-red-300 hover:bg-red-900 transition flex items-center gap-1.5"
+                  title="Lock clipboard for all cases in domain (Strict Anti-Cheat)"
+                >
+                  <Lock className="w-3.5 h-3.5 text-red-400" />
+                  Lock Clipboard ({selectedDomain})
+                </button>
+                <button
+                  onClick={() => handleBatchJudge(selectedDomain, null, null, true)}
+                  className="px-3 py-1.5 rounded bg-emerald-950/80 border border-emerald-600 text-emerald-300 hover:bg-emerald-900 transition flex items-center gap-1.5"
+                  title="Allow copy/paste for all cases in domain"
+                >
+                  <Unlock className="w-3.5 h-3.5 text-emerald-400" />
+                  Allow Clipboard
                 </button>
               </div>
 
@@ -296,7 +326,8 @@ export default function AdminPanel() {
             <div className="text-[11px] text-slate-400 flex items-center gap-4 pt-2 border-t border-forensic-800">
               <span>Showing {filteredSolutions.length} of {solutions.length} cases</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span> Judge Enabled</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Practice Mode (Failed test inputs visible to participants)</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> Practice Mode (Failed test inputs visible)</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span> Clipboard Locked (Anti-Cheat)</span>
             </div>
           </div>
 
@@ -351,7 +382,21 @@ export default function AdminPanel() {
                       title="Toggle whether participants see failed test inputs/outputs"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      {c.reveal_failed_tests ? 'Practice Mode (Revealed)' : 'Contest Mode (Hidden)'}
+                      {c.reveal_failed_tests ? 'Practice Mode' : 'Contest Mode'}
+                    </button>
+
+                    {/* Clipboard Restriction Toggle */}
+                    <button
+                      onClick={() => handleToggleClipboard(c.id, c.allow_copy_paste)}
+                      className={`px-3 py-1.5 rounded text-xs font-bold flex items-center gap-1.5 transition ${
+                        c.allow_copy_paste 
+                          ? 'bg-emerald-950 text-emerald-300 border border-emerald-500 hover:bg-emerald-900' 
+                          : 'bg-red-950 text-red-300 border border-red-600 hover:bg-red-900'
+                      }`}
+                      title="Toggle whether participants can copy/paste code (Ctrl+C/V, Ctrl+Shift+C)"
+                    >
+                      {c.allow_copy_paste ? <Unlock className="w-3.5 h-3.5 text-emerald-400" /> : <Lock className="w-3.5 h-3.5 text-red-400" />}
+                      Clipboard: {c.allow_copy_paste ? 'ALLOWED' : 'LOCKED'}
                     </button>
 
                     {/* View Reference Answer Toggle */}
@@ -465,6 +510,7 @@ export default function AdminPanel() {
                   <th className="py-3 px-4 text-center">Difficulty</th>
                   <th className="py-3 px-4 text-center">Judge Status</th>
                   <th className="py-3 px-4 text-center">Feedback Mode</th>
+                  <th className="py-3 px-4 text-center">Clipboard</th>
                   <th className="py-3 px-4 text-center">Publication</th>
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
@@ -501,6 +547,18 @@ export default function AdminPanel() {
                         }`}
                       >
                         {c.reveal_failed_tests ? 'PRACTICE' : 'CONTEST'}
+                      </button>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => handleToggleClipboard(c.id, c.allow_copy_paste)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          c.allow_copy_paste 
+                            ? 'bg-emerald-950 text-emerald-400 border border-emerald-700/60' 
+                            : 'bg-red-950 text-red-400 border border-red-700/60'
+                        }`}
+                      >
+                        {c.allow_copy_paste ? 'ALLOWED' : 'LOCKED'}
                       </button>
                     </td>
                     <td className="py-3 px-4 text-center">

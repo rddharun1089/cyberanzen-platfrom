@@ -73,6 +73,7 @@ class Case(Base):
     
     judge_enabled = Column(Boolean, default=True, nullable=False)
     reveal_failed_tests = Column(Boolean, default=True, nullable=False)
+    allow_copy_paste = Column(Boolean, default=False, nullable=False)
 
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 

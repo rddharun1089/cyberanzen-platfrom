@@ -16,7 +16,8 @@ def init_db(db: Session):
     with engine.connect() as conn:
         for col_def in [
             ("judge_enabled", "BOOLEAN DEFAULT 1"),
-            ("reveal_failed_tests", "BOOLEAN DEFAULT 1")
+            ("reveal_failed_tests", "BOOLEAN DEFAULT 1"),
+            ("allow_copy_paste", "BOOLEAN DEFAULT 0")
         ]:
             try:
                 conn.execute(text(f"ALTER TABLE cases ADD COLUMN {col_def[0]} {col_def[1]}"))

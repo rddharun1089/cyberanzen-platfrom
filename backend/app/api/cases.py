@@ -68,6 +68,8 @@ def get_case_detail(case_id: str, db: Session = Depends(get_db)):
         "time_limit_ms": case.time_limit_ms,
         "memory_limit_mb": case.memory_limit_mb,
         "validation_status": case.validation_status,
+        "judge_enabled": bool(case.judge_enabled),
+        "allow_copy_paste": bool(case.allow_copy_paste),
         "story": case.story,
         "objective": case.objective,
         "input_contract": case.input_contract,
