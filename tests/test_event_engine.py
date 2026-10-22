@@ -9,14 +9,28 @@ from app.db.models import (
     DSAQuestion, DSATestCase, CTFChallenge, MCQQuestion, Team, TeamMembership,
     EventRegistration
 )
-from app.core.security import create_access_token
+from app.core.security import create_access_token, hash_password
 
 client = TestClient(app)
 
 @pytest.fixture(scope="module")
 def db():
     session = SessionLocal()
+    cadet = session.query(User).filter(User.username == "cadet_forensic").first()
+    if not cadet:
+        cadet = User(
+            username="cadet_forensic",
+            email="cadet_forensic@cyberanzen.io",
+            hashed_password=hash_password("Pass#12345!"),
+            role=UserRole.PARTICIPANT.value,
+            points=0
+        )
+        session.add(cadet)
+        session.commit()
     yield session
+    # Cleanup cadet created for this test module
+    session.query(User).filter(User.username == "cadet_forensic").delete()
+    session.commit()
     session.close()
 
 def get_auth_headers(username: str, role: str) -> dict:

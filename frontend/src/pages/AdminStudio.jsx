@@ -2547,10 +2547,10 @@ int main() {
             </div>
 
             {/* Modal Body: Split Screen (Left: Problem Dossier, Right: Monaco IDE + Output) */}
-            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-0">
               
               {/* LEFT: Problem Dossier & Public Samples (lg:col-span-5) */}
-              <div className="lg:col-span-5 border-r border-[#18385E] flex flex-col bg-[#061329] overflow-y-auto p-5 space-y-5 text-xs font-sans">
+              <div className="lg:col-span-5 border-r border-[#18385E] flex flex-col bg-[#061329] overflow-y-auto p-5 space-y-5 text-xs font-sans min-h-0">
                 <div>
                   <span className="text-[10px] font-mono font-bold uppercase text-[#00CFFF] block tracking-wider">
                     PROBLEM STATEMENT
@@ -2618,7 +2618,7 @@ int main() {
               </div>
 
               {/* RIGHT: Monaco Editor & Judge Console (lg:col-span-7) */}
-              <div className="lg:col-span-7 flex flex-col bg-[#08172B] overflow-hidden">
+              <div className="lg:col-span-7 flex flex-col bg-[#08172B] overflow-hidden min-h-0 h-full">
                 
                 {/* Editor Top Bar Controls */}
                 <div className="p-2.5 bg-[#08172B] border-b border-[#18385E] flex items-center justify-between shrink-0 font-mono text-xs">
@@ -2656,7 +2656,7 @@ int main() {
                 </div>
 
                 {/* Monaco Code Editor Instance */}
-                <div className="h-[52%] border-b border-[#18385E] relative">
+                <div className="flex-[3_3_0%] min-h-[220px] border-b border-[#18385E] relative">
                   <Editor
                     height="100%"
                     language={consoleLang === 'python3' ? 'python' : consoleLang}
@@ -2675,23 +2675,25 @@ int main() {
                   />
                 </div>
 
-                {/* Bottom Judge Diagnostics Output Area */}
-                <div className="flex-1 flex flex-col bg-[#061329] p-4 overflow-y-auto font-mono text-xs space-y-3">
+                {/* Bottom Judge Diagnostics Output Terminal Area */}
+                <div className="flex-[2_2_0%] min-h-[200px] flex flex-col bg-[#061329] p-4 overflow-y-auto font-mono text-xs space-y-3 border-t border-[#18385E]">
                   <div className="flex items-center justify-between border-b border-[#18385E] pb-2 shrink-0">
                     <span className="font-bold text-white flex items-center space-x-2">
                       <Terminal className="w-3.5 h-3.5 text-[#00CFFF]" />
-                      <span>JUDGE EXECUTION MATRIX</span>
+                      <span className="tracking-wider">JUDGE OUTPUT TERMINAL</span>
                     </span>
                     {consoleResult && (
                       <div className="flex items-center space-x-3 text-[11px]">
                         <span className={`px-2.5 py-0.5 rounded font-bold uppercase ${
                           consoleResult.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-500/40' :
-                          consoleResult.verdict === 'WRONG ANSWER' ? 'bg-rose-950 text-rose-400 border border-rose-500/40' :
+                          consoleResult.verdict === 'WRONG ANSWER' || consoleResult.verdict === 'WRONG_ANSWER' ? 'bg-rose-950 text-rose-400 border border-rose-500/40' :
                           'bg-amber-950 text-amber-400 border border-amber-500/40'
                         }`}>
                           {consoleResult.verdict}
                         </span>
-                        <span className="text-slate-400">Time: {consoleResult.execution_time_ms} ms</span>
+                        {consoleResult.execution_time_ms !== undefined && (
+                          <span className="text-slate-400">Time: {consoleResult.execution_time_ms} ms</span>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2701,7 +2703,7 @@ int main() {
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-2 py-6">
                       <Terminal className="w-8 h-8 text-slate-600" />
                       <p className="text-xs">
-                        Click "Run Code Against Samples" to execute your solution in the sandboxed judge engine.
+                        Terminal ready. Click "Run Code Against Samples" to execute your solution in the sandboxed judge engine.
                       </p>
                     </div>
                   )}
@@ -2730,47 +2732,77 @@ int main() {
                   {/* Verdict & Test Results Matrix */}
                   {consoleResult && (
                     <div className="space-y-3">
-                      {consoleResult.compile_output && (
+                      {(consoleResult.compile_log || consoleResult.compile_output) && (
                         <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-800 text-rose-300 text-[11px]">
-                          <span className="font-bold block mb-1">Compiler Output:</span>
-                          <pre className="whitespace-pre-wrap">{consoleResult.compile_output}</pre>
+                          <span className="font-bold block mb-1">Compiler / Diagnostic Log:</span>
+                          <pre className="whitespace-pre-wrap font-mono">{consoleResult.compile_log || consoleResult.compile_output}</pre>
                         </div>
                       )}
 
-                      {consoleResult.tests && consoleResult.tests.map((t, idx) => (
-                        <div 
-                          key={idx} 
-                          className={`p-3 rounded-xl border text-[11px] space-y-1.5 ${
-                            t.status === 'PASSED' 
-                              ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' 
-                              : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between font-bold">
-                            <span>Sample Test #{idx + 1} ({t.test_id})</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] ${
-                              t.status === 'PASSED' ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'
-                            }`}>
-                              {t.status}
-                            </span>
-                          </div>
+                      {((consoleResult.test_results && consoleResult.test_results.length > 0) || (consoleResult.tests && consoleResult.tests.length > 0)) ? (
+                        (consoleResult.test_results || consoleResult.tests).map((t, idx) => {
+                          const isPassed = (t.verdict === 'ACCEPTED' || t.status === 'PASSED');
+                          const verdict = t.verdict || t.status || (isPassed ? 'ACCEPTED' : 'FAILED');
+                          const expected = t.expected_output !== undefined ? t.expected_output : (t.output || '');
+                          const actual = t.actual_output !== undefined ? t.actual_output : (t.actual || '<no output>');
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`p-3 rounded-xl border text-[11px] space-y-2 ${
+                                isPassed 
+                                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300' 
+                                  : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between font-bold">
+                                <span>Sample Test #{idx + 1} ({t.id || t.test_id || `case_${idx + 1}`})</span>
+                                <div className="flex items-center space-x-2">
+                                  {t.exec_time_ms !== undefined && (
+                                    <span className="text-[10px] text-slate-400">{t.exec_time_ms} ms</span>
+                                  )}
+                                  <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
+                                    isPassed ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'
+                                  }`}>
+                                    {verdict}
+                                  </span>
+                                </div>
+                              </div>
 
-                          <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
-                            <div>
-                              <span className="text-slate-500 block">Expected:</span>
-                              <pre className="p-1.5 rounded bg-[#08172B] border border-[#18385E] text-slate-200 overflow-x-auto">
-                                {t.expected_output}
-                              </pre>
+                              <div className="grid grid-cols-2 gap-2 pt-1 font-mono text-[10px]">
+                                <div>
+                                  <span className="text-slate-500 block">Expected Output:</span>
+                                  <pre className="p-1.5 rounded bg-[#08172B] border border-[#18385E] text-slate-200 overflow-x-auto whitespace-pre-wrap">
+                                    {expected}
+                                  </pre>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Your Output:</span>
+                                  <pre className={`p-1.5 rounded bg-[#08172B] border border-[#18385E] overflow-x-auto whitespace-pre-wrap ${
+                                    isPassed ? 'text-emerald-300' : 'text-rose-300'
+                                  }`}>
+                                    {actual}
+                                  </pre>
+                                </div>
+                              </div>
+
+                              {t.error && t.error !== '[HIDDEN]' && (
+                                <div className="pt-1">
+                                  <span className="text-rose-400 text-[10px] block font-bold">Standard Error / Traceback:</span>
+                                  <pre className="p-2 rounded bg-rose-950/40 border border-rose-900/60 text-rose-200 text-[10px] overflow-x-auto whitespace-pre-wrap">
+                                    {t.error}
+                                  </pre>
+                                </div>
+                              )}
                             </div>
-                            <div>
-                              <span className="text-slate-500 block">Your Output:</span>
-                              <pre className="p-1.5 rounded bg-[#08172B] border border-[#18385E] text-slate-200 overflow-x-auto">
-                                {t.actual_output || '<no output>'}
-                              </pre>
-                            </div>
+                          );
+                        })
+                      ) : (
+                        !consoleResult.compile_log && !consoleResult.compile_output && (
+                          <div className="p-3 rounded-xl bg-[#08172B] border border-[#18385E] text-slate-400 text-center text-xs">
+                            Execution finished with verdict: <strong className="text-white">{consoleResult.verdict}</strong>
                           </div>
-                        </div>
-                      ))}
+                        )
+                      )}
                     </div>
                   )}
                 </div>

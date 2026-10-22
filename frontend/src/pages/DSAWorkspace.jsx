@@ -3,7 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
 import { 
   Play, Send, RotateCcw, ArrowLeft, CheckCircle2, AlertTriangle, 
-  Code2, ShieldAlert, Smartphone, RefreshCw, Terminal
+  Code2, ShieldAlert, Smartphone, RefreshCw, Terminal,
+  ChevronDown, ChevronUp, AlertCircle
 } from 'lucide-react';
 import { dsaService, authService } from '../services/api';
 import VerdictBadge from '../components/VerdictBadge';
@@ -21,6 +22,8 @@ export default function DSAWorkspace() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [executionResult, setExecutionResult] = useState(null);
   const [activeTab, setActiveTab] = useState('statement'); // 'statement' | 'results'
+  const [terminalOpen, setTerminalOpen] = useState(true);
+  const [selectedTestIdx, setSelectedTestIdx] = useState(0);
 
   // Anti-Cheat & Clipboard Restriction State (Admins always bypass)
   const currentUser = authService.getCurrentUser();
@@ -117,6 +120,8 @@ export default function DSAWorkspace() {
 
   const handleRunSample = async () => {
     setIsRunningSample(true);
+    setTerminalOpen(true);
+    setSelectedTestIdx(0);
     setActiveTab('results');
     try {
       const res = await dsaService.runSample(identifier, language, sourceCode);
@@ -133,6 +138,8 @@ export default function DSAWorkspace() {
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setTerminalOpen(true);
+    setSelectedTestIdx(0);
     setActiveTab('results');
     try {
       const res = await dsaService.submitSolution(identifier, language, sourceCode);
@@ -370,18 +377,18 @@ export default function DSAWorkspace() {
           )}
         </div>
 
-        {/* Right Pane: Code Editor */}
-        <div className="w-full md:w-1/2 flex flex-col bg-slate-950">
-          {useTouchEditor ? (
-            <textarea
-              value={sourceCode}
-              onChange={(e) => setSourceCode(e.target.value)}
-              className="flex-1 w-full p-4 bg-slate-950 text-cyan-300 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500"
-              placeholder="// Write your solution here..."
-              spellCheck="false"
-            />
-          ) : (
-            <div className="flex-1 w-full h-full">
+        {/* Right Pane: Code Editor & Integrated Output Terminal */}
+        <div className="w-full md:w-1/2 flex flex-col bg-slate-950 overflow-hidden border-t md:border-t-0 md:border-l border-slate-800">
+          <div className={`transition-all relative ${terminalOpen ? 'h-[55%]' : 'flex-1'} min-h-[220px]`}>
+            {useTouchEditor ? (
+              <textarea
+                value={sourceCode}
+                onChange={(e) => setSourceCode(e.target.value)}
+                className="w-full h-full p-4 bg-slate-950 text-cyan-300 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                placeholder="// Write your solution here..."
+                spellCheck="false"
+              />
+            ) : (
               <Editor
                 height="100%"
                 language={language === 'python3' ? 'python' : 'cpp'}
@@ -401,8 +408,162 @@ export default function DSAWorkspace() {
                   contextmenu: isCopyPasteAllowed
                 }}
               />
+            )}
+          </div>
+
+          {/* Integrated Execution Console & Output Terminal */}
+          <div className="flex-1 min-h-[200px] border-t border-slate-800 bg-slate-900/90 flex flex-col overflow-hidden font-mono text-xs">
+            {/* Terminal Header */}
+            <div className="px-3.5 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-2">
+                <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="font-bold text-white tracking-wider text-[11px]">OUTPUT TERMINAL</span>
+                
+                {isRunningSample && (
+                  <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 text-[10px] animate-pulse flex items-center space-x-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Executing Samples...</span>
+                  </span>
+                )}
+                {isSubmitting && (
+                  <span className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 text-[10px] animate-pulse flex items-center space-x-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>Evaluating Judge...</span>
+                  </span>
+                )}
+
+                {executionResult && !isRunningSample && !isSubmitting && (
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                    executionResult.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'
+                  }`}>
+                    {executionResult.verdict}
+                  </span>
+                )}
+                {executionResult?.execution_time_ms !== undefined && (
+                  <span className="text-[10px] text-slate-400">{executionResult.execution_time_ms} ms</span>
+                )}
+              </div>
+
+              <button
+                onClick={() => setTerminalOpen(!terminalOpen)}
+                className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+                title={terminalOpen ? "Collapse Terminal" : "Expand Terminal"}
+              >
+                {terminalOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+              </button>
             </div>
-          )}
+
+            {/* Terminal Content */}
+            {terminalOpen && (
+              <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-slate-950/80">
+                {!executionResult && !isRunningSample && !isSubmitting && (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2 py-6">
+                    <Terminal className="w-6 h-6 text-slate-600" />
+                    <p className="text-xs">
+                      Terminal ready. Click "Run Samples" or "Submit Code" to inspect output.
+                    </p>
+                  </div>
+                )}
+
+                {(isRunningSample || isSubmitting) && (
+                  <div className="h-full flex flex-col items-center justify-center text-cyan-400 space-y-2 py-6">
+                    <RefreshCw className="w-6 h-6 animate-spin" />
+                    <p className="text-xs font-bold">
+                      Evaluating in sandboxed judge container...
+                    </p>
+                  </div>
+                )}
+
+                {executionResult && !isRunningSample && !isSubmitting && (
+                  <div className="space-y-3">
+                    {/* Compiler Log */}
+                    {executionResult.compile_log && (
+                      <div className="p-2.5 rounded-lg bg-rose-950/30 border border-rose-900/60 text-rose-300 text-xs">
+                        <span className="font-bold text-rose-400 block mb-1">Compiler / Diagnostic Output:</span>
+                        <pre className="text-[11px] whitespace-pre-wrap font-mono overflow-x-auto">{executionResult.compile_log}</pre>
+                      </div>
+                    )}
+
+                    {/* Test Results */}
+                    {executionResult.test_results && executionResult.test_results.length > 0 && (
+                      <div className="space-y-2">
+                        {/* Case selector pills */}
+                        <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+                          {executionResult.test_results.map((tr, idx) => {
+                            const isPassed = tr.verdict === 'ACCEPTED';
+                            const isSelected = selectedTestIdx === idx;
+                            return (
+                              <button
+                                key={idx}
+                                onClick={() => setSelectedTestIdx(idx)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5 transition-all shrink-0 ${
+                                  isSelected
+                                    ? 'bg-slate-800 text-cyan-400 border border-cyan-500/50'
+                                    : isPassed
+                                    ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/40'
+                                    : 'bg-rose-950/40 text-rose-400 border border-rose-900/40'
+                                }`}
+                              >
+                                <span className={`w-2 h-2 rounded-full ${isPassed ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                                <span>Case #{idx + 1}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* Selected case detail */}
+                        {(() => {
+                          const curCase = executionResult.test_results[selectedTestIdx] || executionResult.test_results[0];
+                          if (!curCase) return null;
+                          const isPassed = curCase.verdict === 'ACCEPTED';
+                          return (
+                            <div className={`p-3 rounded-lg border text-xs space-y-2 ${
+                              isPassed ? 'bg-emerald-950/20 border-emerald-500/20' : 'bg-rose-950/20 border-rose-500/20'
+                            }`}>
+                              <div className="flex items-center justify-between font-bold">
+                                <span>Case #{selectedTestIdx + 1} ({curCase.type || 'sample'})</span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] uppercase ${
+                                  isPassed ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'
+                                }`}>
+                                  {curCase.verdict}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+                                {curCase.input && (
+                                  <div className="col-span-2">
+                                    <span className="text-slate-500 block text-[10px]">Standard Input:</span>
+                                    <pre className="p-1.5 rounded bg-slate-900 text-slate-200 overflow-x-auto whitespace-pre-wrap">{curCase.input}</pre>
+                                  </div>
+                                )}
+                                <div>
+                                  <span className="text-slate-500 block text-[10px]">Expected Output:</span>
+                                  <pre className="p-1.5 rounded bg-slate-900 text-slate-200 overflow-x-auto whitespace-pre-wrap">{curCase.expected_output || ''}</pre>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block text-[10px]">Your Output:</span>
+                                  <pre className={`p-1.5 rounded bg-slate-900 overflow-x-auto whitespace-pre-wrap ${isPassed ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {curCase.actual_output || '<no output>'}
+                                  </pre>
+                                </div>
+                              </div>
+
+                              {curCase.error && curCase.error !== '[HIDDEN]' && (
+                                <div>
+                                  <span className="text-rose-400 block text-[10px] font-bold">Stderr / Exception Traceback:</span>
+                                  <pre className="p-1.5 rounded bg-rose-950/40 text-rose-300 text-[10px] overflow-x-auto whitespace-pre-wrap">{curCase.error}</pre>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
