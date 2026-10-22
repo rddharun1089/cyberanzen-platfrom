@@ -17,3 +17,7 @@ cyberanzen.db.bak
 .env
 .DS_Store
 /tmp/judge_run_*
+uploads/*
+!uploads/.gitkeep
+frontend/dist/uploads/*
+!frontend/dist/uploads/.gitkeep

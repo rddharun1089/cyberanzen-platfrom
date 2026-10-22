@@ -221,33 +221,38 @@ def get_event_workspace_config(
     if not event:
         raise HTTPException(status_code=404, detail="Event competition not found.")
 
-    ev_type = (event.event_type or "dsa").lower()
+    ev_type = (event.event_type or "ctf").lower()
     part_mode = (event.participation_mode or "individual").lower()
     is_team_mode = part_mode in ("team", "mixed")
+
+    has_dsa = "dsa" in ev_type or ev_type in ("combined", "all")
+    has_ctf = "ctf" in ev_type or ev_type in ("combined", "all")
+    has_mcq = "mcq" in ev_type or ev_type in ("combined", "all")
 
     # Dynamic navigation resolver based on event type and mode
     tabs = [{"id": "overview", "label": "Overview", "icon": "info"}]
 
-    if ev_type == "dsa":
-        tabs.extend([
-            {"id": "problems", "label": "Problems", "icon": "code"},
-            {"id": "submissions", "label": "My Submissions", "icon": "file-text"},
-            {"id": "progress", "label": "My Progress", "icon": "bar-chart-2"}
-        ])
-    elif ev_type == "ctf":
-        tabs.extend([
-            {"id": "challenges", "label": "Challenges", "icon": "flag"},
-            {"id": "labs", "label": "Live Labs", "icon": "cpu"},
-            {"id": "submissions", "label": "My Submissions", "icon": "file-text"}
-        ])
-        if is_team_mode:
-            tabs.append({"id": "squad", "label": "My Squad", "icon": "users"})
-    elif ev_type == "mcq":
-        tabs.extend([
-            {"id": "quizzes", "label": "Available Quizzes", "icon": "help-circle"},
-            {"id": "attempts", "label": "Attempt History", "icon": "history"},
-            {"id": "results", "label": "Results", "icon": "check-circle"}
-        ])
+    if has_ctf:
+        tabs.append({"id": "challenges", "label": "CTF Challenges", "icon": "flag"})
+        tabs.append({"id": "labs", "label": "Live Labs", "icon": "cpu"})
+
+    if has_dsa:
+        tabs.append({"id": "problems", "label": "DSA Problems", "icon": "code"})
+
+    if has_mcq:
+        tabs.append({"id": "quizzes", "label": "Quizzes & MCQs", "icon": "help-circle"})
+
+    if has_dsa or has_ctf:
+        tabs.append({"id": "submissions", "label": "My Submissions", "icon": "file-text"})
+
+    if has_mcq and not (has_dsa or has_ctf):
+        tabs.append({"id": "attempts", "label": "Attempt History", "icon": "history"})
+        tabs.append({"id": "results", "label": "Results", "icon": "check-circle"})
+
+    if is_team_mode:
+        tabs.append({"id": "squad", "label": "My Squad", "icon": "users"})
+
+    tabs.append({"id": "progress", "label": "My Progress", "icon": "bar-chart-2"})
 
     if event.leaderboard_visible:
         tabs.append({"id": "leaderboard", "label": "Leaderboard", "icon": "trophy"})
@@ -259,8 +264,12 @@ def get_event_workspace_config(
         "event_slug": event.slug,
         "title": event.title,
         "event_type": ev_type,
+        "has_dsa": has_dsa,
+        "has_ctf": has_ctf,
+        "has_mcq": has_mcq,
         "participation_mode": part_mode,
         "team_size_max": event.team_size_max,
+        "banner_url": event.banner_url,
         "tabs": tabs,
         "clipboard_policy": event.clipboard_policy,
         "scoring_policy": event.scoring_policy,

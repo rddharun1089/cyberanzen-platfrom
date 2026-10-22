@@ -187,6 +187,44 @@ export default function AdminStudio() {
     }
   };
 
+  // --- Question Deletions ---
+  const handleDeleteDSA = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to permanently delete DSA problem "${title}" (#${id})? This will also remove testcases, submissions, and event associations.`)) return;
+    try {
+      await adminService.deleteDSA(id);
+      alert(`DSA question "${title}" deleted successfully.`);
+      if (selectedDsaId === id) {
+        setSelectedDsaId(null);
+        setSelectedDsaDetail(null);
+      }
+      loadTabData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete DSA question.');
+    }
+  };
+
+  const handleDeleteMCQ = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to permanently delete MCQ "${title}" (#${id})?`)) return;
+    try {
+      await adminService.deleteMCQ(id);
+      alert(`MCQ "${title}" deleted successfully.`);
+      loadTabData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete MCQ.');
+    }
+  };
+
+  const handleDeleteCTF = async (id, title) => {
+    if (!window.confirm(`Are you sure you want to permanently delete CTF challenge "${title}" (#${id})? This will also terminate any active lab instances.`)) return;
+    try {
+      await adminService.deleteCTF(id);
+      alert(`CTF challenge "${title}" deleted successfully.`);
+      loadTabData();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to delete CTF challenge.');
+    }
+  };
+
   // --- User Deletion ---
   const handleDeleteUser = async () => {
     if (!deleteTarget) return;
@@ -355,7 +393,21 @@ export default function AdminStudio() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-slate-400 font-mono mb-1">Category</label>
+                  <select
+                    value={dsaForm.category}
+                    onChange={(e) => setDsaForm({ ...dsaForm, category: e.target.value })}
+                    className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
+                  >
+                    <option value="Data Structures & Algorithms">Data Structures & Algorithms</option>
+                    <option value="Logic & Mathematical Puzzles">Logic & Mathematical Puzzles</option>
+                    <option value="Cryptographic Algorithms">Cryptographic Algorithms</option>
+                    <option value="Dynamic Programming & Greedy">Dynamic Programming & Greedy</option>
+                    <option value="Graph Theory & Networks">Graph Theory & Networks</option>
+                  </select>
+                </div>
                 <div>
                   <label className="block text-slate-400 font-mono mb-1">Difficulty</label>
                   <select
@@ -375,15 +427,6 @@ export default function AdminStudio() {
                     type="number"
                     value={dsaForm.points}
                     onChange={(e) => setDsaForm({ ...dsaForm, points: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Time Limit (ms)</label>
-                  <input
-                    type="number"
-                    value={dsaForm.time_limit_ms}
-                    onChange={(e) => setDsaForm({ ...dsaForm, time_limit_ms: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
                   />
                 </div>
@@ -428,20 +471,43 @@ export default function AdminStudio() {
               <h3 className="text-base font-bold text-white font-mono mb-3">
                 EXISTING DSA QUESTIONS ({dsaList.length})
               </h3>
-              <div className="space-y-2 max-h-60 overflow-y-auto font-mono text-xs">
+              <div className="space-y-2 max-h-72 overflow-y-auto font-mono text-xs">
                 {dsaList.map(q => (
-                  <button
+                  <div
                     key={q.id}
-                    onClick={() => handleSelectDsa(q.id)}
-                    className={`w-full p-2.5 rounded-lg border text-left flex items-center justify-between transition-colors ${
+                    className={`w-full p-2.5 rounded-lg border flex items-center justify-between transition-colors ${
                       selectedDsaId === q.id
                         ? 'bg-cyan-950/40 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
                     }`}
                   >
-                    <span>{q.title}</span>
-                    <span className="text-[10px] text-slate-400">{q.test_count} Tests • {q.points} pts</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectDsa(q.id)}
+                      className="flex-1 text-left truncate mr-2"
+                    >
+                      <span className="font-semibold block truncate text-white">{q.title}</span>
+                      <span className="text-[10px] text-slate-400 block">{q.test_count} Tests • {q.points} pts • {q.difficulty}</span>
+                    </button>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => handleSelectDsa(q.id)}
+                        className="p-1.5 rounded text-cyan-400 hover:bg-slate-800"
+                        title="Manage Test Cases"
+                      >
+                        <Settings className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteDSA(q.id, q.title)}
+                        className="p-1.5 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
+                        title="Delete Question"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -632,10 +698,25 @@ export default function AdminStudio() {
               {mcqList.map(m => (
                 <div key={m.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">{m.title}</span>
-                    <span className="text-emerald-400">+{m.points_positive} pts</span>
+                    <span className="font-bold text-white truncate max-w-[70%]">{m.title}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-emerald-400">+{m.points_positive} pts</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMCQ(m.id, m.title)}
+                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors"
+                        title="Delete MCQ Question"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-slate-400 font-sans text-xs">{m.prompt}</p>
+                  <div className="text-[10px] text-slate-500 flex items-center space-x-2 pt-1 font-mono">
+                    <span className="px-1.5 py-0.5 rounded bg-slate-900 text-purple-400">{m.category}</span>
+                    <span>{m.difficulty}</span>
+                    <span>{m.options?.length || 0} options</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -683,6 +764,7 @@ export default function AdminStudio() {
                     onChange={(e) => setCtfForm({ ...ctfForm, category: e.target.value })}
                     className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
                   >
+                    <option value="puzzle">Logic Puzzle & Cryptic Mystery</option>
                     <option value="web">Web Exploitation</option>
                     <option value="crypto">Cryptography</option>
                     <option value="forensics">Digital Forensics</option>
@@ -779,12 +861,23 @@ export default function AdminStudio() {
               {ctfList.map(c => (
                 <div key={c.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">{c.title}</span>
-                    <span className="text-cyan-400">{c.points} pts</span>
+                    <span className="font-bold text-white truncate max-w-[70%]">{c.title}</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-cyan-400">{c.points} pts</span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCTF(c.id, c.title)}
+                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors"
+                        title="Delete CTF Challenge"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center space-x-2 text-[10px] text-slate-400">
-                    <span className="uppercase">{c.category}</span>
-                    {c.has_docker_lab && <span className="text-emerald-400">• Docker Lab</span>}
+                    <span className="uppercase px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400">{c.category}</span>
+                    <span>{c.difficulty}</span>
+                    {c.has_docker_lab && <span className="text-emerald-400 font-semibold">• Docker Lab</span>}
                   </div>
                 </div>
               ))}

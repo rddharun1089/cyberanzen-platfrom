@@ -1,17 +1,19 @@
 import json
 import secrets
+import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.db.session import get_db
 from app.db.models import (
     User, UserRole, DSAQuestion, DSATestCase, MCQQuestion, CTFChallenge,
     DynamicTemplate, DockerLabInstance, AuditLog, SecurityIncident, Team,
     TeamMembership, TeamMemberRole, TeamSolvedCase, Submission, Solve, ChallengeStatus, FlagType, LabStatus,
     Event, EventStatus, EventType, ParticipationMode, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
-    EventRegistration, QuestionImportJob
+    EventRegistration, QuestionImportJob, DynamicFlag, MCQAttempt
 )
 from app.api.deps import get_current_admin, get_current_super_admin, get_current_event_admin
 from app.judge.worker import evaluate_submission
@@ -286,7 +288,7 @@ def admin_create_event(
     ))
     db.commit()
 
-    return {"success": True, "event_id": new_event.id, "slug": new_event.slug, "status": new_event.status}
+    return {"success": True, "id": new_event.id, "event_id": new_event.id, "slug": new_event.slug, "status": new_event.status}
 
 @router.get("/events/{event_id}")
 def admin_get_event(
@@ -299,35 +301,43 @@ def admin_get_event(
         raise HTTPException(status_code=404, detail="Event not found.")
 
     assigned_questions = []
-    if event.event_type == "dsa":
+    ev_type = (event.event_type or "").lower()
+    has_dsa = "dsa" in ev_type or ev_type in ("combined", "all")
+    has_ctf = "ctf" in ev_type or ev_type in ("combined", "all")
+    has_mcq = "mcq" in ev_type or ev_type in ("combined", "all")
+
+    if has_dsa:
         assigned = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).order_by(EventDSAQuestion.order_index.asc()).all()
         for a in assigned:
             if a.question:
                 assigned_questions.append({
                     "id": a.question.id,
                     "title": a.question.title,
+                    "domain": "DSA",
                     "difficulty": a.question.difficulty,
                     "points": a.points_override or a.question.points,
                     "order_index": a.order_index
                 })
-    elif event.event_type == "ctf":
+    if has_ctf:
         assigned = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).order_by(EventCTFChallenge.order_index.asc()).all()
         for a in assigned:
             if a.challenge:
                 assigned_questions.append({
                     "id": a.challenge.id,
                     "title": a.challenge.title,
+                    "domain": "CTF",
                     "category": a.challenge.category,
                     "points": a.points_override or a.challenge.points,
                     "order_index": a.order_index
                 })
-    elif event.event_type == "mcq":
+    if has_mcq:
         assigned = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).order_by(EventMCQQuestion.order_index.asc()).all()
         for a in assigned:
             if a.mcq:
                 assigned_questions.append({
                     "id": a.mcq.id,
                     "title": a.mcq.title,
+                    "domain": "MCQ",
                     "category": a.mcq.category,
                     "points": a.points_override or a.mcq.points_positive,
                     "order_index": a.order_index
@@ -393,22 +403,32 @@ def admin_assign_event_questions(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
-    # Remove prior assignments
-    if event.event_type == "dsa":
+    # Remove prior assignments and assign to appropriate domain(s)
+    ev_type = (event.event_type or "").lower()
+    has_dsa = "dsa" in ev_type or ev_type in ("combined", "all")
+    has_ctf = "ctf" in ev_type or ev_type in ("combined", "all")
+    has_mcq = "mcq" in ev_type or ev_type in ("combined", "all")
+
+    if has_dsa:
         db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).delete()
         for idx, qid in enumerate(req.question_ids):
-            override = req.points_overrides.get(str(qid))
-            db.add(EventDSAQuestion(event_id=event.id, question_id=qid, points_override=override, order_index=idx))
-    elif event.event_type == "ctf":
+            if db.query(DSAQuestion).filter(DSAQuestion.id == qid).first():
+                override = req.points_overrides.get(str(qid))
+                db.add(EventDSAQuestion(event_id=event.id, question_id=qid, points_override=override, order_index=idx))
+
+    if has_ctf:
         db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).delete()
         for idx, cid in enumerate(req.question_ids):
-            override = req.points_overrides.get(str(cid))
-            db.add(EventCTFChallenge(event_id=event.id, challenge_id=cid, points_override=override, order_index=idx))
-    elif event.event_type == "mcq":
+            if db.query(CTFChallenge).filter(CTFChallenge.id == cid).first():
+                override = req.points_overrides.get(str(cid))
+                db.add(EventCTFChallenge(event_id=event.id, challenge_id=cid, points_override=override, order_index=idx))
+
+    if has_mcq:
         db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).delete()
         for idx, mid in enumerate(req.question_ids):
-            override = req.points_overrides.get(str(mid))
-            db.add(EventMCQQuestion(event_id=event.id, mcq_id=mid, points_override=override, order_index=idx))
+            if db.query(MCQQuestion).filter(MCQQuestion.id == mid).first():
+                override = req.points_overrides.get(str(mid))
+                db.add(EventMCQQuestion(event_id=event.id, mcq_id=mid, points_override=override, order_index=idx))
 
     db.add(AuditLog(
         actor_id=admin.id,
@@ -484,6 +504,95 @@ def admin_delete_event(
     db.commit()
 
     return {"success": True, "message": f"Event '{event_title}' permanently deleted."}
+
+@router.post("/events/{event_id}/banner")
+async def admin_upload_event_banner(
+    event_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    allowed_types = ["image/jpeg", "image/png", "image/webp"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Invalid banner image format. Allowed: JPG, PNG, WebP.")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Banner image exceeds 10MB limit.")
+
+    ext = ".png"
+    if "jpeg" in file.content_type or "jpg" in file.content_type:
+        ext = ".jpg"
+    elif "webp" in file.content_type:
+        ext = ".webp"
+
+    filename = f"banner_{event.id}_{secrets.token_hex(6)}{ext}"
+    uploads_dir = os.path.abspath(os.path.join(settings.BASE_DIR, "uploads", "banners"))
+    os.makedirs(uploads_dir, exist_ok=True)
+    file_path = os.path.join(uploads_dir, filename)
+
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    frontend_dist_banners = os.path.abspath(os.path.join(settings.BASE_DIR, "frontend", "dist", "uploads", "banners"))
+    if os.path.exists(os.path.join(settings.BASE_DIR, "frontend", "dist")):
+        os.makedirs(frontend_dist_banners, exist_ok=True)
+        with open(os.path.join(frontend_dist_banners, filename), "wb") as f:
+            f.write(content)
+
+    event.banner_url = f"/uploads/banners/{filename}"
+    db.commit()
+
+    log = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="UPDATE_EVENT_BANNER",
+        entity_type="EVENT",
+        entity_id=str(event.id),
+        details=f"Uploaded banner for event #{event.id}: {event.banner_url}"
+    )
+    db.add(log)
+    db.commit()
+
+    return {"success": True, "banner_url": event.banner_url}
+
+@router.delete("/events/{event_id}/banner")
+def admin_remove_event_banner(
+    event_id: str,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    event.banner_url = None
+    db.commit()
+
+    log = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="REMOVE_EVENT_BANNER",
+        entity_type="EVENT",
+        entity_id=str(event.id),
+        details=f"Removed banner for event #{event.id}"
+    )
+    db.add(log)
+    db.commit()
+
+    return {"success": True, "banner_url": None}
 
 # ==============================================================================
 # 1. DSA QUESTION STUDIO
@@ -622,6 +731,33 @@ def admin_delete_dsa_testcase(test_id: int, db: Session = Depends(get_db), admin
     db.commit()
     return {"success": True, "deleted_test_id": test_id}
 
+@router.delete("/dsa/{id}")
+def admin_delete_dsa_question(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    q = db.query(DSAQuestion).filter(DSAQuestion.id == id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="Question not found.")
+
+    db.query(EventDSAQuestion).filter(EventDSAQuestion.question_id == q.id).delete()
+    db.query(DSATestCase).filter(DSATestCase.question_id == q.id).delete()
+    db.query(Submission).filter(Submission.target_id == str(q.id)).delete()
+
+    title = q.title
+    db.delete(q)
+    db.commit()
+
+    log = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="DELETE_DSA_QUESTION",
+        entity_type="DSA",
+        entity_id=str(id),
+        details=f"Deleted DSA question #{id} ({title})"
+    )
+    db.add(log)
+    db.commit()
+
+    return {"success": True, "deleted_id": id, "title": title}
+
 @router.post("/dsa/{id}/validate-reference")
 def admin_validate_dsa_reference(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
     q = db.query(DSAQuestion).filter(DSAQuestion.id == id).first()
@@ -700,6 +836,32 @@ def admin_list_mcqs(db: Session = Depends(get_db), admin: User = Depends(get_cur
         for m in mcqs
     ]
 
+@router.delete("/mcqs/{id}")
+def admin_delete_mcq(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    m = db.query(MCQQuestion).filter(MCQQuestion.id == id).first()
+    if not m:
+        raise HTTPException(status_code=404, detail="MCQ not found.")
+
+    db.query(EventMCQQuestion).filter(EventMCQQuestion.mcq_id == m.id).delete()
+    db.query(MCQAttempt).filter(MCQAttempt.mcq_id == m.id).delete()
+
+    title = m.title
+    db.delete(m)
+    db.commit()
+
+    log = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="DELETE_MCQ_QUESTION",
+        entity_type="MCQ",
+        entity_id=str(id),
+        details=f"Deleted MCQ #{id} ({title})"
+    )
+    db.add(log)
+    db.commit()
+
+    return {"success": True, "deleted_id": id, "title": title}
+
 # ==============================================================================
 # 3. CTF CHALLENGE STUDIO
 # ==============================================================================
@@ -753,6 +915,33 @@ def admin_list_ctf(db: Session = Depends(get_db), admin: User = Depends(get_curr
         }
         for c in challenges
     ]
+
+@router.delete("/ctf/{id}")
+def admin_delete_ctf(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    c = db.query(CTFChallenge).filter(CTFChallenge.id == id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Challenge not found.")
+
+    db.query(EventCTFChallenge).filter(EventCTFChallenge.challenge_id == c.id).delete()
+    db.query(DynamicFlag).filter(DynamicFlag.challenge_id == c.id).delete()
+    db.query(DockerLabInstance).filter(DockerLabInstance.challenge_id == c.id).delete()
+
+    title = c.title
+    db.delete(c)
+    db.commit()
+
+    log = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="DELETE_CTF_CHALLENGE",
+        entity_type="CTF",
+        entity_id=str(id),
+        details=f"Deleted CTF challenge #{id} ({title})"
+    )
+    db.add(log)
+    db.commit()
+
+    return {"success": True, "deleted_id": id, "title": title}
 
 # ==============================================================================
 # 4. DYNAMIC GENERATOR STUDIO

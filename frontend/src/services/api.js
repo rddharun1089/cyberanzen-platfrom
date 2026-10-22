@@ -372,6 +372,18 @@ export const adminService = {
     const res = await apiClient.post(`/admin/events/${id}/status`, { status });
     return res.data;
   },
+  async uploadEventBanner(id, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post(`/admin/events/${id}/banner`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return res.data;
+  },
+  async removeEventBanner(id) {
+    const res = await apiClient.delete(`/admin/events/${id}/banner`);
+    return res.data;
+  },
   async deleteEvent(id) {
     const res = await apiClient.delete(`/admin/events/${id}`);
     return res.data;
@@ -388,6 +400,10 @@ export const adminService = {
   },
   async getDSA(id) {
     const res = await apiClient.get(`/admin/dsa/${id}`);
+    return res.data;
+  },
+  async deleteDSA(id) {
+    const res = await apiClient.delete(`/admin/dsa/${id}`);
     return res.data;
   },
   async addDSATestCase(id, data) {
@@ -412,6 +428,10 @@ export const adminService = {
     const res = await apiClient.get('/admin/mcqs');
     return res.data;
   },
+  async deleteMCQ(id) {
+    const res = await apiClient.delete(`/admin/mcqs/${id}`);
+    return res.data;
+  },
 
   // CTF Challenge Studio
   async createCTF(data) {
@@ -420,6 +440,10 @@ export const adminService = {
   },
   async listCTF() {
     const res = await apiClient.get('/admin/ctf');
+    return res.data;
+  },
+  async deleteCTF(id) {
+    const res = await apiClient.delete(`/admin/ctf/${id}`);
     return res.data;
   },
 

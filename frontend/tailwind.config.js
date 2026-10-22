@@ -9,29 +9,31 @@ export default {
     extend: {
       colors: {
         cyber: {
-          bg: '#030B12',
-          bgSecondary: '#061521',
-          surface: '#071B28',
-          cyan: '#00E5F0',
-          teal: '#00BFCB',
-          text: '#F2FAFF',
-          muted: '#9BB3C2',
-          border: '#123746',
-          success: '#20D49A',
+          bg: '#061329',
+          bgSecondary: '#08172B',
+          card: '#0B1D38',
+          surface: '#102746',
+          blue: '#087FFF',
+          cyan: '#00CFFF',
+          text: '#F2F7FF',
+          muted: '#A9BCD6',
+          border: '#18385E',
+          success: '#20C997',
           warning: '#F5B942',
-          error: '#FF5263'
+          error: '#FF5263',
+          purple: '#8B5CF6'
         },
         forensic: {
-          950: '#06090e',
-          900: '#0b111a',
-          850: '#101926',
-          800: '#162234',
-          700: '#1e3048',
-          cyan: '#00f0ff',
-          emerald: '#10b981',
-          amber: '#f59e0b',
-          crimson: '#ef4444',
-          muted: '#8493a8'
+          950: '#061329',
+          900: '#08172B',
+          850: '#0B1D38',
+          800: '#102746',
+          700: '#18385E',
+          cyan: '#00CFFF',
+          emerald: '#20C997',
+          amber: '#F5B942',
+          crimson: '#FF5263',
+          muted: '#A9BCD6'
         }
       },
       fontFamily: {

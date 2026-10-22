@@ -58,30 +58,37 @@ export default function EventWorkspace({ user }) {
       setEvent(evDetail);
       setConfig(evConfig);
 
+      const evType = (evConfig.event_type || '').toLowerCase();
+      const hasDsa = evConfig.has_dsa || evType.includes('dsa') || ['combined', 'all'].includes(evType);
+      const hasCtf = evConfig.has_ctf || evType.includes('ctf') || ['combined', 'all'].includes(evType);
+      const hasMcq = evConfig.has_mcq || evType.includes('mcq') || ['combined', 'all'].includes(evType);
+
       // Default active tab to problems/challenges/quizzes if user already registered
       if (evDetail.is_registered) {
-        if (evConfig.event_type === 'dsa') setActiveTab('problems');
-        else if (evConfig.event_type === 'ctf') setActiveTab('challenges');
-        else if (evConfig.event_type === 'mcq') setActiveTab('quizzes');
+        if (hasCtf) setActiveTab('challenges');
+        else if (hasDsa) setActiveTab('problems');
+        else if (hasMcq) setActiveTab('quizzes');
       }
 
-      // Load event-specific content
-      if (evConfig.event_type === 'dsa') {
-        const qData = await eventService.getEventQuestions(targetEventId);
-        setQuestions(qData);
-        if (qData.length > 0) {
+      // Load event-specific content for all active paradigms
+      if (hasDsa) {
+        const qData = await eventService.getEventQuestions(targetEventId).catch(() => []);
+        setQuestions(qData || []);
+        if (qData && qData.length > 0) {
           selectDSAQuestion(qData[0]);
         }
-      } else if (evConfig.event_type === 'ctf') {
-        const cData = await eventService.getEventChallenges(targetEventId);
-        setChallenges(cData);
-        if (cData.length > 0) {
+      }
+      if (hasCtf) {
+        const cData = await eventService.getEventChallenges(targetEventId).catch(() => []);
+        setChallenges(cData || []);
+        if (cData && cData.length > 0) {
           selectCTFChallenge(cData[0]);
         }
-      } else if (evConfig.event_type === 'mcq') {
-        const mData = await eventService.getEventMCQs(targetEventId);
-        setMcqs(mData);
-        if (mData.length > 0) {
+      }
+      if (hasMcq) {
+        const mData = await eventService.getEventMCQs(targetEventId).catch(() => []);
+        setMcqs(mData || []);
+        if (mData && mData.length > 0) {
           setSelectedMcq(mData[0]);
         }
       }
@@ -238,65 +245,85 @@ export default function EventWorkspace({ user }) {
         <span className="text-white truncate max-w-md">{event.title}</span>
       </div>
 
-      {/* Event Header Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 shadow-xl relative overflow-hidden flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2 mb-2">
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800 uppercase font-bold tracking-wider">
-              {config.event_type.toUpperCase()} ARENA
-            </span>
-            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 capitalize font-medium">
-              Mode: {config.participation_mode}
-            </span>
-            <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
-              event.status === 'live' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800 animate-pulse' :
-              event.status === 'registration_open' ? 'bg-cyan-950 text-cyan-400 border border-cyan-800' :
-              'bg-slate-800 text-slate-400'
-            }`}>
-              {event.status}
-            </span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-mono tracking-tight">
-            {event.title}
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 max-w-2xl font-mono">
-            {event.short_description || event.description}
-          </p>
-        </div>
-
-        {/* Registration CTA if not registered */}
-        {!event.is_registered ? (
-          <div className="flex items-center space-x-3">
-            {event.participation_mode === 'mixed' ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => handleRegister('individual')}
-                  className="px-4 py-2 rounded-xl text-xs font-mono font-bold text-slate-950 bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.4)]"
-                >
-                  Join Solo
-                </button>
-                <button
-                  onClick={() => handleRegister('team')}
-                  className="px-4 py-2 rounded-xl text-xs font-mono font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700"
-                >
-                  Join Squad
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => handleRegister(event.participation_mode === 'team' ? 'team' : 'individual')}
-                className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-300 hover:from-cyan-300 hover:to-teal-200 shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all"
-              >
-                Enroll in Competition
-              </button>
-            )}
+      {/* Event Header Banner with Custom Banner Image & CyberAnzen Fallback */}
+      <div className="rounded-2xl border border-[#18385E] shadow-2xl relative overflow-hidden bg-[#0B1D38]">
+        {event.banner_url ? (
+          <div className="w-full h-44 sm:h-56 relative overflow-hidden">
+            <img 
+              src={event.banner_url} 
+              alt={event.title} 
+              className="w-full h-full object-cover" 
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0B1D38] via-[#0B1D38]/50 to-transparent" />
           </div>
         ) : (
-          <div className="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-400 font-bold">
-            <CheckCircle2 className="w-4 h-4" />
-            <span>OPERATIVE ENLISTED // READY</span>
+          <div className="w-full h-28 sm:h-36 relative bg-gradient-to-r from-[#061329] via-[#08172B] to-[#102746] overflow-hidden flex items-center px-6">
+            <div className="absolute right-6 opacity-15">
+              <img src="/logo.png" alt="CyberAnzen" className="w-40 h-40 object-contain" />
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-[#0B1D38] via-transparent to-transparent" />
           </div>
         )}
+
+        <div className="p-6 relative -mt-8 sm:-mt-10 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center space-x-2 mb-2">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#087FFF]/20 text-[#00CFFF] border border-[#087FFF]/40 uppercase font-bold tracking-wider">
+                {config.event_type.toUpperCase()} ARENA
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#102746] text-[#A9BCD6] capitalize font-medium border border-[#18385E]">
+                Mode: {config.participation_mode}
+              </span>
+              <span className={`text-[10px] font-mono px-2 py-0.5 rounded uppercase font-bold ${
+                event.status === 'live' || event.status === 'active' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800 animate-pulse' :
+                event.status === 'registration_open' ? 'bg-[#087FFF]/20 text-[#00CFFF] border border-[#087FFF]/40' :
+                'bg-[#102746] text-[#A9BCD6]'
+              }`}>
+                {event.status}
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#F2F7FF] font-mono tracking-tight drop-shadow-md">
+              {event.title}
+            </h1>
+            <p className="text-xs text-[#A9BCD6] mt-1 max-w-2xl font-mono">
+              {event.short_description || event.description}
+            </p>
+          </div>
+
+          {/* Registration CTA if not registered */}
+          {!event.is_registered ? (
+            <div className="flex items-center space-x-3">
+              {event.participation_mode === 'mixed' ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleRegister('individual')}
+                    className="px-4 py-2 rounded-xl text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_15px_rgba(0,207,255,0.4)]"
+                  >
+                    Join Solo
+                  </button>
+                  <button
+                    onClick={() => handleRegister('team')}
+                    className="px-4 py-2 rounded-xl text-xs font-mono font-bold text-white bg-[#102746] hover:bg-[#18385E] border border-[#18385E]"
+                  >
+                    Join Squad
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleRegister(event.participation_mode === 'team' ? 'team' : 'individual')}
+                  className="px-5 py-2.5 rounded-xl text-xs font-mono font-bold text-slate-950 bg-gradient-to-r from-[#087FFF] to-[#00CFFF] hover:opacity-95 shadow-[0_0_20px_rgba(0,207,255,0.5)] transition-all"
+                >
+                  Enroll in Competition
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2 text-xs font-mono px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-800 text-emerald-400 font-bold">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>OPERATIVE ENLISTED // READY</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Dynamic Event Navigation Tabs */}

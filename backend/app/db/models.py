@@ -56,6 +56,10 @@ class EventType(str, enum.Enum):
     DSA = "dsa"
     CTF = "ctf"
     MCQ = "mcq"
+    CTF_DSA = "ctf_dsa"
+    DSA_MCQ = "dsa_mcq"
+    CTF_MCQ = "ctf_mcq"
+    COMBINED = "combined"
 
 class ParticipationMode(str, enum.Enum):
     TEAM = "team"
@@ -100,6 +104,7 @@ class CTFCategory(str, enum.Enum):
     STEGO = "stego"
     CLOUD = "cloud"
     IOT = "iot"
+    PUZZLE = "puzzle"
     MISC = "misc"
 
 class FlagType(str, enum.Enum):

@@ -97,6 +97,11 @@ def health_check():
         "mode": "PRODUCTION_ARENA"
     }
 
+# 5.5 Uploads Static Assets Mount (Event Banners & Media)
+uploads_dir = os.path.abspath(os.path.join(settings.BASE_DIR, "uploads"))
+os.makedirs(os.path.join(uploads_dir, "banners"), exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 # 6. Frontend Static Assets Mount
 frontend_dist = os.path.abspath(os.path.join(settings.BASE_DIR, "frontend/dist"))
 if os.path.exists(frontend_dist):
