@@ -7,7 +7,8 @@ import {
   RefreshCw, FileText, BarChart2, Check, Lock, Key, AlertTriangle,
   Flag, Settings, Crown, ChevronRight, Award, Sparkles, CheckSquare,
   Smartphone, RotateCcw, Send, ShieldAlert, Calendar, UserPlus,
-  Copy, LogOut, ExternalLink, X, ChevronDown, ChevronUp, AlertCircle
+  Copy, LogOut, ExternalLink, X, ChevronDown, ChevronUp, AlertCircle,
+  ChevronLeft, Maximize2, Minimize2, List
 } from 'lucide-react';
 import { eventService, labService, challengeService, questionService, dsaService, authService, mcqService, teamService } from '../services/api';
 
@@ -51,6 +52,8 @@ export default function EventWorkspace({ user }) {
   const [terminalOpen, setTerminalOpen] = useState(true);
   const [activeTerminalTab, setActiveTerminalTab] = useState('tests'); // 'tests' | 'compiler'
   const [selectedTestCaseIndex, setSelectedTestCaseIndex] = useState(0);
+  const [showProblemMatrix, setShowProblemMatrix] = useState(false);
+  const [editorHeightMode, setEditorHeightMode] = useState('split'); // 'split' | 'max_editor' | 'max_terminal'
 
   // CTF interactive state
   const [selectedChallenge, setSelectedChallenge] = useState(null);
@@ -324,6 +327,18 @@ export default function EventWorkspace({ user }) {
     setSelectedQuestion(q);
   };
 
+  const currentQIndex = questions.findIndex(q => q.id === selectedQuestion?.id);
+  const hasPrevQ = currentQIndex > 0;
+  const hasNextQ = currentQIndex >= 0 && currentQIndex < questions.length - 1;
+
+  const handlePrevQ = () => {
+    if (hasPrevQ) selectDSAQuestion(questions[currentQIndex - 1]);
+  };
+
+  const handleNextQ = () => {
+    if (hasNextQ) selectDSAQuestion(questions[currentQIndex + 1]);
+  };
+
   const handleResetCode = () => {
     if (!selectedQuestion) return;
     if (!window.confirm('Reset code to original starter template? Any unsaved edits will be lost.')) return;
@@ -509,22 +524,30 @@ export default function EventWorkspace({ user }) {
 
   // Determine main interactive tab for "Continue Event" CTA
   const primaryPlayTab = config.tabs.find(t => ['challenges', 'problems', 'quizzes'].includes(t.id))?.id || 'overview';
+  const isCodingFocusMode = activeTab === 'problems';
 
   return (
-    <div className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans text-[#F2F7FF]">
+    <div className={`flex-1 w-full mx-auto transition-all font-sans text-[#F2F7FF] ${
+      isCodingFocusMode 
+        ? 'max-w-[1920px] px-3 sm:px-6 py-3 space-y-3' 
+        : 'max-w-6xl px-4 sm:px-6 lg:px-8 py-6 space-y-6'
+    }`}>
       
       {/* Back to Events Breadcrumb */}
-      <div>
-        <Link to="/events" className="inline-flex items-center space-x-1.5 text-xs text-[#A9BCD6] hover:text-[#00CFFF] transition-colors font-sans">
-          <span className="text-sm">←</span>
-          <span>Back to Events</span>
-        </Link>
-      </div>
+      {!isCodingFocusMode && (
+        <div>
+          <Link to="/events" className="inline-flex items-center space-x-1.5 text-xs text-[#A9BCD6] hover:text-[#00CFFF] transition-colors font-sans">
+            <span className="text-sm">←</span>
+            <span>Back to Events</span>
+          </Link>
+        </div>
+      )}
 
       {/* =========================================================================
-          HERO EVENT CARD (EXACT SCREENSHOT LAYOUT 3)
+          HERO EVENT CARD (Hidden in DSA coding focus mode to preserve vertical screen space)
           ========================================================================= */}
-      <div className="p-5 sm:p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-2xl flex flex-col md:flex-row items-stretch md:items-center gap-6">
+      {!isCodingFocusMode && (
+        <div className="p-5 sm:p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-2xl flex flex-col md:flex-row items-stretch md:items-center gap-6">
         
         {/* Left Thumbnail (Nightfall Hooded Hacker with CyberAnzen badge) */}
         <div className="w-full md:w-52 h-44 md:h-36 rounded-xl overflow-hidden bg-[#061329] border border-[#18385E] flex-shrink-0 relative">
@@ -609,11 +632,13 @@ export default function EventWorkspace({ user }) {
           </button>
         </div>
       </div>
+      )}
 
       {/* =========================================================================
-          WORKSPACE NAVIGATION TABS (EXACT SCREENSHOT 3 BAR)
+          WORKSPACE NAVIGATION TABS
           ========================================================================= */}
-      <div className="flex items-center border-b border-[#18385E] gap-6 font-sans text-xs">
+      <div className="flex items-center justify-between border-b border-[#18385E] gap-4 font-sans text-xs">
+        <div className="flex items-center gap-6 overflow-x-auto">
         {(() => {
           const tabList = [
             { id: 'overview', label: 'Overview' },
@@ -646,6 +671,18 @@ export default function EventWorkspace({ user }) {
             </button>
           );
         })}
+        </div>
+
+        {isCodingFocusMode && (
+          <div className="hidden sm:flex items-center space-x-2">
+            <Link 
+              to="/events" 
+              className="px-3 py-1.5 rounded-lg bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-slate-300 hover:text-white transition-colors text-xs font-mono flex items-center space-x-1"
+            >
+              <span>← Exit to Events</span>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* =========================================================================
@@ -1335,78 +1372,10 @@ export default function EventWorkspace({ user }) {
       )}
 
       {/* =========================================================================
-          TAB 3: DSA PROBLEMS WORKSPACE (WITH EXISTING MONACO CONSOLE)
+          TAB 3: DSA PROBLEMS WORKSPACE (FULL-WIDTH LEETCODE-STYLE CODING ARENA)
           ========================================================================= */}
       {activeTab === 'problems' && (
-        <div className="space-y-4">
-          {/* Top Bar: CyberAnzen | Event Name | Timer | Progress | Participant */}
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
-            {/* CyberAnzen Logo + Event Title */}
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#061329] border border-[#18385E] flex items-center justify-center p-1.5 shadow-sm">
-                <img 
-                  src="/favicon(1).png" 
-                  alt="CyberAnzen" 
-                  className="w-full h-full object-contain" 
-                  onError={(e) => { e.target.style.display = 'none'; }} 
-                />
-              </div>
-              <div>
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-white text-sm">{event.title}</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#087FFF]/20 text-[#00CFFF] border border-[#087FFF]/40 uppercase">
-                    DSA Console
-                  </span>
-                </div>
-                <span className="text-[10px] text-[#A9BCD6]">CyberAnzen Sandbox Judge Engine</span>
-              </div>
-            </div>
-
-            {/* Timer & Solved Progress */}
-            <div className="flex flex-wrap items-center gap-3 sm:gap-6">
-              {/* Timer */}
-              <div className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E]">
-                <Clock className="w-3.5 h-3.5 text-[#00CFFF]" />
-                <div>
-                  <span className="text-[9px] text-[#A9BCD6] block uppercase tracking-wider">Time Remaining</span>
-                  <span className="font-bold text-white">{timeRemaining || 'Active Session'}</span>
-                </div>
-              </div>
-
-              {/* Progress */}
-              <div className="flex items-center space-x-3 px-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E]">
-                <CheckCircle2 className="w-3.5 h-3.5 text-[#20C997]" />
-                <div>
-                  <span className="text-[9px] text-[#A9BCD6] block uppercase tracking-wider">Progress</span>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-white">
-                      Solved {questions.filter(q => q.status === 'solved').length} / {questions.length}
-                    </span>
-                    <div className="w-16 h-1.5 bg-[#08172B] rounded-full overflow-hidden border border-[#18385E]">
-                      <div 
-                        className="h-full bg-gradient-to-r from-[#00CFFF] to-[#20C997] transition-all duration-500"
-                        style={{ 
-                          width: `${questions.length > 0 ? (questions.filter(q => q.status === 'solved').length / questions.length) * 100 : 0}%` 
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Participant badge */}
-              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E]">
-                <div className="w-6 h-6 rounded-full bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center text-[#00CFFF] font-bold text-[10px]">
-                  {(currentUser?.username || 'U')[0].toUpperCase()}
-                </div>
-                <div>
-                  <span className="text-white font-bold block text-xs">{currentUser?.username || 'Candidate'}</span>
-                  <span className="text-[9px] text-[#A9BCD6] uppercase">{currentUser?.role || 'Participant'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
+        <div className="space-y-3">
           {/* Anti-cheat banner warning if triggered */}
           {clipboardWarning && (
             <div className="flex items-center space-x-2 p-3 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-mono animate-pulse shadow-lg">
@@ -1415,27 +1384,29 @@ export default function EventWorkspace({ user }) {
             </div>
           )}
 
-          {/* Main Coding Layout: Left Question Sidebar + Right Console Area */}
-          <div className="flex flex-col lg:flex-row gap-4 items-start">
-            
-            {/* Left Question Sidebar */}
-            <div className="w-full lg:w-80 flex-shrink-0 p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-3 font-mono text-xs max-h-[820px] overflow-y-auto">
-              <div className="flex items-center justify-between border-b border-[#18385E] pb-2.5">
-                <div className="flex items-center space-x-2">
-                  <Code2 className="w-4 h-4 text-[#00CFFF]" />
-                  <span className="text-xs font-bold text-white uppercase tracking-wider">Problem Matrix</span>
+          {/* Slide-over Problem Matrix Drawer / Modal */}
+          {showProblemMatrix && (
+            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex justify-start animate-fade-in">
+              <div className="w-full max-w-md h-full bg-[#08172B] border-r border-[#18385E] shadow-2xl flex flex-col p-5 space-y-4 font-mono text-xs overflow-hidden">
+                <div className="flex items-center justify-between border-b border-[#18385E] pb-3 shrink-0">
+                  <div className="flex items-center space-x-2">
+                    <Code2 className="w-5 h-5 text-[#00CFFF]" />
+                    <span className="font-bold text-white text-sm uppercase tracking-wider">Problem Matrix</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-[#102746] text-[#00CFFF] border border-[#00CFFF]/30">
+                      {questions.length} Challenges
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowProblemMatrix(false)}
+                    className="p-1.5 rounded-xl bg-[#061329] hover:bg-[#102746] text-slate-400 hover:text-white border border-[#18385E] transition-colors"
+                    title="Close Matrix Drawer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
-                <span className="text-[10px] text-[#A9BCD6]">
-                  {questions.reduce((sum, q) => sum + (q.points || 0), 0)} pts
-                </span>
-              </div>
 
-              {questions.length === 0 ? (
-                <div className="p-8 text-center text-[#A9BCD6]">
-                  No coding challenges assigned to this event tournament yet.
-                </div>
-              ) : (
-                <div className="space-y-2">
+                {/* Question Cards List inside Drawer */}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                   {questions.map((q, idx) => {
                     const isCurrent = selectedQuestion && selectedQuestion.id === q.id;
                     const isSolved = q.status === 'solved';
@@ -1444,8 +1415,11 @@ export default function EventWorkspace({ user }) {
                     return (
                       <div
                         key={q.id}
-                        onClick={() => selectDSAQuestion(q)}
-                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                        onClick={() => {
+                          selectDSAQuestion(q);
+                          setShowProblemMatrix(false);
+                        }}
+                        className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
                           isCurrent
                             ? 'bg-[#102746] border-[#00CFFF] shadow-[0_0_15px_rgba(0,207,255,0.25)] ring-1 ring-[#00CFFF]'
                             : isLocked
@@ -1455,12 +1429,12 @@ export default function EventWorkspace({ user }) {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center space-x-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               isCurrent ? 'bg-[#00CFFF] text-slate-950' : 'bg-[#08172B] text-[#A9BCD6] border border-[#18385E]'
                             }`}>
                               {q.display_number || `Q${idx + 1}`}
                             </span>
-                            <span className={`font-bold text-xs truncate max-w-[140px] ${
+                            <span className={`font-bold text-xs truncate max-w-[200px] ${
                               isCurrent ? 'text-white font-extrabold' : 'text-slate-200'
                             }`}>
                               {q.title}
@@ -1474,7 +1448,7 @@ export default function EventWorkspace({ user }) {
                               <span>Solved</span>
                             </span>
                           ) : isLocked ? (
-                            <span className="flex items-center space-x-1 text-[10px] text-amber-400 font-bold bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-800/40" title={q.lock_reason}>
+                            <span className="flex items-center space-x-1 text-[10px] text-amber-400 font-bold bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-800/40">
                               <Lock className="w-3 h-3" />
                               <span>Locked</span>
                             </span>
@@ -1495,28 +1469,100 @@ export default function EventWorkspace({ user }) {
                             q.difficulty?.toLowerCase() === 'easy' || q.difficulty?.toLowerCase() === 'beginner' ? 'text-emerald-400' :
                             q.difficulty?.toLowerCase() === 'hard' || q.difficulty?.toLowerCase() === 'advanced' ? 'text-rose-400' : 'text-amber-400'
                           }`}>{q.difficulty}</span>
-                          <span className="text-slate-400 truncate max-w-[80px]">{q.category}</span>
+                          <span className="text-slate-400 truncate max-w-[120px]">{q.category}</span>
                         </div>
-
-                        {isLocked && q.lock_reason && (
-                          <div className="mt-1.5 text-[9px] text-amber-300 font-sans italic bg-amber-950/30 p-1 rounded border border-amber-900/40">
-                            {q.lock_reason}
-                          </div>
-                        )}
                       </div>
                     );
                   })}
                 </div>
-              )}
+              </div>
+              {/* Backdrop click to close */}
+              <div className="flex-1" onClick={() => setShowProblemMatrix(false)} />
+            </div>
+          )}
+
+          {/* Sleek Top Problem Navigation & Status Bar */}
+          <div className="px-4 py-2.5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
+            {/* Left: Problem Selector & Steppers */}
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setShowProblemMatrix(true)}
+                className="px-3 py-1.5 rounded-xl bg-[#061329] hover:bg-[#102746] text-[#00CFFF] border border-[#00CFFF]/40 flex items-center space-x-1.5 font-bold transition-all shadow-[0_0_10px_rgba(0,207,255,0.15)]"
+                title="Open Problem Matrix List"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Problem Matrix ({questions.length})</span>
+              </button>
+
+              {/* Prev Problem Button */}
+              <button
+                onClick={handlePrevQ}
+                disabled={!hasPrevQ}
+                className="p-1.5 rounded-xl bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-slate-300 hover:text-white disabled:opacity-40 transition-colors"
+                title="Previous Challenge"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              {/* Question Jump Selector Dropdown */}
+              <select
+                value={selectedQuestion?.id || ''}
+                onChange={(e) => {
+                  const found = questions.find(q => q.id === parseInt(e.target.value));
+                  if (found) selectDSAQuestion(found);
+                }}
+                className="px-3 py-1.5 bg-[#061329] border border-[#18385E] rounded-xl text-white font-bold text-xs focus:border-[#00CFFF] focus:outline-none max-w-[260px] truncate"
+              >
+                {questions.map((q, idx) => (
+                  <option key={q.id} value={q.id}>
+                    {q.status === 'solved' ? '✓ ' : ''}{q.display_number || `Q${idx + 1}`}: {q.title} ({q.points} PTS)
+                  </option>
+                ))}
+              </select>
+
+              {/* Next Problem Button */}
+              <button
+                onClick={handleNextQ}
+                disabled={!hasNextQ}
+                className="p-1.5 rounded-xl bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-slate-300 hover:text-white disabled:opacity-40 transition-colors"
+                title="Next Challenge"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
 
-            {/* Right: Existing Code Console & Problem Dossier Split Area */}
-            {selectedQuestion ? (
-              <div className="flex-1 w-full flex flex-col space-y-4">
-                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-                  
-                  {/* Left Column: Dossier / Execution Output / Submissions (xl:col-span-6) */}
-                  <div className="xl:col-span-6 p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col space-y-4 font-mono text-xs max-h-[820px] overflow-y-auto">
+            {/* Center: Live Timer & Progress */}
+            <div className="flex items-center space-x-3 sm:space-x-5">
+              <div className="flex items-center space-x-1.5 text-xs text-[#00CFFF] bg-[#061329] px-3 py-1 rounded-xl border border-[#18385E]">
+                <Clock className="w-3.5 h-3.5" />
+                <span>{timeRemaining || 'Active Session'}</span>
+              </div>
+              <div className="flex items-center space-x-1.5 text-xs text-[#20C997] bg-[#061329] px-3 py-1 rounded-xl border border-[#18385E]">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Solved {questions.filter(q => q.status === 'solved').length} / {questions.length}</span>
+              </div>
+            </div>
+
+            {/* Right: Points Badge & Candidate */}
+            <div className="flex items-center space-x-2.5">
+              <span className="px-2.5 py-1 rounded-xl bg-[#061329] border border-[#18385E] text-[#00CFFF] font-bold text-[11px]">
+                {selectedQuestion?.points} PTS • {selectedQuestion?.difficulty}
+              </span>
+              <div className="hidden md:flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-[#061329] border border-[#18385E] text-[11px]">
+                <div className="w-4 h-4 rounded-full bg-[#087FFF]/30 flex items-center justify-center text-[#00CFFF] text-[9px] font-bold">
+                  {(currentUser?.username || 'U')[0].toUpperCase()}
+                </div>
+                <span className="text-white font-medium">{currentUser?.username || 'Candidate'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Full-Width Split Coding Arena: Left Problem Dossier (50%) + Right IDE & Output Terminal (50%) */}
+          {selectedQuestion ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch min-h-[660px]">
+              
+              {/* Left Column: Spacious Problem Dossier (lg:col-span-6) */}
+              <div className="lg:col-span-6 p-5 sm:p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-2xl flex flex-col space-y-4 font-sans text-xs h-[calc(100vh-170px)] min-h-[640px] overflow-y-auto">
                     {/* Sub-tab Navigation */}
                     <div className="flex items-center justify-between border-b border-[#18385E] pb-3">
                       <div className="flex rounded-xl bg-[#061329] p-1 border border-[#18385E]">
@@ -1727,8 +1773,8 @@ export default function EventWorkspace({ user }) {
                     )}
                   </div>
 
-                  {/* Right Column: Existing Monaco Editor Console (xl:col-span-6) */}
-                  <div className="xl:col-span-6 p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col space-y-3">
+                  {/* Right Column: Code Console & Interactive Terminal (lg:col-span-6) */}
+                  <div className="lg:col-span-6 p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-2xl flex flex-col space-y-3 h-[calc(100vh-170px)] min-h-[640px] overflow-y-auto">
                     {/* Editor Toolbar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#18385E] pb-3 font-mono text-xs">
                       <div className="flex items-center space-x-2">
@@ -1784,7 +1830,9 @@ export default function EventWorkspace({ user }) {
                     </div>
 
                     {/* Monaco Editor Container */}
-                    <div className={`rounded-xl overflow-hidden border border-[#18385E] bg-[#061329] transition-all relative ${terminalOpen ? 'h-[400px]' : 'h-[620px]'}`}>
+                    <div className={`rounded-xl overflow-hidden border border-[#18385E] bg-[#061329] transition-all relative ${
+                      !terminalOpen ? 'h-[680px]' : (editorHeightMode === 'max_terminal' ? 'h-[240px]' : 'h-[390px]')
+                    }`}>
                       {useTouchEditor ? (
                         <textarea
                           value={getCurrentCode()}
@@ -1881,6 +1929,17 @@ export default function EventWorkspace({ user }) {
                           )}
 
                           <button
+                            onClick={() => {
+                              if (!terminalOpen) setTerminalOpen(true);
+                              setEditorHeightMode(editorHeightMode === 'max_terminal' ? 'split' : 'max_terminal');
+                            }}
+                            className="p-1.5 rounded-lg bg-[#061329] hover:bg-[#102746] text-[#A9BCD6] hover:text-white border border-[#18385E] transition-colors"
+                            title={editorHeightMode === 'max_terminal' ? "Restore Split View" : "Maximize Terminal"}
+                          >
+                            {editorHeightMode === 'max_terminal' ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <button
                             onClick={() => setTerminalOpen(!terminalOpen)}
                             className="p-1.5 rounded-lg bg-[#061329] hover:bg-[#102746] text-[#A9BCD6] hover:text-white border border-[#18385E] transition-colors"
                             title={terminalOpen ? "Collapse Terminal" : "Expand Terminal"}
@@ -1892,7 +1951,9 @@ export default function EventWorkspace({ user }) {
 
                       {/* Terminal Body */}
                       {terminalOpen && (
-                        <div className="p-4 max-h-[320px] overflow-y-auto space-y-3 bg-[#061329]">
+                        <div className={`p-4 overflow-y-auto space-y-3 bg-[#061329] ${
+                          editorHeightMode === 'max_terminal' ? 'h-[480px]' : 'max-h-[320px]'
+                        }`}>
                           {/* Idle State */}
                           {!executionResults[selectedQuestion.id] && !isRunningSample && !isSubmittingDSA && (
                             <div className="py-8 flex flex-col items-center justify-center text-slate-500 space-y-2">
@@ -2031,18 +2092,14 @@ export default function EventWorkspace({ user }) {
                       )}
                     </div>
                   </div>
-
                 </div>
-              </div>
-            ) : (
-              <div className="flex-1 p-16 text-center text-[#A9BCD6] font-mono rounded-2xl bg-[#0B1D38] border border-[#18385E]">
-                Select a problem from the matrix sidebar to begin coding and sandbox execution.
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
+              ) : (
+                <div className="p-16 text-center text-[#A9BCD6] font-mono rounded-2xl bg-[#0B1D38] border border-[#18385E]">
+                  Select a problem from the Problem Matrix to begin coding and sandbox execution.
+                </div>
+              )}
+            </div>
+          )}
 
       {/* =========================================================================
           TAB 4: MCQ QUIZZES
