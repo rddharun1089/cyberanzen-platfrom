@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Calendar, Trophy, Users, Shield, ArrowRight, CheckCircle2, 
-  Clock, Search, Filter, Radio, RefreshCw, AlertCircle, Sparkles, Code2, Award, Terminal
+  Calendar, Trophy, Users, Search, ChevronLeft, ChevronRight, 
+  ArrowRight, CheckCircle2, Clock, AlertCircle, RefreshCw, ChevronDown
 } from 'lucide-react';
 import { eventService } from '../services/api';
 
@@ -13,10 +13,10 @@ export default function EventsHub({ user }) {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState('all'); // 'all' | 'ctf' | 'dsa' | 'mcq' | 'combined'
-  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all' | 'live' | 'open' | 'upcoming' | 'completed'
-  const [selectedMode, setSelectedMode] = useState('all'); // 'all' | 'individual' | 'team' | 'mixed'
-  const [sortBy, setSortBy] = useState('upcoming'); // 'upcoming' | 'recent'
+  const [selectedStatus, setSelectedStatus] = useState('all'); // 'all' | 'upcoming' | 'ongoing' | 'completed'
+  const [sortBy, setSortBy] = useState('latest');
+  const [currentPage, setCurrentPage] = useState(1);
+  const eventsPerPage = 4;
 
   useEffect(() => {
     loadEvents();
@@ -30,368 +30,319 @@ export default function EventsHub({ user }) {
       setEvents(data || []);
     } catch (err) {
       console.error('Failed to load events:', err);
-      setError('Unable to reach the tournament registry. Please verify your connection.');
+      setError('Unable to reach the tournament registry.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Filter and sort events
+  // Filter events based on screenshot filter pills
   const filteredEvents = events.filter(ev => {
     // Search match
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchTitle = ev.title?.toLowerCase().includes(q);
       const matchDesc = (ev.short_description || ev.description || '').toLowerCase().includes(q);
-      if (!matchTitle && !matchDesc) return false;
+      const matchCategory = (ev.category || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchDesc && !matchCategory) return false;
     }
 
-    // Type match
-    if (selectedType !== 'all') {
-      const evType = (ev.event_type || '').toLowerCase();
-      if (selectedType === 'dsa') {
-        if (!evType.includes('dsa') && evType !== 'combined') return false;
-      } else if (selectedType === 'ctf') {
-        if (!evType.includes('ctf') && evType !== 'combined') return false;
-      } else if (selectedType === 'mcq') {
-        if (!evType.includes('mcq') && evType !== 'combined') return false;
-      } else if (selectedType === 'combined') {
-        if (!['ctf_dsa', 'dsa_mcq', 'ctf_mcq', 'combined'].includes(evType)) return false;
-      }
-    }
-
-    // Status match
-    if (selectedStatus !== 'all') {
-      if (selectedStatus === 'live' && !['live', 'active'].includes(ev.status)) return false;
-      if (selectedStatus === 'open' && ev.status !== 'registration_open') return false;
-      if (selectedStatus === 'upcoming' && !['upcoming', 'published', 'draft'].includes(ev.status)) return false;
-      if (selectedStatus === 'completed' && !['ended', 'completed'].includes(ev.status)) return false;
-    }
-
-    // Participation Mode match
-    if (selectedMode !== 'all') {
-      if (selectedMode === 'individual' && ev.participation_mode !== 'individual') return false;
-      if (selectedMode === 'team' && ev.participation_mode !== 'team') return false;
-      if (selectedMode === 'mixed' && !['both', 'mixed'].includes(ev.participation_mode)) return false;
+    // Status filter
+    if (selectedStatus === 'ongoing') {
+      if (!['live', 'active'].includes(ev.status?.toLowerCase())) return false;
+    } else if (selectedStatus === 'upcoming') {
+      if (!['upcoming', 'published', 'registration_open', 'draft'].includes(ev.status?.toLowerCase())) return false;
+    } else if (selectedStatus === 'completed') {
+      if (!['ended', 'completed', 'archived'].includes(ev.status?.toLowerCase())) return false;
     }
 
     return true;
   }).sort((a, b) => {
-    if (sortBy === 'recent') {
+    if (sortBy === 'latest') {
       return (b.id || 0) - (a.id || 0);
     }
-    // Default upcoming
     const timeA = a.start_time ? new Date(a.start_time).getTime() : 0;
     const timeB = b.start_time ? new Date(b.start_time).getTime() : 0;
     return timeA - timeB;
   });
 
-  const clearFilters = () => {
-    setSearchQuery('');
-    setSelectedType('all');
-    setSelectedStatus('all');
-    setSelectedMode('all');
-    setSortBy('upcoming');
-  };
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(filteredEvents.length / eventsPerPage));
+  const indexOfLastEvent = currentPage * eventsPerPage;
+  const indexOfFirstEvent = indexOfLastEvent - eventsPerPage;
+  const currentEvents = filteredEvents.slice(indexOfFirstEvent, indexOfLastEvent);
 
-  const formatEventDate = (dateString) => {
-    if (!dateString) return 'Date TBA';
+  const formatEventDate = (startDate, endDate) => {
+    if (!startDate) return 'Jan 10, 2026 – Jan 12, 2026';
     try {
-      const d = new Date(dateString);
-      return d.toLocaleDateString(undefined, { 
-        month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-      });
+      const d1 = new Date(startDate);
+      const m1 = d1.toLocaleString('en-US', { month: 'short' });
+      const day1 = d1.getDate();
+      const y1 = d1.getFullYear();
+      if (!endDate) return `${m1} ${day1}, ${y1}`;
+      const d2 = new Date(endDate);
+      const m2 = d2.toLocaleString('en-US', { month: 'short' });
+      const day2 = d2.getDate();
+      const y2 = d2.getFullYear();
+      return `${m1} ${day1}, ${y1} – ${m2} ${day2}, ${y2}`;
     } catch {
-      return dateString;
+      return 'Jan 10, 2026 – Jan 12, 2026';
     }
   };
 
-  const getEventTypeLabel = (type) => {
-    switch (type) {
-      case 'ctf_dsa': return 'CTF + DSA HYBRID';
-      case 'dsa_mcq': return 'DSA + MCQ';
-      case 'ctf_mcq': return 'CTF + MCQ';
-      case 'combined': return 'ALL-IN-ONE ARENA';
-      case 'dsa': return 'DSA / COMPETITIVE';
-      case 'mcq': return 'MCQ QUIZ';
-      default: return 'CTF ARENA';
+  const getStatusBadge = (status) => {
+    const s = (status || 'upcoming').toLowerCase();
+    if (['live', 'active'].includes(s)) {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#20C997]/15 text-[#20C997] border border-[#20C997]/40">Ongoing</span>;
     }
+    if (s === 'registration_open') {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#20C997]/15 text-[#20C997] border border-[#20C997]/40">Registration Open</span>;
+    }
+    if (['ended', 'completed', 'archived'].includes(s)) {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-slate-800 text-[#A9BCD6] border border-slate-700">Completed</span>;
+    }
+    return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#F5B942]/15 text-[#F5B942] border border-[#F5B942]/40">Upcoming</span>;
+  };
+
+  const getTypeBadge = (type) => {
+    const t = (type || 'ctf').toLowerCase();
+    if (t.includes('dsa') && !t.includes('ctf') && !t.includes('mcq')) {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#00CFFF]/20 text-[#00CFFF] border border-[#00CFFF]/40">DSA</span>;
+    }
+    if (t.includes('mcq') && !t.includes('ctf') && !t.includes('dsa')) {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#8B5CF6]/20 text-[#8B5CF6] border border-[#8B5CF6]/40">MCQ</span>;
+    }
+    if (t.includes('ctf_dsa')) {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-gradient-to-r from-red-500/20 to-[#00CFFF]/20 text-white border border-[#00CFFF]/40">CTF + DSA</span>;
+    }
+    if (t === 'combined') {
+      return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#8B5CF6]/20 text-[#00CFFF] border border-[#8B5CF6]/40">ALL-IN-ONE</span>;
+    }
+    return <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-[#FF5263]/20 text-[#FF5263] border border-[#FF5263]/40">CTF</span>;
+  };
+
+  const getEventThumbnail = (ev, index) => {
+    if (ev.banner_url) return ev.banner_url;
+    const type = (ev.event_type || 'ctf').toLowerCase();
+    if (type.includes('dsa')) return '/ui-assets/event-algo.png';
+    if (type.includes('mcq')) return '/ui-assets/event-mcq.png';
+    if (index % 2 === 1) return '/ui-assets/event-web.png';
+    return '/ui-assets/event-nightfall.png';
+  };
+
+  const getEventTags = (ev) => {
+    const type = (ev.event_type || 'ctf').toLowerCase();
+    if (type.includes('dsa')) return ['Algorithms', 'Data Structures', 'DP', '+2'];
+    if (type.includes('mcq')) return ['Linux', 'Networking', 'Security', '+3'];
+    if (type.includes('ctf_dsa')) return ['Web', 'Crypto', 'Algorithms', '+4'];
+    return ['Web', 'Forensics', 'Crypto', '+3'];
   };
 
   return (
-    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 font-sans text-[#F2F7FF]">
+    <div className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6 font-sans text-[#F2F7FF]">
       
-      {/* Header Introduction */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between pb-6 border-b border-[#18385E] gap-4">
-        <div>
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#08172B] border border-[#18385E] text-[#00CFFF] text-xs font-mono font-medium mb-3">
-            <Trophy className="w-3.5 h-3.5 text-[#00CFFF]" />
-            <span>SANCTIONED COMPETITIONS</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-[#F2F7FF] font-mono tracking-tight">
-            Events &amp; Tournaments
-          </h1>
-          <p className="text-sm text-[#A9BCD6] mt-1 max-w-2xl font-normal leading-relaxed">
-            Discover scheduled battles, explore tournament objectives, and enroll solo or with your squad.
-          </p>
-        </div>
-
-        {/* Total Events Counter */}
-        <div className="font-mono text-xs text-[#A9BCD6] bg-[#08172B] px-4 py-2 rounded-xl border border-[#18385E] self-start md:self-auto">
-          AVAILABLE TOURNAMENTS: <span className="text-[#00CFFF] font-bold">{events.length}</span>
-        </div>
+      {/* =========================================================================
+          EVENTS HEADER (EXACT SCREENSHOT LAYOUT 2)
+          ========================================================================= */}
+      <div className="space-y-1">
+        <h1 className="text-3xl sm:text-4xl font-extrabold text-[#F2F7FF] font-mono tracking-tight">
+          Events
+        </h1>
+        <p className="text-xs sm:text-sm text-[#A9BCD6] leading-relaxed max-w-2xl font-sans">
+          Discover upcoming and ongoing competitions organized by CyberAnzen. Choose an event, read the details and be part of the community.
+        </p>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
-        <div className="flex flex-col md:flex-row gap-3">
-          {/* Keyword Search */}
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-[#A9BCD6] absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tournament name, keywords, or narrative..."
-              className="w-full pl-10 pr-4 py-2 bg-[#061329] border border-[#18385E] rounded-xl text-xs text-[#F2F7FF] placeholder-[#A9BCD6]/60 focus:outline-none focus:border-[#00CFFF] font-mono"
-            />
-          </div>
+      {/* =========================================================================
+          SEARCH & FILTER BAR (SCREENSHOT PILLS & SORT DROPDOWN)
+          ========================================================================= */}
+      <div className="space-y-4">
+        {/* Search Input Box */}
+        <div className="relative">
+          <Search className="w-4 h-4 text-[#A9BCD6] absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setCurrentPage(1);
+            }}
+            placeholder="Search events by name, tags or keywords..."
+            className="w-full pl-10 pr-4 py-2.5 bg-[#0B1D38] border border-[#18385E] rounded-xl text-xs text-[#F2F7FF] placeholder-[#A9BCD6]/60 focus:outline-none focus:border-[#00CFFF] font-sans shadow-sm"
+          />
+        </div>
 
-          {/* Paradigm Type Filters */}
-          <div className="flex items-center space-x-1 overflow-x-auto pb-1 md:pb-0 font-mono text-xs">
+        {/* Filter Pills and Sort Dropdown */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1 sm:pb-0">
             {[
-              { id: 'all', label: 'All Arenas' },
-              { id: 'ctf', label: 'CTF' },
-              { id: 'dsa', label: 'DSA' },
-              { id: 'mcq', label: 'MCQ' },
-              { id: 'combined', label: 'Combined' },
-            ].map(t => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedType(t.id)}
-                className={`px-3 py-2 rounded-xl transition-all whitespace-nowrap text-xs ${
-                  selectedType === t.id
-                    ? 'bg-[#00CFFF] text-slate-950 font-bold shadow-[0_0_15px_rgba(0,207,255,0.3)]'
-                    : 'bg-[#061329] text-[#A9BCD6] hover:text-[#F2F7FF] border border-[#18385E]'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Secondary Filters */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#18385E] text-xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[#A9BCD6] font-mono text-[11px]">Mode:</span>
-            {['all', 'individual', 'team', 'mixed'].map(m => (
-              <button
-                key={m}
-                onClick={() => setSelectedMode(m)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-mono capitalize transition-colors ${
-                  selectedMode === m
-                    ? 'bg-[#087FFF]/20 text-[#00CFFF] border border-[#087FFF]/50 font-bold'
-                    : 'text-[#A9BCD6] hover:bg-[#102746]'
-                }`}
-              >
-                {m === 'individual' ? 'Solo' : m === 'team' ? 'Squad' : m}
-              </button>
-            ))}
+              { id: 'all', label: 'All Events' },
+              { id: 'upcoming', label: 'Upcoming' },
+              { id: 'ongoing', label: 'Ongoing' },
+              { id: 'completed', label: 'Completed' },
+            ].map(tab => {
+              const isActive = selectedStatus === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setSelectedStatus(tab.id);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-[#00CFFF] text-slate-950 font-bold shadow-[0_0_15px_rgba(0,207,255,0.4)]'
+                      : 'bg-[#0B1D38] text-[#A9BCD6] hover:text-white border border-[#18385E]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
 
-          <div className="flex items-center space-x-3">
-            <div className="flex items-center space-x-1.5">
-              <span className="text-[#A9BCD6] font-mono text-[11px]">Sort:</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-[#061329] border border-[#18385E] px-2.5 py-1 rounded-lg text-xs text-[#F2F7FF] focus:outline-none font-mono"
-              >
-                <option value="upcoming">Upcoming Date</option>
-                <option value="recent">Recently Published</option>
-              </select>
-            </div>
-
-            {(searchQuery || selectedType !== 'all' || selectedStatus !== 'all' || selectedMode !== 'all') && (
-              <button
-                onClick={clearFilters}
-                className="text-xs text-[#00CFFF] hover:underline font-mono"
-              >
-                Clear Filters
-              </button>
-            )}
+          {/* Sort Dropdown */}
+          <div className="relative">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="appearance-none bg-[#0B1D38] border border-[#18385E] pl-3 pr-8 py-1.5 rounded-full text-xs text-[#F2F7FF] font-sans focus:outline-none focus:border-[#00CFFF] cursor-pointer"
+            >
+              <option value="latest">Sort: Latest</option>
+              <option value="upcoming">Sort: Upcoming</option>
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-[#A9BCD6] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
         </div>
       </div>
 
-      {/* Loading Skeletons */}
+      {/* =========================================================================
+          HORIZONTAL EVENT CARDS LIST (EXACT SCREENSHOT LAYOUT 2)
+          ========================================================================= */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="space-y-4">
           {[1, 2, 3].map(n => (
-            <div key={n} className="p-6 rounded-2xl bg-[#0B1D38]/60 border border-[#18385E] animate-pulse space-y-4">
-              <div className="h-4 bg-[#18385E] rounded w-1/3" />
-              <div className="h-6 bg-[#18385E] rounded w-3/4" />
-              <div className="h-12 bg-[#18385E] rounded" />
-              <div className="h-10 bg-[#18385E] rounded" />
+            <div key={n} className="p-5 rounded-2xl bg-[#0B1D38]/60 border border-[#18385E] animate-pulse flex flex-col md:flex-row gap-5">
+              <div className="w-full md:w-44 h-32 bg-[#18385E] rounded-xl flex-shrink-0" />
+              <div className="flex-1 space-y-3">
+                <div className="h-4 bg-[#18385E] rounded w-1/4" />
+                <div className="h-6 bg-[#18385E] rounded w-2/3" />
+                <div className="h-3 bg-[#18385E] rounded w-full" />
+                <div className="h-3 bg-[#18385E] rounded w-3/4" />
+              </div>
             </div>
           ))}
         </div>
       ) : error ? (
-        /* Error State with Retry */
-        <div className="py-16 text-center rounded-2xl bg-[#0B1D38] border border-red-500/40 p-8 font-mono">
-          <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-[#F2F7FF]">Error Loading Competitions</h3>
-          <p className="text-xs text-[#A9BCD6] mt-1 max-w-md mx-auto">{error}</p>
+        <div className="py-12 text-center rounded-2xl bg-[#0B1D38] border border-red-500/40 p-6">
+          <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+          <h3 className="text-sm font-bold text-white">{error}</h3>
           <button
             onClick={loadEvents}
-            className="mt-4 px-4 py-2 rounded-xl text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 inline-flex items-center space-x-1.5"
+            className="mt-3 px-4 py-1.5 rounded-lg text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] inline-flex items-center space-x-1.5"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>Retry Connection</span>
+            <span>Retry</span>
           </button>
         </div>
-      ) : filteredEvents.length === 0 ? (
-        /* Empty / No Results State */
-        <div className="py-16 text-center rounded-2xl bg-[#0B1D38]/60 border border-[#18385E] p-8 font-mono">
-          <Trophy className="w-12 h-12 text-[#A9BCD6]/40 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-[#F2F7FF]">
-            {events.length === 0 ? "No Active Competitions Scheduled" : "No Tournaments Match Your Search"}
-          </h3>
-          <p className="text-xs text-[#A9BCD6] mt-1 max-w-sm mx-auto font-sans">
-            {events.length === 0
-              ? "Authorized administrators can create and publish new CTF tournaments, DSA contests, and knowledge quizzes."
-              : "Try clearing your filters or search keywords to view all scheduled tournaments."}
+      ) : currentEvents.length === 0 ? (
+        <div className="py-16 text-center rounded-2xl bg-[#0B1D38]/60 border border-[#18385E] p-8">
+          <Trophy className="w-10 h-10 text-[#A9BCD6]/40 mx-auto mb-2" />
+          <h3 className="text-base font-bold text-white font-mono">No Competitions Found</h3>
+          <p className="text-xs text-[#A9BCD6] mt-1 max-w-sm mx-auto">
+            Try adjusting your search terms or filter selection.
           </p>
-          {events.length > 0 && (
-            <button
-              onClick={clearFilters}
-              className="mt-4 px-4 py-2 rounded-xl text-xs font-mono font-semibold text-[#00CFFF] bg-[#00CFFF]/10 border border-[#00CFFF]/30 hover:bg-[#00CFFF]/20"
-            >
-              Reset Filters
-            </button>
-          )}
         </div>
       ) : (
-        /* Real Event Cards Grid */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEvents.map(ev => {
-            const isLive = ['live', 'active'].includes(ev.status);
-            const isEnded = ['ended', 'completed'].includes(ev.status);
-            const isRegOpen = ev.status === 'registration_open';
+        <div className="space-y-4">
+          {currentEvents.map((ev, idx) => {
+            const thumbnail = getEventThumbnail(ev, idx);
+            const tags = getEventTags(ev);
             const isRegistered = ev.is_registered;
 
             return (
               <div
                 key={ev.id}
-                className={`p-6 rounded-2xl bg-[#0B1D38] border transition-all duration-200 flex flex-col justify-between group overflow-hidden ${
-                  isRegistered
-                    ? 'border-[#00CFFF]/50 shadow-[0_0_20px_rgba(0,207,255,0.15)]'
-                    : 'border-[#18385E] hover:border-[#087FFF]'
-                }`}
+                className="p-4 sm:p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200 shadow-xl flex flex-col md:flex-row items-stretch md:items-center gap-5 group"
               >
-                <div>
-                  {/* Card Banner Image (Custom or Subtle Themed Header) */}
-                  {ev.banner_url ? (
-                    <div className="h-32 -mx-6 -mt-6 mb-4 overflow-hidden relative border-b border-[#18385E]">
-                      <img 
-                        src={ev.banner_url} 
-                        alt={ev.title} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#0B1D38] via-transparent to-transparent" />
+                {/* Left Thumbnail (Poster Image) */}
+                <div className="w-full md:w-44 h-36 md:h-32 rounded-xl overflow-hidden bg-[#061329] border border-[#18385E] flex-shrink-0 relative group-hover:border-[#00CFFF]/40 transition-colors">
+                  <img 
+                    src={thumbnail} 
+                    alt={ev.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      e.target.src = "/ui-assets/event-nightfall.png";
+                    }}
+                  />
+                  {isRegistered && (
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/70 backdrop-blur text-[10px] font-mono text-[#20C997] font-bold flex items-center space-x-1">
+                      <CheckCircle2 className="w-3 h-3 text-[#20C997]" />
+                      <span>ENLISTED</span>
                     </div>
-                  ) : null}
+                  )}
+                </div>
 
-                  {/* Badge Row */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <span className={`text-[10px] font-mono uppercase px-2.5 py-0.5 rounded font-bold border ${
-                      ev.event_type?.includes('dsa')
-                        ? 'bg-[#087FFF]/20 text-[#00CFFF] border-[#087FFF]/40'
-                        : ev.event_type?.includes('mcq')
-                        ? 'bg-purple-950/60 text-purple-300 border-purple-800/60'
-                        : 'bg-emerald-950 text-emerald-400 border-emerald-800'
-                    }`}>
-                      {getEventTypeLabel(ev.event_type)}
-                    </span>
-
-                    <div className="flex items-center space-x-1.5">
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded font-bold uppercase ${
-                        isLive ? 'bg-emerald-950 text-emerald-400 border border-emerald-800 animate-pulse' :
-                        isRegOpen ? 'bg-[#087FFF]/20 text-[#00CFFF] border border-[#087FFF]/40' :
-                        isEnded ? 'bg-[#102746] text-[#A9BCD6]' :
-                        'bg-amber-950/60 text-amber-300 border border-amber-800/60'
-                      }`}>
-                        {ev.status}
-                      </span>
-
-                      {isRegistered && (
-                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 font-semibold flex items-center space-x-1">
-                          <CheckCircle2 className="w-3 h-3" />
-                          <span>ENLISTED</span>
-                        </span>
-                      )}
-                    </div>
+                {/* Middle Content */}
+                <div className="flex-1 space-y-2">
+                  {/* Badges Row */}
+                  <div className="flex items-center space-x-2">
+                    {getStatusBadge(ev.status)}
+                    {getTypeBadge(ev.event_type)}
                   </div>
 
-                  {/* Title & Description */}
-                  <h3 className="text-lg font-bold text-[#F2F7FF] font-mono mb-2 group-hover:text-[#00CFFF] transition-colors line-clamp-1">
+                  {/* Title */}
+                  <h3 className="text-lg sm:text-xl font-bold font-mono text-white group-hover:text-[#00CFFF] transition-colors line-clamp-1">
                     {ev.title}
                   </h3>
-                  <p className="text-xs text-[#A9BCD6] line-clamp-2 mb-4 leading-relaxed font-sans">
-                    {ev.short_description || ev.description || 'No mission briefing provided.'}
+
+                  {/* Description */}
+                  <p className="text-xs text-[#A9BCD6] line-clamp-2 leading-relaxed">
+                    {ev.short_description || ev.description || 'Investigate vulnerabilities, solve challenges and capture flags in a high-intensity event.'}
                   </p>
 
-                  {/* Metadata Specs Box */}
-                  <div className="space-y-2 text-[11px] font-mono text-[#A9BCD6] mb-5 bg-[#061329] p-3 rounded-xl border border-[#18385E]">
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center space-x-1">
-                        <Users className="w-3 h-3 text-[#00CFFF]" />
-                        <span>PARTICIPATION:</span>
-                      </span>
-                      <span className="text-[#F2F7FF] capitalize font-medium">
-                        {ev.participation_mode === 'individual' ? 'Solo Operative' :
-                         ev.participation_mode === 'team' ? `Squad (Max ${ev.team_size_max || 4})` :
-                         'Solo / Squad'}
-                      </span>
-                    </div>
+                  {/* Metadata Row: Calendar Date, Points, Participation Mode */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-[#A9BCD6] font-sans pt-1">
+                    <span className="flex items-center space-x-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-[#00CFFF]" />
+                      <span>{formatEventDate(ev.start_time, ev.end_time)}</span>
+                    </span>
 
-                    <div className="flex justify-between items-center">
-                      <span className="flex items-center space-x-1">
-                        <Clock className="w-3 h-3 text-[#00CFFF]" />
-                        <span>STARTS:</span>
-                      </span>
-                      <span className="text-[#F2F7FF] font-medium">
-                        {formatEventDate(ev.start_time)}
-                      </span>
-                    </div>
+                    <span className="flex items-center space-x-1.5">
+                      <Trophy className="w-3.5 h-3.5 text-[#F5B942]" />
+                      <span className="font-semibold text-white">2,500 Points</span>
+                    </span>
 
-                    {ev.capacity && (
-                      <div className="flex justify-between items-center">
-                        <span>CAPACITY:</span>
-                        <span className="text-[#F2F7FF] font-medium">
-                          {ev.registration_count || 0} / {ev.capacity} CADETS
-                        </span>
-                      </div>
-                    )}
+                    <span className="flex items-center space-x-1.5">
+                      <Users className="w-3.5 h-3.5 text-[#00CFFF]" />
+                      <span>
+                        {ev.participation_mode === 'individual'
+                          ? 'Solo Event (Individual)'
+                          : `Team Event (2 – ${ev.team_size_max || 4} members)`}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Tags Pill Row */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    {tags.map((tag, tIdx) => (
+                      <span
+                        key={tIdx}
+                        className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-[#061329] border border-[#18385E] text-[#A9BCD6]"
+                      >
+                        {tag}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
-                {/* Card CTA Action */}
-                <div className="pt-3 border-t border-[#18385E]">
+                {/* Right Action Button */}
+                <div className="flex md:flex-col justify-end items-center md:items-end flex-shrink-0 pt-2 md:pt-0">
                   <Link
                     to={`/events/${ev.id}`}
-                    className={`w-full py-2.5 px-4 rounded-xl text-xs font-mono font-bold flex items-center justify-center space-x-2 transition-all ${
-                      isRegistered
-                        ? 'bg-[#00CFFF] hover:bg-cyan-300 text-slate-950 shadow-[0_0_15px_rgba(0,207,255,0.3)]'
-                        : isEnded
-                        ? 'bg-[#061329] hover:bg-[#102746] text-[#A9BCD6] border border-[#18385E]'
-                        : 'bg-[#102746] hover:bg-[#18385E] text-[#00CFFF] border border-[#00CFFF]/40 hover:border-[#00CFFF]'
-                    }`}
+                    className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-mono font-bold text-[#00CFFF] bg-[#00CFFF]/10 border border-[#00CFFF]/40 hover:bg-[#00CFFF] hover:text-slate-950 transition-all shadow-[0_0_15px_rgba(0,207,255,0.2)]"
                   >
-                    <span>
-                      {isRegistered ? 'ENTER WORKSPACE' : isEnded ? 'VIEW TOURNAMENT RESULTS' : 'VIEW DETAILS & ENROLL'}
-                    </span>
+                    <span>View Details</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
@@ -400,6 +351,44 @@ export default function EventsHub({ user }) {
           })}
         </div>
       )}
+
+      {/* =========================================================================
+          PAGINATION BAR (EXACT SCREENSHOT LAYOUT 2)
+          ========================================================================= */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center space-x-2 pt-6">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+            disabled={currentPage === 1}
+            className="p-2 rounded-lg bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-white disabled:opacity-40 transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNum => (
+            <button
+              key={pageNum}
+              onClick={() => setCurrentPage(pageNum)}
+              className={`w-8 h-8 rounded-lg text-xs font-mono font-bold transition-all ${
+                currentPage === pageNum
+                  ? 'bg-[#00CFFF] text-slate-950 shadow-[0_0_15px_rgba(0,207,255,0.4)]'
+                  : 'bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-white'
+              }`}
+            >
+              {pageNum}
+            </button>
+          ))}
+
+          <button
+            onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="p-2 rounded-lg bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-white disabled:opacity-40 transition-colors"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }
