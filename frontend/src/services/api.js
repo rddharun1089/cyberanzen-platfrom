@@ -154,6 +154,31 @@ export const eventService = {
   async getEventSubmissions(eventId) {
     const res = await apiClient.get(`/events/${eventId}/submissions`);
     return res.data;
+  },
+
+  async logActivity(eventId, payload) {
+    try {
+      const res = await apiClient.post(`/events/${eventId}/activity`, payload);
+      return res.data;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  async getMyActivity(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/my-activity`);
+    return res.data;
+  },
+
+  async getParticipantActivity(eventId, userId = null) {
+    const params = userId ? { user_id: userId } : {};
+    const res = await apiClient.get(`/events/${eventId}/participant-activity`, { params });
+    return res.data;
+  },
+
+  async completeEventSession(eventId) {
+    const res = await apiClient.post(`/events/${eventId}/complete`);
+    return res.data;
   }
 };
 

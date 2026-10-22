@@ -3,9 +3,10 @@ import {
   Calendar, Trophy, Plus, Users, Shield, Clock, 
   Trash2, CheckCircle2, AlertOctagon, Settings, Layers, Play,
   Image as ImageIcon, Upload, X, Smartphone, Monitor, ArrowUp, ArrowDown,
-  ArrowRight, ExternalLink, Copy, Shuffle, Lock, Unlock, HelpCircle, Code2, Flag
+  ArrowRight, ExternalLink, Copy, Shuffle, Lock, Unlock, HelpCircle, Code2, Flag,
+  Activity, RefreshCw
 } from 'lucide-react';
-import { adminService } from '../../services/api';
+import { adminService, eventService } from '../../services/api';
 import EventWizardModal from './EventWizardModal';
 
 export default function EventsManagementTab({ onOpenWizard, preselectedTemplate = null }) {
@@ -22,6 +23,12 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
   const [pointsOverrides, setPointsOverrides] = useState({});
   const [copySourceId, setCopySourceId] = useState('');
   const [savingReorder, setSavingReorder] = useState(false);
+
+  // Participant Journey Audit Trail Modal State
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [selectedUserFilter, setSelectedUserFilter] = useState('');
 
   // Question Experience State
   const [expForm, setExpForm] = useState({
@@ -228,6 +235,22 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
     }
   };
 
+  // Participant Audit Trail Modal Handler
+  const openActivityModal = async (ev, userId = null) => {
+    setTargetEvent(ev);
+    setSelectedUserFilter(userId || '');
+    setActivityModalOpen(true);
+    setLoadingActivity(true);
+    try {
+      const data = await eventService.getParticipantActivity(ev.id, userId);
+      setActivityLogs(data || []);
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to fetch event audit logs.');
+    } finally {
+      setLoadingActivity(false);
+    }
+  };
+
   // Banner Handlers
   const openBannerModal = (ev) => {
     setTargetEvent(ev);
@@ -407,6 +430,16 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
                       >
                         <ImageIcon className="w-3 h-3" />
                         <span>Banner</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openActivityModal(ev)}
+                        className="px-2 py-1 rounded bg-[#08172B] hover:bg-[#102746] text-amber-300 border border-amber-800/60 text-[10px] inline-flex items-center space-x-1"
+                        title="View Participant Audit Logs & Session Timeline"
+                      >
+                        <Activity className="w-3 h-3 text-amber-400" />
+                        <span>Audit Trail</span>
                       </button>
 
                       {/* Status quick toggles */}
@@ -906,6 +939,149 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
                   {bannerUploading ? 'Uploading...' : 'Save Banner'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 3: PARTICIPANT JOURNEY AUDIT TRAIL MODAL (ENTERING TO COMPLETION)
+          ========================================================================= */}
+      {activityModalOpen && targetEvent && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[85vh] bg-[#08172B] border border-[#18385E] rounded-2xl shadow-2xl flex flex-col p-6 space-y-4 font-mono text-xs overflow-hidden">
+            <div className="flex items-center justify-between border-b border-[#18385E] pb-3 shrink-0">
+              <div className="flex items-center space-x-2">
+                <Activity className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="text-white font-bold text-sm">
+                    PARTICIPANT JOURNEY AUDIT LOG // {targetEvent.title}
+                  </h3>
+                  <span className="text-[10px] text-[#A9BCD6]">
+                    Full chronological audit trail of all candidate actions from tournament entrance to challenge completion.
+                  </span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setActivityModalOpen(false)}
+                className="p-1 rounded-lg bg-[#061329] hover:bg-[#102746] text-[#A9BCD6] hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Controls Bar: Filter & Refresh */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-[#061329] p-3 rounded-xl border border-[#18385E] shrink-0">
+              <div className="flex items-center space-x-2">
+                <span className="text-[#A9BCD6] text-[11px]">Filter Operative:</span>
+                <select
+                  value={selectedUserFilter}
+                  onChange={(e) => {
+                    const u = e.target.value;
+                    setSelectedUserFilter(u);
+                    openActivityModal(targetEvent, u ? parseInt(u) : null);
+                  }}
+                  className="px-2.5 py-1 bg-[#08172B] border border-[#18385E] rounded-lg text-white text-xs focus:border-[#00CFFF] focus:outline-none"
+                >
+                  <option value="">All Participants ({activityLogs.length} events)</option>
+                  {Array.from(new Set(activityLogs.map(l => l.username).filter(Boolean))).map(u => (
+                    <option key={u} value={activityLogs.find(l => l.username === u)?.user_id}>
+                      Operative: {u}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => openActivityModal(targetEvent, selectedUserFilter ? parseInt(selectedUserFilter) : null)}
+                disabled={loadingActivity}
+                className="px-3 py-1 rounded-lg bg-[#08172B] hover:bg-[#102746] border border-[#18385E] text-[#00CFFF] text-xs flex items-center space-x-1"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingActivity ? 'animate-spin' : ''}`} />
+                <span>Refresh Log</span>
+              </button>
+            </div>
+
+            {/* Audit Log Timeline Body */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {loadingActivity ? (
+                <div className="py-16 text-center text-[#A9BCD6]">
+                  Loading participant activity logs...
+                </div>
+              ) : activityLogs.length === 0 ? (
+                <div className="py-16 text-center text-[#A9BCD6] space-y-2">
+                  <Clock className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p>No activity recorded yet for this event.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-[#18385E]/50 rounded-xl border border-[#18385E] overflow-hidden bg-[#061329]">
+                  {activityLogs.map((log) => {
+                    const isSolved = log.action === 'SOLVED';
+                    const isCompleted = log.action === 'EVENT_COMPLETED';
+                    const isSubmit = log.action === 'SUBMIT_CODE';
+                    const isRun = log.action === 'RUN_SAMPLE';
+                    const isAlert = log.action === 'SECURITY_ALERT';
+
+                    const badgeStyle = (
+                      isCompleted ? 'bg-cyan-950 text-[#00CFFF] border-cyan-800' :
+                      isSolved ? 'bg-emerald-950 text-[#20C997] border-emerald-800' :
+                      isSubmit ? (log.status === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-rose-950 text-rose-300 border-rose-800') :
+                      isRun ? 'bg-teal-950 text-teal-300 border-teal-800' :
+                      isAlert ? 'bg-amber-950 text-amber-300 border-amber-800' :
+                      'bg-[#08172B] text-slate-300 border-[#18385E]'
+                    );
+
+                    return (
+                      <div key={log.id} className="p-3 hover:bg-[#102746]/40 transition-colors flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-white font-bold">{log.username || `User #${log.user_id}`}</span>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${badgeStyle}`}>
+                              {log.action.replace('_', ' ')}
+                            </span>
+                            {log.entity_title && (
+                              <span className="text-slate-300 text-[11px] truncate max-w-[260px]">
+                                • {log.entity_title}
+                              </span>
+                            )}
+                          </div>
+                          {log.details && (
+                            <p className="text-[11px] text-[#A9BCD6] font-sans leading-relaxed">
+                              {log.details}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className="text-[10px] text-slate-400 font-mono block">
+                            {log.time_display || log.timestamp}
+                          </span>
+                          <span className={`text-[9px] font-bold uppercase ${
+                            log.status === 'ACCEPTED' || log.status === 'SUCCESS' ? 'text-emerald-400' :
+                            log.status === 'WRONG_ANSWER' || log.status === 'ERROR' ? 'text-rose-400' :
+                            log.status === 'WARNING' ? 'text-amber-400' : 'text-slate-400'
+                          }`}>
+                            {log.status}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-2 border-t border-[#18385E] flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setActivityModalOpen(false)}
+                className="px-5 py-1.5 rounded-lg text-xs font-mono font-bold bg-[#102746] hover:bg-[#18385E] text-white"
+              >
+                Close Audit Viewer
+              </button>
             </div>
           </div>
         </div>

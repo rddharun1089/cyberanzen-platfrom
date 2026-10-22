@@ -6,8 +6,9 @@ from sqlalchemy import or_
 import json
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 from app.db.session import get_db
-from app.db.models import DSAQuestion, DSATestCase, Submission, User, ChallengeStatus, Verdict, Event, EventDSAQuestion, Solve, EventStatus
+from app.db.models import DSAQuestion, DSATestCase, Submission, User, ChallengeStatus, Verdict, Event, EventDSAQuestion, Solve, EventStatus, EventActivityLog
 from app.api.deps import get_current_user
 from app.judge.worker import evaluate_submission
 from app.services.scoring_service import ScoringService
@@ -35,6 +36,7 @@ def check_cooldown_and_size(user_id: int, source_code: str):
 class RunCodeRequest(BaseModel):
     language: str  # python3, cpp, c
     source_code: str
+    event_id: Optional[int] = None
 
 class SubmitCodeRequest(BaseModel):
     language: str
@@ -170,6 +172,24 @@ def run_sample_code(
         reveal_failed_tests=bool(q.reveal_failed_tests)
     )
 
+    if getattr(req, "event_id", None):
+        try:
+            db.add(EventActivityLog(
+                event_id=req.event_id,
+                user_id=current_user.id,
+                username=current_user.username,
+                action="RUN_SAMPLE",
+                entity_type="dsa_question",
+                entity_id=str(q.id),
+                entity_title=q.title,
+                status=res.get("verdict", "SAMPLE_TESTED"),
+                details=f"Language: {req.language}. Tested {len(samples)} public samples in {res.get('execution_time_ms', 0)}ms.",
+                created_at=datetime.now(timezone.utc)
+            ))
+            db.commit()
+        except Exception:
+            pass
+
     return res
 
 @router.post("/{identifier}/submit")
@@ -286,6 +306,64 @@ def submit_solution(
             submission=sub,
             event=event
         )
+
+    # Automatic Event Journey Audit Trail Logging
+    if event:
+        try:
+            # 1. Log submission attempt
+            db.add(EventActivityLog(
+                event_id=event.id,
+                user_id=current_user.id,
+                username=current_user.username,
+                action="SUBMIT_CODE",
+                entity_type="dsa_question",
+                entity_id=str(q.id),
+                entity_title=q.title,
+                status=verdict_str,
+                details=f"Language: {req.language}. Executed in {eval_res.get('execution_time_ms', 0)}ms. Awarded: {awarded_points} PTS.",
+                created_at=datetime.now(timezone.utc)
+            ))
+
+            # 2. If accepted, log challenge solve
+            if verdict_str == Verdict.ACCEPTED.value:
+                db.add(EventActivityLog(
+                    event_id=event.id,
+                    user_id=current_user.id,
+                    username=current_user.username,
+                    action="SOLVED",
+                    entity_type="dsa_question",
+                    entity_id=str(q.id),
+                    entity_title=q.title,
+                    status="ACCEPTED",
+                    details=f"Challenge '{q.title}' solved! Awarded +{points_to_award} points.",
+                    created_at=datetime.now(timezone.utc)
+                ))
+
+                # 3. Check if all tournament challenges are now completed!
+                total_assigned = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).count()
+                if total_assigned > 0:
+                    solves_count = db.query(Solve).filter(
+                        Solve.event_id == event.id,
+                        Solve.user_id == current_user.id,
+                        Solve.challenge_type == "dsa"
+                    ).count()
+                    if solves_count >= total_assigned:
+                        db.add(EventActivityLog(
+                            event_id=event.id,
+                            user_id=current_user.id,
+                            username=current_user.username,
+                            action="EVENT_COMPLETED",
+                            entity_type="event",
+                            entity_id=str(event.id),
+                            entity_title=event.title,
+                            status="SUCCESS",
+                            details=f"Candidate completed all {total_assigned} challenges in the event! Tournament session finished.",
+                            created_at=datetime.now(timezone.utc)
+                        ))
+
+            db.commit()
+        except Exception:
+            pass
 
     return {
         "submission_id": sub.id,

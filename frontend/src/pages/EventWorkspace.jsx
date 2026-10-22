@@ -8,7 +8,7 @@ import {
   Flag, Settings, Crown, ChevronRight, Award, Sparkles, CheckSquare,
   Smartphone, RotateCcw, Send, ShieldAlert, Calendar, UserPlus,
   Copy, LogOut, ExternalLink, X, ChevronDown, ChevronUp, AlertCircle,
-  ChevronLeft, Maximize2, Minimize2, List
+  ChevronLeft, Maximize2, Minimize2, List, Eye, LogIn, History, Activity
 } from 'lucide-react';
 import { eventService, labService, challengeService, questionService, dsaService, authService, mcqService, teamService } from '../services/api';
 
@@ -54,6 +54,9 @@ export default function EventWorkspace({ user }) {
   const [selectedTestCaseIndex, setSelectedTestCaseIndex] = useState(0);
   const [showProblemMatrix, setShowProblemMatrix] = useState(false);
   const [editorHeightMode, setEditorHeightMode] = useState('split'); // 'split' | 'max_editor' | 'max_terminal'
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [loadingActivityLogs, setLoadingActivityLogs] = useState(false);
+  const [completingEvent, setCompletingEvent] = useState(false);
 
   // CTF interactive state
   const [selectedChallenge, setSelectedChallenge] = useState(null);
@@ -99,6 +102,13 @@ export default function EventWorkspace({ user }) {
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
   }, [event?.end_time]);
+
+  // Load session activity log whenever visiting progress tab
+  useEffect(() => {
+    if (activeTab === 'progress') {
+      loadActivityLogs();
+    }
+  }, [activeTab]);
 
   // Anti-cheat keyboard and clipboard listener
   useEffect(() => {
@@ -174,6 +184,14 @@ export default function EventWorkspace({ user }) {
       ]);
       setEvent(evDetail);
       setConfig(evConfig);
+
+      // Log event entrance audit milestone
+      eventService.logActivity(targetEventId, {
+        action: 'EVENT_ENTERED',
+        entity_type: 'event',
+        entity_title: evDetail.title,
+        details: `Operative entered tournament arena workspace for "${evDetail.title}".`
+      });
 
       const evType = (evConfig.event_type || '').toLowerCase();
       const hasDsa = evConfig.has_dsa || evType.includes('dsa') || ['combined', 'all'].includes(evType);
@@ -325,6 +343,42 @@ export default function EventWorkspace({ user }) {
       return;
     }
     setSelectedQuestion(q);
+    if (targetEventId) {
+      eventService.logActivity(targetEventId, {
+        action: 'PROBLEM_VIEWED',
+        entity_type: 'dsa_question',
+        entity_id: String(q.id),
+        entity_title: q.title,
+        details: `Operative inspected ${q.category} challenge: ${q.title} (${q.points} PTS).`
+      });
+    }
+  };
+
+  const loadActivityLogs = async () => {
+    if (!targetEventId) return;
+    setLoadingActivityLogs(true);
+    try {
+      const data = await eventService.getMyActivity(targetEventId);
+      setActivityLogs(data || []);
+    } catch (e) {
+      console.error('Failed to load activity logs:', e);
+    } finally {
+      setLoadingActivityLogs(false);
+    }
+  };
+
+  const handleCompleteSession = async () => {
+    if (!window.confirm('Are you sure you want to finalize and conclude your event session? Your final score, challenges completed, and audit trail will be permanently recorded.')) return;
+    setCompletingEvent(true);
+    try {
+      const res = await eventService.completeEventSession(targetEventId);
+      await loadActivityLogs();
+      alert(`Event tournament session successfully finalized!\nTotal Challenges Solved: ${res.solves_count}\nFinal Score: ${res.points_earned} PTS`);
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Failed to complete event session.');
+    } finally {
+      setCompletingEvent(false);
+    }
   };
 
   const currentQIndex = questions.findIndex(q => q.id === selectedQuestion?.id);
@@ -2455,6 +2509,118 @@ export default function EventWorkspace({ user }) {
                       );
                     })}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* Session Audit Log & Chronological Journey Timeline (From Entering to Completion) */}
+            <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+              <div className="flex flex-wrap justify-between items-center border-b border-[#18385E] pb-3 gap-2">
+                <div className="flex items-center space-x-2">
+                  <Activity className="w-4 h-4 text-[#00CFFF]" />
+                  <h3 className="text-sm font-bold text-white tracking-wider">
+                    OPERATIVE EVENT AUDIT LOG // SESSION TIMELINE
+                  </h3>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  <button
+                    onClick={loadActivityLogs}
+                    disabled={loadingActivityLogs}
+                    className="px-3 py-1.5 rounded-lg bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-slate-300 hover:text-white transition-colors text-[10px] flex items-center space-x-1"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingActivityLogs ? 'animate-spin text-[#00CFFF]' : ''}`} />
+                    <span>Refresh Trail</span>
+                  </button>
+
+                  <button
+                    onClick={handleCompleteSession}
+                    disabled={completingEvent}
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 font-bold transition-colors text-[10px] flex items-center space-x-1 shadow-[0_0_10px_rgba(32,201,151,0.2)]"
+                  >
+                    <Award className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>{completingEvent ? 'Finalizing...' : 'Finalize & Complete Event'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-[#A9BCD6] leading-relaxed">
+                Immutable chronological log documenting your complete progression journey from entering the tournament arena to challenge inspection, sandbox testing, evaluations, and final completion.
+              </p>
+
+              {activityLogs.length === 0 ? (
+                <div className="py-10 text-center text-[#A9BCD6] space-y-2">
+                  <Clock className="w-8 h-8 text-slate-600 mx-auto" />
+                  <p className="text-xs">
+                    Recording session milestones... As you navigate challenges, test sample inputs, and submit code, each action is logged here in chronological order.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative pl-6 space-y-3 before:content-[''] before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#18385E]">
+                  {activityLogs.map((log, idx) => {
+                    const isEntered = log.action === 'EVENT_ENTERED';
+                    const isViewed = log.action === 'PROBLEM_VIEWED';
+                    const isRun = log.action === 'RUN_SAMPLE';
+                    const isSubmit = log.action === 'SUBMIT_CODE';
+                    const isSolved = log.action === 'SOLVED';
+                    const isCompleted = log.action === 'EVENT_COMPLETED';
+                    const isAlert = log.action === 'SECURITY_ALERT';
+
+                    const dotColor = (
+                      isSolved || isCompleted ? 'bg-emerald-400 ring-4 ring-emerald-500/20' :
+                      isSubmit ? (log.status === 'ACCEPTED' ? 'bg-emerald-400' : 'bg-rose-400') :
+                      isRun ? 'bg-teal-400' :
+                      isAlert ? 'bg-amber-400' :
+                      isViewed ? 'bg-[#00CFFF]' :
+                      'bg-[#087FFF]'
+                    );
+
+                    const badgeStyle = (
+                      isCompleted ? 'bg-cyan-950 text-[#00CFFF] border-cyan-800' :
+                      isSolved ? 'bg-emerald-950 text-[#20C997] border-emerald-800' :
+                      isSubmit ? (log.status === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-rose-950 text-rose-300 border-rose-800') :
+                      isRun ? 'bg-teal-950 text-teal-300 border-teal-800' :
+                      isAlert ? 'bg-amber-950 text-amber-300 border-amber-800' :
+                      'bg-[#061329] text-slate-300 border-[#18385E]'
+                    );
+
+                    return (
+                      <div key={log.id || idx} className="relative group">
+                        {/* Dot on timeline wire */}
+                        <div className={`absolute -left-[19px] top-3.5 w-2.5 h-2.5 rounded-full transition-transform group-hover:scale-125 ${dotColor}`} />
+
+                        <div className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF]/40 transition-colors space-y-1.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${badgeStyle}`}>
+                                {log.action.replace('_', ' ')}
+                              </span>
+                              {log.entity_title && (
+                                <span className="text-white font-bold text-xs truncate max-w-[280px]">
+                                  {log.entity_title}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center space-x-2 text-[10px] text-[#A9BCD6] font-mono">
+                              <span>{log.time_display || log.timestamp?.slice(11, 19)}</span>
+                              {log.elapsed_seconds !== undefined && (
+                                <span className="text-[#00CFFF]">
+                                  (+{Math.floor(log.elapsed_seconds / 60)}m {log.elapsed_seconds % 60}s)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {log.details && (
+                            <p className="text-[11px] text-slate-300 leading-relaxed font-sans">
+                              {log.details}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

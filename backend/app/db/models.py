@@ -726,6 +726,25 @@ class SecurityIncident(Base):
     resolved = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
+class EventActivityLog(Base):
+    __tablename__ = "event_activity_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    username = Column(String(100), nullable=True)
+    action = Column(String(100), nullable=False, index=True)  # EVENT_ENTERED, PROBLEM_VIEWED, RUN_SAMPLE, SUBMIT_CODE, SOLVED, TAB_SWITCH, SECURITY_ALERT, EVENT_COMPLETED
+    entity_type = Column(String(50), nullable=True)  # dsa_question, ctf_challenge, mcq, event
+    entity_id = Column(String(50), nullable=True)
+    entity_title = Column(String(200), nullable=True)
+    status = Column(String(50), default="INFO", nullable=False)  # INFO, SUCCESS, WARNING, ERROR, ACCEPTED, WRONG_ANSWER
+    details = Column(Text, nullable=True)
+    ip_address = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+
+    event = relationship("Event")
+    user = relationship("User")
+
 class Notification(Base):
     __tablename__ = "notifications"
 

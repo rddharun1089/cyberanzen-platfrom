@@ -10,7 +10,7 @@ from app.db.session import get_db
 from app.db.models import (
     Event, EventRegistration, Team, Solve, User, EventStatus, ParticipationMode, EventType,
     DSAQuestion, CTFChallenge, MCQQuestion, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
-    Submission, DSATestCase
+    Submission, DSATestCase, EventActivityLog
 )
 from app.api.deps import get_current_user, get_optional_current_user
 
@@ -18,6 +18,14 @@ router = APIRouter(prefix="/events", tags=["Events & Competitions"])
 
 class RegisterEventRequest(BaseModel):
     selected_mode: Optional[str] = "individual"
+
+class LogActivityRequest(BaseModel):
+    action: str  # EVENT_ENTERED, PROBLEM_VIEWED, RUN_SAMPLE, SUBMIT_CODE, SOLVED, TAB_SWITCH, SECURITY_ALERT, EVENT_COMPLETED
+    entity_type: Optional[str] = "event"  # dsa_question, ctf_challenge, mcq, event, workspace
+    entity_id: Optional[str] = None
+    entity_title: Optional[str] = None
+    status: Optional[str] = "INFO"  # INFO, SUCCESS, WARNING, ERROR, ACCEPTED, WRONG_ANSWER
+    details: Optional[str] = None
 
 def serialize_event(e: Event, current_user: Optional[User] = None, db: Optional[Session] = None) -> dict:
     reg_count = len(e.registrations) if e.registrations else 0
@@ -642,4 +650,180 @@ def get_event_submissions(
             "created_at": s.created_at
         })
     return results
+
+# ==============================================================================
+# PARTICIPANT AUDIT TRAIL & EVENT USER JOURNEY LOGGING
+# ==============================================================================
+
+@router.post("/{event_id}/activity")
+def log_event_activity(
+    event_id: str,
+    req: LogActivityRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    now = datetime.now(timezone.utc)
+
+    # Dedup consecutive duplicate views within 10 seconds to avoid flooding
+    if req.action in ("PROBLEM_VIEWED", "EVENT_ENTERED", "TAB_SWITCH"):
+        recent = db.query(EventActivityLog).filter(
+            EventActivityLog.event_id == event.id,
+            EventActivityLog.user_id == current_user.id,
+            EventActivityLog.action == req.action,
+            EventActivityLog.entity_id == (str(req.entity_id) if req.entity_id else None)
+        ).order_by(EventActivityLog.id.desc()).first()
+        if recent and (now - recent.created_at).total_seconds() < 10:
+            return {"status": "DEDUPED", "id": recent.id, "message": "Recent duplicate activity suppressed."}
+
+    activity = EventActivityLog(
+        event_id=event.id,
+        user_id=current_user.id,
+        username=current_user.username,
+        action=req.action,
+        entity_type=req.entity_type,
+        entity_id=str(req.entity_id) if req.entity_id else None,
+        entity_title=req.entity_title,
+        status=req.status or "INFO",
+        details=req.details,
+        created_at=now
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+
+    return {"status": "LOGGED", "id": activity.id, "created_at": activity.created_at}
+
+@router.get("/{event_id}/my-activity")
+def get_my_event_activity(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    logs = db.query(EventActivityLog).filter(
+        EventActivityLog.event_id == event.id,
+        EventActivityLog.user_id == current_user.id
+    ).order_by(EventActivityLog.created_at.asc()).all()
+
+    first_log = logs[0] if logs else None
+    start_time = first_log.created_at if first_log else None
+
+    return [
+        {
+            "id": l.id,
+            "action": l.action,
+            "entity_type": l.entity_type,
+            "entity_id": l.entity_id,
+            "entity_title": l.entity_title,
+            "status": l.status,
+            "details": l.details,
+            "timestamp": l.created_at.isoformat(),
+            "time_display": l.created_at.strftime("%H:%M:%S"),
+            "elapsed_seconds": int((l.created_at - start_time).total_seconds()) if start_time else 0
+        }
+        for l in logs
+    ]
+
+@router.get("/{event_id}/participant-activity")
+def get_participant_activity_admin(
+    event_id: str,
+    user_id: Optional[int] = Query(None),
+    limit: int = Query(250),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    is_admin = getattr(current_user, "role", "").lower() in ("super_admin", "admin", "event_admin", "auditor")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Only platform administrators and auditors can inspect participant audit logs.")
+
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    q = db.query(EventActivityLog).filter(EventActivityLog.event_id == event.id)
+    if user_id:
+        q = q.filter(EventActivityLog.user_id == user_id)
+
+    logs = q.order_by(EventActivityLog.created_at.desc()).limit(limit).all()
+
+    return [
+        {
+            "id": l.id,
+            "user_id": l.user_id,
+            "username": l.username,
+            "action": l.action,
+            "entity_type": l.entity_type,
+            "entity_id": l.entity_id,
+            "entity_title": l.entity_title,
+            "status": l.status,
+            "details": l.details,
+            "timestamp": l.created_at.isoformat(),
+            "time_display": l.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        for l in logs
+    ]
+
+@router.post("/{event_id}/complete")
+def complete_event_session(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    solves = db.query(Solve).filter(
+        Solve.event_id == event.id,
+        Solve.user_id == current_user.id
+    ).all()
+
+    solves_count = len(solves)
+    points_earned = sum(s.points_awarded for s in solves)
+
+    log = EventActivityLog(
+        event_id=event.id,
+        user_id=current_user.id,
+        username=current_user.username,
+        action="EVENT_COMPLETED",
+        entity_type="event",
+        entity_id=str(event.id),
+        entity_title=event.title,
+        status="SUCCESS",
+        details=f"Candidate finished tournament session. Total challenges solved: {solves_count}. Points earned: {points_earned}.",
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(log)
+    db.commit()
+
+    return {
+        "status": "COMPLETED",
+        "event_id": event.id,
+        "solves_count": solves_count,
+        "points_earned": points_earned,
+        "completed_at": log.created_at
+    }
 

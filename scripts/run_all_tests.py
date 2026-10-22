@@ -29,6 +29,7 @@ def main():
         os.path.join(base_dir, "tests", "test_combined_events_and_banners.py"),
         os.path.join(base_dir, "tests", "test_competition_studio_and_event_workspace.py"),
         os.path.join(base_dir, "tests", "test_admin_studio_event_attribution.py"),
+        os.path.join(base_dir, "tests", "test_event_journey_audit_log.py"),
     ]
 
     cmd = [pytest_bin] + test_files + ["-v"]
