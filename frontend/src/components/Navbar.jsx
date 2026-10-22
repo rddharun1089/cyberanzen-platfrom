@@ -22,6 +22,8 @@ export default function Navbar({ user, onLogout }) {
     ['super_admin', 'event_admin', 'challenge_author', 'admin'].includes(user.role?.toLowerCase())
   );
 
+  const isAuthPage = ['/login', '/register'].includes(location.pathname);
+
   const scrollToSection = (sectionId) => {
     setMobileMenuOpen(false);
     if (location.pathname === '/') {
@@ -73,16 +75,18 @@ export default function Navbar({ user, onLogout }) {
             </>
           )}
 
-          <Link
-            to="/events"
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
-              location.pathname.startsWith('/events')
-                ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
-                : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#07182B]'
-            }`}
-          >
-            <span>Events</span>
-          </Link>
+          {!isAuthPage && (
+            <Link
+              to="/events"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
+                location.pathname.startsWith('/events')
+                  ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
+                  : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#07182B]'
+              }`}
+            >
+              <span>Events</span>
+            </Link>
+          )}
 
           {user && isAdmin && (
             <Link
@@ -102,14 +106,16 @@ export default function Navbar({ user, onLogout }) {
         {/* User Account / Sign In & Sign Up Controls */}
         <div className="hidden md:flex items-center space-x-3">
           {/* Search Button */}
-          <button
-            onClick={() => navigate('/events')}
-            className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] hover:border-[#00CFFF]/40 transition-colors"
-            title="Search competitions"
-            aria-label="Search"
-          >
-            <Search className="w-4 h-4" />
-          </button>
+          {!isAuthPage && (
+            <button
+              onClick={() => navigate('/events')}
+              className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] hover:border-[#00CFFF]/40 transition-colors"
+              title="Search competitions"
+              aria-label="Search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
 
           {user ? (
             <div className="relative">
@@ -193,13 +199,15 @@ export default function Navbar({ user, onLogout }) {
 
         {/* Mobile Action Controls */}
         <div className="flex md:hidden items-center space-x-2">
-          <button
-            onClick={() => navigate('/events')}
-            className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF]"
-            aria-label="Search"
-          >
-            <Search className="w-4 h-4" />
-          </button>
+          {!isAuthPage && (
+            <button
+              onClick={() => navigate('/events')}
+              className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF]"
+              aria-label="Search"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#F2F7FF]"
@@ -239,13 +247,15 @@ export default function Navbar({ user, onLogout }) {
               </button>
             </>
           )}
-          <Link
-            to="/events"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block px-3 py-2 rounded-xl text-sm font-medium text-[#00CFFF] hover:bg-[#102746]"
-          >
-            Events
-          </Link>
+          {!isAuthPage && (
+            <Link
+              to="/events"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-3 py-2 rounded-xl text-sm font-medium text-[#00CFFF] hover:bg-[#102746]"
+            >
+              Events
+            </Link>
+          )}
 
           <div className="pt-4 border-t border-[#18385E] flex flex-col gap-2">
             {user ? (
