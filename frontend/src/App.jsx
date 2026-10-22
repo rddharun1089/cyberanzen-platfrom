@@ -104,11 +104,11 @@ export default function App() {
             <Route path="/creator" element={<Landing user={user} />} />
             <Route
               path="/dashboard"
-              element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
+              element={<Navigate to="/events" replace />}
             />
 
-            {/* Challenge Arena & Individual Workspaces */}
-            <Route path="/arena" element={<ChallengeArena />} />
+            {/* Legacy redirect to Events Hub */}
+            <Route path="/arena" element={<Navigate to="/events" replace />} />
             <Route path="/ctf/:identifier" element={<CTFWorkspace />} />
             <Route path="/dsa/:identifier" element={<DSAWorkspace />} />
             <Route path="/mcq/:id" element={<MCQWorkspace />} />
@@ -149,9 +149,9 @@ export default function App() {
             <Route path="/register" element={<Register onLoginSuccess={handleLoginSuccess} />} />
 
             {/* Legacy Backward Compatibility Fallbacks */}
-            <Route path="/challenges" element={<Navigate to="/arena" />} />
-            <Route path="/archive" element={<Navigate to="/arena" />} />
-            <Route path="/cases/:caseId" element={<Navigate to="/arena?tab=dsa" />} />
+            <Route path="/challenges" element={<Navigate to="/events" replace />} />
+            <Route path="/archive" element={<Navigate to="/events" replace />} />
+            <Route path="/cases/:caseId" element={<Navigate to="/events" replace />} />
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/" />} />

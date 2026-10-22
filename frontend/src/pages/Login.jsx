@@ -22,7 +22,7 @@ export default function Login({ onLoginSuccess }) {
       if (['super_admin', 'event_admin', 'challenge_author', 'admin'].includes(data.role?.toLowerCase())) {
         navigate('/admin');
       } else {
-        navigate('/dashboard');
+        navigate('/events');
       }
     } catch (err) {
       setError(err.response?.data?.detail || 'Invalid clearance credentials or passphrase.');

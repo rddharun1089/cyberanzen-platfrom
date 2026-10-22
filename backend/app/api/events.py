@@ -233,7 +233,7 @@ def get_event_workspace_config(
 
     ev_type = (event.event_type or "ctf").lower()
     part_mode = (event.participation_mode or "individual").lower()
-    is_team_mode = part_mode in ("team", "mixed")
+    is_team_mode = part_mode in ("team", "mixed", "any")
 
     has_dsa = "dsa" in ev_type or ev_type in ("combined", "all")
     has_ctf = "ctf" in ev_type or ev_type in ("combined", "all")

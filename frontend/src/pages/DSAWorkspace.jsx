@@ -169,7 +169,7 @@ export default function DSAWorkspace() {
       <div className="h-14 px-4 border-b border-slate-800 bg-slate-900/80 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-3">
           <Link
-            to="/arena?tab=dsa"
+            to="/events"
             className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />

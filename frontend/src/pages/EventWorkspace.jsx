@@ -6,9 +6,10 @@ import {
   ArrowRight, CheckCircle2, AlertOctagon, Clock, Flame, Play, 
   RefreshCw, FileText, BarChart2, Check, Lock, Key, AlertTriangle,
   Flag, Settings, Crown, ChevronRight, Award, Sparkles, CheckSquare,
-  Smartphone, RotateCcw, Send, ShieldAlert, Calendar
+  Smartphone, RotateCcw, Send, ShieldAlert, Calendar, UserPlus,
+  Copy, LogOut, ExternalLink, X
 } from 'lucide-react';
-import { eventService, labService, challengeService, questionService, dsaService, authService, mcqService } from '../services/api';
+import { eventService, labService, challengeService, questionService, dsaService, authService, mcqService, teamService } from '../services/api';
 
 export default function EventWorkspace({ user }) {
   const { eventId, id, tab } = useParams();
@@ -24,6 +25,17 @@ export default function EventWorkspace({ user }) {
   const [mcqs, setMcqs] = useState([]);
   const [leaderboard, setLeaderboard] = useState(null);
   const [userSubmissions, setUserSubmissions] = useState([]);
+
+  // Squad / Team interactive state
+  const [userTeam, setUserTeam] = useState(null);
+  const [squadName, setSquadName] = useState('');
+  const [joinSquadCode, setJoinSquadCode] = useState('');
+  const [squadLoading, setSquadLoading] = useState(false);
+  const [squadError, setSquadError] = useState('');
+  const [squadSuccess, setSquadSuccess] = useState('');
+  const [copiedSquadCode, setCopiedSquadCode] = useState(false);
+  const [squadSubTab, setSquadSubTab] = useState('commission');
+  const [showRegistrationModal, setShowRegistrationModal] = useState(false);
 
   // DSA interactive state (Existing Console Integration)
   const [selectedQuestion, setSelectedQuestion] = useState(null);
@@ -197,6 +209,18 @@ export default function EventWorkspace({ user }) {
         const subData = await eventService.getEventSubmissions(targetEventId).catch(() => []);
         setUserSubmissions(subData || []);
       }
+
+      // Load user team state if logged in
+      try {
+        const teamRes = await teamService.getMyTeam();
+        if (teamRes && teamRes.has_team && teamRes.team) {
+          setUserTeam(teamRes.team);
+        } else {
+          setUserTeam(null);
+        }
+      } catch {
+        setUserTeam(null);
+      }
     } catch (err) {
       console.error('Failed to load event workspace:', err);
     } finally {
@@ -208,8 +232,61 @@ export default function EventWorkspace({ user }) {
     try {
       await eventService.registerEvent(targetEventId, mode);
       await loadEventData();
+      setShowRegistrationModal(true);
     } catch (err) {
       alert(err.response?.data?.detail || 'Registration failed.');
+    }
+  };
+
+  const handleCreateSquad = async (e) => {
+    e.preventDefault();
+    if (!squadName.trim()) return;
+    setSquadLoading(true);
+    setSquadError('');
+    setSquadSuccess('');
+    try {
+      const res = await teamService.createTeam(squadName.trim(), event?.team_size_max || 4, targetEventId);
+      setSquadSuccess(`Squad "${res.team?.name || squadName}" successfully commissioned!`);
+      setSquadName('');
+      await loadEventData();
+    } catch (err) {
+      setSquadError(err.response?.data?.detail || 'Failed to create squad.');
+    } finally {
+      setSquadLoading(false);
+    }
+  };
+
+  const handleJoinSquad = async (e) => {
+    e.preventDefault();
+    if (!joinSquadCode.trim()) return;
+    setSquadLoading(true);
+    setSquadError('');
+    setSquadSuccess('');
+    try {
+      const res = await teamService.joinTeam(joinSquadCode.trim());
+      setSquadSuccess(`Enlisted in squad "${res.team?.name || 'Squad'}" successfully!`);
+      setJoinSquadCode('');
+      await loadEventData();
+    } catch (err) {
+      setSquadError(err.response?.data?.detail || 'Failed to join squad. Please verify invitation token.');
+    } finally {
+      setSquadLoading(false);
+    }
+  };
+
+  const handleLeaveSquad = async () => {
+    if (!window.confirm('Are you sure you want to leave your squad?')) return;
+    setSquadLoading(true);
+    setSquadError('');
+    setSquadSuccess('');
+    try {
+      await teamService.leaveTeam();
+      setSquadSuccess('You have left the squad.');
+      await loadEventData();
+    } catch (err) {
+      setSquadError(err.response?.data?.detail || 'Failed to leave squad.');
+    } finally {
+      setSquadLoading(false);
     }
   };
 
@@ -528,13 +605,20 @@ export default function EventWorkspace({ user }) {
           WORKSPACE NAVIGATION TABS (EXACT SCREENSHOT 3 BAR)
           ========================================================================= */}
       <div className="flex items-center border-b border-[#18385E] gap-6 font-sans text-xs">
-        {[
-          { id: 'overview', label: 'Overview' },
-          ...(config.tabs.filter(t => t.id !== 'overview').map(t => {
-            if (t.id === 'squad') return { id: 'squad', label: 'Team' };
-            return t;
-          }))
-        ].map(tab => {
+        {(() => {
+          const tabList = [
+            { id: 'overview', label: 'Overview' },
+            ...(config.tabs.filter(t => t.id !== 'overview').map(t => {
+              if (t.id === 'squad') return { id: 'squad', label: 'Team' };
+              return t;
+            }))
+          ];
+          const isTeamAllowed = ['team', 'mixed', 'any'].includes(event?.participation_mode?.toLowerCase()) || config?.has_teams;
+          if (isTeamAllowed && !tabList.some(t => t.id === 'squad')) {
+            tabList.splice(1, 0, { id: 'squad', label: 'Team' });
+          }
+          return tabList;
+        })().map(tab => {
           const isActive = activeTab === tab.id;
           return (
             <button
@@ -669,41 +753,61 @@ export default function EventWorkspace({ user }) {
                     onClick={() => setActiveTab('squad')}
                     className="inline-flex items-center space-x-1 text-xs font-mono text-[#00CFFF] hover:underline"
                   >
-                    <span>Manage</span>
+                    <span>{userTeam ? 'Manage' : 'Configure'}</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* Team Box Header */}
-                <div className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between">
-                  <div className="flex items-center space-x-2.5">
-                    <Shield className="w-5 h-5 text-[#F5B942]" />
-                    <span className="text-xs font-bold text-white">Shadow Byte</span>
-                  </div>
-                  <span className="text-[11px] text-[#A9BCD6] font-mono">4 / 4 Members</span>
-                </div>
-
-                {/* Member Avatars */}
-                <div className="space-y-2 pt-1 font-sans text-xs">
-                  {[
-                    { name: 'Dharun (You)', isLeader: true },
-                    { name: 'Arjun' },
-                    { name: 'Kavya' },
-                    { name: 'Rohit' }
-                  ].map((m, mIdx) => (
-                    <div key={mIdx} className="flex items-center justify-between py-1 border-b border-[#18385E]/40 last:border-0">
+                {userTeam ? (
+                  <>
+                    {/* Team Box Header */}
+                    <div className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between">
                       <div className="flex items-center space-x-2.5">
-                        <div className="w-6 h-6 rounded-full bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center font-mono text-[10px] text-[#00CFFF] font-bold">
-                          {m.name[0]}
-                        </div>
-                        <span className="text-[#F2F7FF] font-medium">{m.name}</span>
+                        <Shield className="w-5 h-5 text-[#F5B942]" />
+                        <span className="text-xs font-bold text-white">{userTeam.name}</span>
                       </div>
-                      {m.isLeader && (
-                        <Crown className="w-3.5 h-3.5 text-[#F5B942]" title="Squad Leader" />
-                      )}
+                      <span className="text-[11px] text-[#A9BCD6] font-mono">
+                        {userTeam.members?.length || 1} / {userTeam.max_members || 4} Members
+                      </span>
                     </div>
-                  ))}
-                </div>
+
+                    {/* Member Avatars */}
+                    <div className="space-y-2 pt-1 font-sans text-xs">
+                      {userTeam.members?.map((m, mIdx) => (
+                        <div key={mIdx} className="flex items-center justify-between py-1 border-b border-[#18385E]/40 last:border-0">
+                          <div className="flex items-center space-x-2.5">
+                            <div className="w-6 h-6 rounded-full bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center font-mono text-[10px] text-[#00CFFF] font-bold">
+                              {m.username?.[0]?.toUpperCase() || 'U'}
+                            </div>
+                            <span className="text-[#F2F7FF] font-medium">
+                              {m.username} {m.user_id === currentUser?.id ? '(You)' : ''}
+                            </span>
+                          </div>
+                          {m.role === 'owner' && (
+                            <Crown className="w-3.5 h-3.5 text-[#F5B942]" title="Squad Leader" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] text-center space-y-3">
+                    <p className="text-xs text-[#A9BCD6]">
+                      {event?.participation_mode === 'individual'
+                        ? 'Enlisted as Individual Operative'
+                        : 'No squad formed yet. Form or join a squad to compete with teammates.'}
+                    </p>
+                    {event?.participation_mode !== 'individual' && (
+                      <button
+                        onClick={() => setActiveTab('squad')}
+                        className="px-4 py-2 rounded-xl text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 transition-all inline-flex items-center space-x-1.5"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        <span>Form or Join Squad</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* What to Expect Card */}
@@ -785,6 +889,306 @@ export default function EventWorkspace({ user }) {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          TAB: TEAM & SQUAD FORMATION WORKSPACE
+          ========================================================================= */}
+      {activeTab === 'squad' && (
+        <div className="space-y-6">
+          {/* Feedback alerts */}
+          {squadSuccess && (
+            <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/60 text-emerald-300 text-xs font-mono flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{squadSuccess}</span>
+              </div>
+              <button onClick={() => setSquadSuccess('')} className="p-1 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {squadError && (
+            <div className="p-4 rounded-xl bg-rose-950/60 border border-rose-500/60 text-rose-300 text-xs font-mono flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{squadError}</span>
+              </div>
+              <button onClick={() => setSquadError('')} className="p-1 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {userTeam ? (
+            /* ACTIVE TEAM DASHBOARD */
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column: Team Details & Operatives Roster */}
+              <div className="lg:col-span-8 space-y-6">
+                <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#18385E] pb-4">
+                    <div className="flex items-center space-x-3.5">
+                      <div className="w-12 h-12 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center text-[#00CFFF]">
+                        <Shield className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h2 className="text-xl font-bold font-mono text-white">{userTeam.name}</h2>
+                          {userTeam.owner_id === currentUser?.id && (
+                            <span className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-mono font-bold flex items-center space-x-1">
+                              <Crown className="w-3 h-3 text-amber-400" />
+                              <span>SQUAD COMMANDER</span>
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-[#A9BCD6] font-mono">
+                          Squad ID: #{userTeam.id} · Enlisted in {event?.title || 'Tournament'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setActiveTab(primaryPlayTab)}
+                        className="px-4 py-2 rounded-xl text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 transition-all inline-flex items-center space-x-1.5 shadow-[0_0_15px_rgba(0,207,255,0.3)]"
+                      >
+                        <Flame className="w-3.5 h-3.5" />
+                        <span>Enter Challenges</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Invitation Token Box */}
+                  <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-[#A9BCD6] font-mono flex items-center space-x-1.5">
+                        <Key className="w-3.5 h-3.5 text-[#00CFFF]" />
+                        <span>Recruitment Invitation Token</span>
+                      </span>
+                      <span className="text-[11px] text-[#A9BCD6] font-mono">Share with your teammates</span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-1 px-3 py-2 bg-[#0B1D38] border border-[#18385E] rounded-lg font-mono text-xs text-[#00CFFF] tracking-wider select-all overflow-x-auto">
+                        {userTeam.invitation_code}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (userTeam.invitation_code) {
+                            navigator.clipboard.writeText(userTeam.invitation_code);
+                            setCopiedSquadCode(true);
+                            setTimeout(() => setCopiedSquadCode(false), 2500);
+                          }
+                        }}
+                        className="px-3 py-2 rounded-lg bg-[#087FFF]/20 hover:bg-[#087FFF]/40 border border-[#087FFF]/50 text-xs font-mono text-[#00CFFF] transition-all flex items-center space-x-1"
+                      >
+                        {copiedSquadCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedSquadCode ? 'Copied' : 'Copy Token'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Operatives Roster */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold font-mono text-white flex items-center space-x-2">
+                        <Users className="w-4 h-4 text-[#00CFFF]" />
+                        <span>Operative Roster</span>
+                      </h3>
+                      <span className="text-xs font-mono text-[#A9BCD6]">
+                        {userTeam.members?.length || 1} / {userTeam.max_members || 4} Members
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-[#18385E] border border-[#18385E] rounded-xl overflow-hidden bg-[#061329]">
+                      {userTeam.members?.map((m, idx) => (
+                        <div key={idx} className="p-3.5 flex items-center justify-between hover:bg-[#0B1D38]/50 transition-colors">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-8 h-8 rounded-full bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center font-mono text-xs text-[#00CFFF] font-bold">
+                              {m.username?.[0]?.toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <div className="flex items-center space-x-2">
+                                <span className="text-xs font-bold text-white">
+                                  {m.username} {m.user_id === currentUser?.id ? '(You)' : ''}
+                                </span>
+                                {m.role === 'owner' && (
+                                  <Crown className="w-3.5 h-3.5 text-amber-400" title="Squad Leader" />
+                                )}
+                              </div>
+                              <span className="text-[10px] text-[#A9BCD6] font-mono">
+                                {m.role === 'owner' ? 'Squad Commander' : 'Operative'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="text-right">
+                            <span className="text-xs font-mono font-bold text-[#F5B942]">
+                              {m.points || 0} pts
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Leave squad action */}
+                  <div className="pt-2 flex justify-end">
+                    <button
+                      onClick={handleLeaveSquad}
+                      className="px-3.5 py-1.5 rounded-lg text-xs font-mono text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-rose-900/60 transition-colors inline-flex items-center space-x-1.5"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Leave Squadron</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column: Squad Performance & Directives */}
+              <div className="lg:col-span-4 space-y-6">
+                <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+                  <h3 className="text-sm font-bold font-mono text-white flex items-center space-x-2">
+                    <Trophy className="w-4 h-4 text-[#F5B942]" />
+                    <span>Squad Performance</span>
+                  </h3>
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E]">
+                      <span className="text-[10px] text-[#A9BCD6] font-mono block">Squad Score</span>
+                      <span className="text-lg font-bold font-mono text-[#F5B942]">
+                        {userTeam.points || 0}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E]">
+                      <span className="text-[10px] text-[#A9BCD6] font-mono block">Solves</span>
+                      <span className="text-lg font-bold font-mono text-[#20C997]">
+                        {userTeam.solved_challenges?.length || 0}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] text-xs text-[#A9BCD6] space-y-2 font-sans">
+                    <p className="font-bold text-white font-mono">Squad Directives:</p>
+                    <p>• Solves by any squadron member automatically credit points to the collective squad leaderboard.</p>
+                    <p>• Only members of this squad can share interactive lab environments.</p>
+                    <p>• Ensure your team reaches full capacity before the competition ends.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* NO SQUAD YET: COMMISSION OR JOIN */
+            <div className="max-w-2xl mx-auto space-y-6 py-4">
+              <div className="text-center space-y-2">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center text-[#00CFFF] shadow-[0_0_20px_rgba(8,127,255,0.3)]">
+                  <Users className="w-7 h-7" />
+                </div>
+                <h2 className="text-2xl font-bold font-mono text-white">Squad Formation Center</h2>
+                <p className="text-xs text-[#A9BCD6] max-w-md mx-auto">
+                  This tournament supports collaborative team play. Commission a new squad or join your peers using an invitation token.
+                </p>
+              </div>
+
+              {/* Sub-tabs: Commission vs Join */}
+              <div className="flex rounded-xl bg-[#061329] border border-[#18385E] p-1 font-mono text-xs">
+                <button
+                  onClick={() => setSquadSubTab('commission')}
+                  className={`flex-1 py-2.5 rounded-lg font-bold transition-all ${
+                    squadSubTab === 'commission'
+                      ? 'bg-[#00CFFF] text-slate-950 shadow-[0_0_15px_rgba(0,207,255,0.3)]'
+                      : 'text-[#A9BCD6] hover:text-white'
+                  }`}
+                >
+                  Commission New Squad
+                </button>
+                <button
+                  onClick={() => setSquadSubTab('join')}
+                  className={`flex-1 py-2.5 rounded-lg font-bold transition-all ${
+                    squadSubTab === 'join'
+                      ? 'bg-[#00CFFF] text-slate-950 shadow-[0_0_15px_rgba(0,207,255,0.3)]'
+                      : 'text-[#A9BCD6] hover:text-white'
+                  }`}
+                >
+                  Join Existing Squad
+                </button>
+              </div>
+
+              {/* Tab 1: Commission Form */}
+              {squadSubTab === 'commission' && (
+                <form onSubmit={handleCreateSquad} className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono text-[#A9BCD6] mb-1.5">
+                      Squad Designation / Call-sign *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={squadName}
+                      onChange={(e) => setSquadName(e.target.value)}
+                      placeholder="e.g. CyberVanguard, NullPointers, ShadowByte"
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#061329] border border-[#18385E] text-white text-xs font-mono placeholder-[#A9BCD6]/40 focus:outline-none focus:border-[#00CFFF]"
+                    />
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] text-[11px] text-[#A9BCD6] font-mono">
+                    Squad size limit: <span className="text-white font-bold">{event?.team_size_max || 4} operatives</span> max per squad.
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={squadLoading || !squadName.trim()}
+                    className="w-full py-3 rounded-xl text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(0,207,255,0.3)]"
+                  >
+                    {squadLoading ? 'Commissioning Squadron...' : 'Commission Squad & Generate Token'}
+                  </button>
+                </form>
+              )}
+
+              {/* Tab 2: Join Form */}
+              {squadSubTab === 'join' && (
+                <form onSubmit={handleJoinSquad} className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+                  <div>
+                    <label className="block text-xs font-mono text-[#A9BCD6] mb-1.5">
+                      Invitation Token *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={joinSquadCode}
+                      onChange={(e) => setJoinSquadCode(e.target.value)}
+                      placeholder="Paste the invitation token provided by your squad commander"
+                      className="w-full px-4 py-2.5 rounded-xl bg-[#061329] border border-[#18385E] text-white text-xs font-mono placeholder-[#A9BCD6]/40 focus:outline-none focus:border-[#00CFFF]"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={squadLoading || !joinSquadCode.trim()}
+                    className="w-full py-3 rounded-xl text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 transition-all disabled:opacity-50 shadow-[0_0_20px_rgba(0,207,255,0.3)]"
+                  >
+                    {squadLoading ? 'Authenticating Token...' : 'Enlist in Squadron'}
+                  </button>
+                </form>
+              )}
+
+              {/* Solo option if event allows */}
+              {['mixed', 'any', 'individual'].includes(event?.participation_mode?.toLowerCase()) && (
+                <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-white font-bold block font-mono">Prefer to compete alone?</span>
+                    <span className="text-[#A9BCD6] text-[11px]">You can participate as an individual operative.</span>
+                  </div>
+                  <button
+                    onClick={() => setActiveTab(primaryPlayTab)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold text-[#00CFFF] hover:bg-[#00CFFF]/10 border border-[#00CFFF]/40 transition-colors"
+                  >
+                    Enter Solo Arena →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1632,6 +2036,95 @@ export default function EventWorkspace({ user }) {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          REGISTRATION CONFIRMATION & NAVIGATION MODAL
+          ========================================================================= */}
+      {showRegistrationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#0B1D38] border border-[#00CFFF]/40 rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-[0_0_50px_rgba(0,207,255,0.25)] space-y-6 relative">
+            <button
+              onClick={() => setShowRegistrationModal(false)}
+              className="absolute top-4 right-4 text-[#A9BCD6] hover:text-white p-1 rounded-lg hover:bg-[#102746] transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-[#20C997]/20 border border-[#20C997] flex items-center justify-center text-[#20C997] shadow-[0_0_20px_rgba(32,201,151,0.4)]">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <h2 className="text-2xl font-black font-mono text-white tracking-wide">
+                ENLISTMENT CONFIRMED
+              </h2>
+              <p className="text-xs text-[#A9BCD6]">
+                You have officially registered for <span className="text-[#00CFFF] font-bold font-mono">{event?.title}</span>. Choose how you want to proceed into the tournament:
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* If team / mixed event, show Team Formation option */}
+              {(['team', 'mixed', 'any'].includes(event?.participation_mode?.toLowerCase()) || config?.has_teams) && (
+                <button
+                  onClick={() => {
+                    setShowRegistrationModal(false);
+                    setActiveTab('squad');
+                  }}
+                  className="w-full p-4 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] hover:bg-[#102746] transition-all text-left flex items-start space-x-4 group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center text-[#00CFFF] group-hover:scale-110 transition-transform shrink-0">
+                    <Users className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-white group-hover:text-[#00CFFF] font-mono">
+                        Squad Formation & Recruitment
+                      </span>
+                      <ArrowRight className="w-4 h-4 text-[#00CFFF] group-hover:translate-x-1 transition-transform" />
+                    </div>
+                    <p className="text-xs text-[#A9BCD6] mt-1 font-sans">
+                      Form an operative team, generate invitation tokens for teammates, or join an existing squad.
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              {/* Enter Arena directly */}
+              <button
+                onClick={() => {
+                  setShowRegistrationModal(false);
+                  setActiveTab(primaryPlayTab);
+                }}
+                className="w-full p-4 rounded-xl bg-gradient-to-r from-[#087FFF]/20 to-[#00CFFF]/20 border border-[#00CFFF]/50 hover:border-[#00CFFF] hover:shadow-[0_0_25px_rgba(0,207,255,0.3)] transition-all text-left flex items-start space-x-4 group"
+              >
+                <div className="w-10 h-10 rounded-xl bg-[#00CFFF]/20 border border-[#00CFFF] flex items-center justify-center text-[#00CFFF] group-hover:scale-110 transition-transform shrink-0">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-white group-hover:text-[#00CFFF] font-mono">
+                      Launch Challenge Arena Directly
+                    </span>
+                    <ArrowRight className="w-4 h-4 text-[#00CFFF] group-hover:translate-x-1 transition-transform" />
+                  </div>
+                  <p className="text-xs text-[#A9BCD6] mt-1 font-sans">
+                    Deploy straight into the competition arena to view problems, launch container labs, and submit solutions.
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            <div className="text-center pt-2">
+              <button
+                onClick={() => setShowRegistrationModal(false)}
+                className="text-xs text-[#A9BCD6] hover:text-white transition-colors font-mono underline"
+              >
+                Stay on Event Overview
+              </button>
+            </div>
           </div>
         </div>
       )}

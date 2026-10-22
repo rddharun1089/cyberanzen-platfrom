@@ -26,7 +26,11 @@ export default function Register({ onLoginSuccess }) {
       if (onLoginSuccess) {
         onLoginSuccess(data);
       }
-      navigate('/dashboard');
+      if (['super_admin', 'event_admin', 'challenge_author', 'admin'].includes(data.role?.toLowerCase())) {
+        navigate('/admin');
+      } else {
+        navigate('/events');
+      }
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to complete registration.');
     } finally {

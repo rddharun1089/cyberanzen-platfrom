@@ -127,11 +127,11 @@ export default function CTFWorkspace() {
     <div className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Back link */}
       <Link
-        to="/arena?tab=ctf"
+        to="/events"
         className="inline-flex items-center space-x-1.5 text-xs font-mono text-slate-400 hover:text-cyan-400 mb-6 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Return to Arena</span>
+        <span>Return to Events</span>
       </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

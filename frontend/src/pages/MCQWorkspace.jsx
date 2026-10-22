@@ -81,11 +81,11 @@ export default function MCQWorkspace() {
   return (
     <div className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link
-        to="/arena?tab=mcq"
+        to="/events"
         className="inline-flex items-center space-x-1.5 text-xs font-mono text-slate-400 hover:text-cyan-400 mb-6 transition-colors"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        <span>Return to Arena</span>
+        <span>Return to Events</span>
       </Link>
 
       <div className="p-8 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl backdrop-blur-md">

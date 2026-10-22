@@ -113,9 +113,12 @@ export default function AdminStudio({ user, defaultView = null }) {
     category: 'Cybersecurity', points_positive: 10, points_negative: 0, time_limit_sec: 60,
     explanation: '', options: [
       { id: 1, text: '', is_correct: true, explanation: '' },
-      { id: 2, text: '', is_correct: false, explanation: '' }
+      { id: 2, text: '', is_correct: false, explanation: '' },
+      { id: 3, text: '', is_correct: false, explanation: '' },
+      { id: 4, text: '', is_correct: false, explanation: '' }
     ]
   });
+  const [inspectMcqQuestion, setInspectMcqQuestion] = useState(null);
 
   const [ctfForm, setCtfForm] = useState({
     title: '', description: '', category: 'web', difficulty: 'Beginner',
@@ -311,11 +314,64 @@ export default function AdminStudio({ user, defaultView = null }) {
     }
   };
 
+  const handleAddMcqOption = () => {
+    const nextId = mcqForm.options.length > 0 ? Math.max(...mcqForm.options.map(o => o.id)) + 1 : 1;
+    setMcqForm({
+      ...mcqForm,
+      options: [...mcqForm.options, { id: nextId, text: '', is_correct: false, explanation: '' }]
+    });
+  };
+
+  const handleRemoveMcqOption = (idx) => {
+    if (mcqForm.options.length <= 2) {
+      alert('An MCQ question must contain at least 2 answer options.');
+      return;
+    }
+    const updated = mcqForm.options.filter((_, i) => i !== idx);
+    if (!updated.some(o => o.is_correct)) {
+      updated[0].is_correct = true;
+    }
+    setMcqForm({ ...mcqForm, options: updated });
+  };
+
+  const handleToggleCorrectOption = (idx) => {
+    if (mcqForm.question_type === 'multiple_choice') {
+      const updated = mcqForm.options.map((opt, i) => 
+        i === idx ? { ...opt, is_correct: !opt.is_correct } : opt
+      );
+      setMcqForm({ ...mcqForm, options: updated });
+    } else {
+      const updated = mcqForm.options.map((opt, i) => ({
+        ...opt,
+        is_correct: i === idx
+      }));
+      setMcqForm({ ...mcqForm, options: updated });
+    }
+  };
+
   const handleCreateMcq = async (e) => {
     e.preventDefault();
+    if (!mcqForm.options.some(o => o.is_correct)) {
+      alert('Please mark at least one option as the correct answer!');
+      return;
+    }
+    if (mcqForm.options.some(o => !o.text.trim())) {
+      alert('Please enter text for all options before publishing!');
+      return;
+    }
     try {
       await adminService.createMCQ(mcqForm);
-      alert('MCQ created successfully!');
+      alert('MCQ question authored & published to Question Bank successfully!');
+      setMcqForm({
+        title: '', prompt: '', question_type: 'single_choice', difficulty: 'Beginner',
+        category: 'Cybersecurity', points_positive: 10, points_negative: 0, time_limit_sec: 60,
+        explanation: '', options: [
+          { id: 1, text: '', is_correct: true, explanation: '' },
+          { id: 2, text: '', is_correct: false, explanation: '' },
+          { id: 3, text: '', is_correct: false, explanation: '' },
+          { id: 4, text: '', is_correct: false, explanation: '' }
+        ]
+      });
       loadTabData('questions');
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to create MCQ.');
@@ -1140,8 +1196,19 @@ int main() {
                         Published DSA Questions ({filteredDsa.length})
                       </h4>
                       <span className="text-[10px] text-[#A9BCD6] font-mono">
-                        Click "Interactive Code Console" to test code in Monaco IDE
+                        Click problem title or "Interactive Code Console" to test code in Monaco IDE
                       </span>
+                    </div>
+
+                    {/* Console Info Banner */}
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-[#102746] to-[#061329] border border-[#00CFFF]/40 flex items-center justify-between text-xs font-mono mb-3 shadow-[0_0_15px_rgba(0,207,255,0.1)]">
+                      <div className="flex items-center space-x-2.5">
+                        <Terminal className="w-4 h-4 text-[#00CFFF] shrink-0" />
+                        <div>
+                          <span className="text-white font-bold block">Monaco Programming Console Ready</span>
+                          <span className="text-slate-300 text-[11px]">Click "Interactive Code Console" on any problem to test solutions in Python 3.14, C++ 17, or C 11 with live judge evaluation.</span>
+                        </div>
+                      </div>
                     </div>
 
                     <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
@@ -1153,7 +1220,15 @@ int main() {
                           <div className="flex items-start justify-between gap-2">
                             <div>
                               <div className="flex items-center space-x-2">
-                                <span className="font-bold text-white text-xs">{q.title}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenConsole(q)}
+                                  className="font-bold text-white text-xs hover:text-[#00CFFF] transition-colors text-left flex items-center space-x-1"
+                                  title="Click to launch Interactive Code Console"
+                                >
+                                  <span>{q.title}</span>
+                                  <Terminal className="w-3 h-3 text-[#00CFFF] opacity-75 inline ml-1" />
+                                </button>
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold ${
                                   q.difficulty === 'Beginner' ? 'bg-emerald-950 text-emerald-400' :
                                   q.difficulty === 'Intermediate' ? 'bg-amber-950 text-amber-400' :
@@ -1425,107 +1500,278 @@ int main() {
             {questionSubTab === 'mcq' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] space-y-4">
-                  <h4 className="font-bold text-white font-mono text-sm flex items-center space-x-2">
-                    <HelpCircle className="w-4 h-4 text-amber-400" />
-                    <span>AUTHOR MCQ QUIZ QUESTION</span>
-                  </h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-bold text-white font-mono text-sm flex items-center space-x-2">
+                      <HelpCircle className="w-4 h-4 text-amber-400" />
+                      <span>AUTHOR MCQ QUIZ QUESTION</span>
+                    </h4>
+                    <span className="text-[10px] text-amber-400 font-mono bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30">
+                      Standard 4-Choice Builder
+                    </span>
+                  </div>
+
                   <form onSubmit={handleCreateMcq} className="space-y-3 font-sans text-xs">
                     <div>
-                      <label className="block text-[#A9BCD6] font-mono mb-1">Question Prompt *</label>
+                      <label className="block text-[#A9BCD6] font-mono mb-1">Question Prompt / Statement *</label>
                       <textarea
                         required
                         rows={3}
                         value={mcqForm.prompt}
                         onChange={(e) => setMcqForm({ ...mcqForm, prompt: e.target.value, title: e.target.value.slice(0, 50) })}
-                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        placeholder="e.g. Which of the following HTTP response headers is used to protect against clickjacking attacks?"
+                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-400"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="block text-[#A9BCD6] font-mono">Answer Options:</label>
-                      {mcqForm.options.map((opt, idx) => (
-                        <div key={idx} className="flex items-center space-x-2">
-                          <input
-                            type="radio"
-                            name="correct_option"
-                            checked={opt.is_correct}
-                            onChange={() => {
-                              const updated = mcqForm.options.map((o, i) => ({ ...o, is_correct: i === idx }));
-                              setMcqForm({ ...mcqForm, options: updated });
-                            }}
-                          />
-                          <input
-                            type="text"
-                            required
-                            placeholder={`Option #${idx + 1}`}
-                            value={opt.text}
-                            onChange={(e) => {
-                              const updated = [...mcqForm.options];
-                              updated[idx].text = e.target.value;
-                              setMcqForm({ ...mcqForm, options: updated });
-                            }}
-                            className="flex-1 px-3 py-1.5 bg-[#061329] border border-[#18385E] rounded text-white"
-                          />
-                        </div>
-                      ))}
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+                      <div>
+                        <label className="block text-[#A9BCD6] text-[10px] uppercase mb-1">Difficulty</label>
+                        <select
+                          value={mcqForm.difficulty}
+                          onChange={(e) => setMcqForm({ ...mcqForm, difficulty: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-[#061329] border border-[#18385E] rounded-lg text-white text-xs"
+                        >
+                          <option value="Beginner">Beginner</option>
+                          <option value="Intermediate">Intermediate</option>
+                          <option value="Advanced">Advanced</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[#A9BCD6] text-[10px] uppercase mb-1">Category</label>
+                        <input
+                          type="text"
+                          value={mcqForm.category}
+                          onChange={(e) => setMcqForm({ ...mcqForm, category: e.target.value })}
+                          className="w-full px-2 py-1.5 bg-[#061329] border border-[#18385E] rounded-lg text-white text-xs"
+                          placeholder="Cybersecurity"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[#A9BCD6] text-[10px] uppercase mb-1">Points (+)</label>
+                        <input
+                          type="number"
+                          value={mcqForm.points_positive}
+                          onChange={(e) => setMcqForm({ ...mcqForm, points_positive: parseInt(e.target.value) || 10 })}
+                          className="w-full px-2 py-1.5 bg-[#061329] border border-[#18385E] rounded-lg text-white text-xs"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[#A9BCD6] text-[10px] uppercase mb-1">Penalty (-)</label>
+                        <input
+                          type="number"
+                          value={mcqForm.points_negative}
+                          onChange={(e) => setMcqForm({ ...mcqForm, points_negative: parseInt(e.target.value) || 0 })}
+                          className="w-full px-2 py-1.5 bg-[#061329] border border-[#18385E] rounded-lg text-white text-xs"
+                        />
+                      </div>
                     </div>
+
+                    {/* Options Builder Section */}
+                    <div className="space-y-2 pt-2 border-t border-[#18385E]">
+                      <div className="flex items-center justify-between">
+                        <label className="text-white font-mono font-bold text-xs">
+                          Answer Choices ({mcqForm.options.length}):
+                        </label>
+                        <span className="text-[10px] text-emerald-400 font-mono">
+                          ✓ Click "Mark as Correct" to select the scoring answer
+                        </span>
+                      </div>
+
+                      {/* Info Callout */}
+                      <div className="p-2.5 rounded-lg bg-[#061329] border border-[#18385E] text-[11px] font-mono text-[#A9BCD6] flex items-center space-x-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>
+                          The green button indicates which option will award points when submitted by cadets.
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {mcqForm.options.map((opt, idx) => {
+                          const optionLetters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+                          const letter = optionLetters[idx] || `#${idx + 1}`;
+                          return (
+                            <div 
+                              key={opt.id || idx} 
+                              className={`p-2.5 rounded-xl border flex items-center space-x-2.5 transition-all ${
+                                opt.is_correct 
+                                  ? 'bg-emerald-950/30 border-emerald-500/60 shadow-[0_0_10px_rgba(16,185,129,0.15)]' 
+                                  : 'bg-[#061329] border-[#18385E]'
+                              }`}
+                            >
+                              {/* Option Letter Badge */}
+                              <span className={`w-6 h-6 rounded-lg flex items-center justify-center font-mono font-bold text-xs shrink-0 ${
+                                opt.is_correct ? 'bg-emerald-500 text-slate-950' : 'bg-[#102746] text-[#A9BCD6]'
+                              }`}>
+                                {letter}
+                              </span>
+
+                              {/* Option Input */}
+                              <input
+                                type="text"
+                                required
+                                placeholder={`Enter text for Option ${letter}...`}
+                                value={opt.text}
+                                onChange={(e) => {
+                                  const updated = [...mcqForm.options];
+                                  updated[idx].text = e.target.value;
+                                  setMcqForm({ ...mcqForm, options: updated });
+                                }}
+                                className="flex-1 px-3 py-1.5 bg-[#08172B] border border-[#18385E] rounded-lg text-white font-mono text-xs focus:outline-none focus:border-emerald-400"
+                              />
+
+                              {/* Toggle Correct Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCorrectOption(idx)}
+                                className={`px-3 py-1.5 rounded-lg font-mono font-bold text-xs flex items-center space-x-1.5 transition-all shrink-0 ${
+                                  opt.is_correct
+                                    ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-[0_0_10px_rgba(16,185,129,0.3)]'
+                                    : 'bg-[#102746] hover:bg-emerald-950/60 hover:text-emerald-300 border border-[#18385E] text-[#A9BCD6]'
+                                }`}
+                                title="Click to designate this choice as the correct scoring answer"
+                              >
+                                {opt.is_correct ? (
+                                  <>
+                                    <CheckCircle2 className="w-3.5 h-3.5 fill-slate-950 text-emerald-400" />
+                                    <span>✓ Correct Answer</span>
+                                  </>
+                                ) : (
+                                  <span>Mark as Correct</span>
+                                )}
+                              </button>
+
+                              {/* Remove Option Button */}
+                              {mcqForm.options.length > 2 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveMcqOption(idx)}
+                                  className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg shrink-0"
+                                  title="Delete Option"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Add Option Button */}
+                      <div className="pt-1 flex justify-between items-center">
+                        <button
+                          type="button"
+                          onClick={handleAddMcqOption}
+                          className="px-3 py-1.5 rounded-lg bg-[#102746] hover:bg-[#18385E] text-[#00CFFF] font-mono text-xs flex items-center space-x-1 transition-colors"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>+ Add Option ({['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'][mcqForm.options.length] || '+'})</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Explanation */}
+                    <div className="pt-2">
+                      <label className="block text-[#A9BCD6] font-mono mb-1 text-[11px]">
+                        Explanation / Solution Rationale (Optional):
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={mcqForm.explanation}
+                        onChange={(e) => setMcqForm({ ...mcqForm, explanation: e.target.value })}
+                        placeholder="Explain why the selected option is correct..."
+                        className="w-full px-3 py-1.5 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono text-xs focus:outline-none focus:border-amber-400"
+                      />
+                    </div>
+
                     <div className="flex justify-end pt-2">
                       <button
                         type="submit"
-                        className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-mono font-bold"
+                        className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-mono font-bold transition-all shadow-[0_0_15px_rgba(251,191,36,0.3)]"
                       >
-                        Publish MCQ
+                        Publish MCQ to Bank
                       </button>
                     </div>
                   </form>
                 </div>
 
-                {/* MCQ List */}
+                {/* Published MCQ List */}
                 <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E]">
-                  <h4 className="text-white font-mono font-bold text-xs uppercase mb-3">
-                    Published MCQs ({filteredMcq.length})
-                  </h4>
-                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-white font-mono font-bold text-xs uppercase">
+                      Published MCQs ({filteredMcq.length})
+                    </h4>
+                    <span className="text-[10px] text-[#A9BCD6] font-mono">
+                      Click "Inspect Question" to review options &amp; answers
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                     {filteredMcq.map(m => (
-                      <div key={m.id} className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] space-y-2 font-mono text-xs">
-                        <div className="flex items-center justify-between">
+                      <div key={m.id} className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#1F497D] space-y-2.5 font-mono text-xs transition-all">
+                        <div className="flex items-start justify-between gap-2">
                           <div>
-                            <span className="font-bold text-white">{m.title || m.prompt?.slice(0, 40)}</span>
-                            <span className="text-[10px] text-amber-400 ml-2">[{m.points_positive}pts]</span>
+                            <div className="flex items-center space-x-2">
+                              <span className="font-bold text-white">{m.title || m.prompt?.slice(0, 45)}</span>
+                              <span className="text-[10px] text-amber-400 font-bold">[{m.points_positive}pts]</span>
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-[#102746] text-[#A9BCD6]">
+                                {m.options ? m.options.length : 0} Options
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                              {m.prompt}
+                            </p>
                           </div>
                           <button
                             onClick={() => handleDeleteMCQ(m.id, m.title || `MCQ #${m.id}`)}
-                            className="p-1 text-rose-400 hover:text-rose-300"
-                            title="Delete"
+                            className="p-1.5 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition-colors"
+                            title="Delete MCQ"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </div>
 
-                        {/* Assigned Event Badges */}
-                        <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-[#18385E]/40">
-                          <div className="flex flex-wrap items-center gap-1">
+                        {/* Assigned Event Badges & Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#18385E]/50">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             {m.assigned_events && m.assigned_events.length > 0 ? (
                               m.assigned_events.map(ev => (
-                                <span key={ev.id} className="px-2 py-0.5 rounded bg-[#102746] text-[#00CFFF] text-[10px]">
-                                  Event: {ev.title}
+                                <span key={ev.id} className="px-2 py-0.5 rounded-md bg-[#102746] text-[#00CFFF] text-[10px] border border-[#00CFFF]/30 flex items-center space-x-1">
+                                  <Trophy className="w-2.5 h-2.5 text-[#00CFFF]" />
+                                  <span>Event: {ev.title}</span>
                                 </span>
                               ))
                             ) : (
-                              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 text-[10px]">
                                 📦 Universal Bank
                               </span>
                             )}
                           </div>
 
-                          <button
-                            onClick={() => {
-                              setQuickAssignQuestion(m);
-                              setQuickAssignEventId(eventsList[0]?.id || '');
-                            }}
-                            className="px-2 py-0.5 bg-[#102746] hover:bg-[#18385E] text-[#A9BCD6] hover:text-white rounded text-[10px]"
-                          >
-                            + Assign to Event
-                          </button>
+                          <div className="flex items-center space-x-2">
+                            {/* Inspect Question Button */}
+                            <button
+                              type="button"
+                              onClick={() => setInspectMcqQuestion(m)}
+                              className="px-2.5 py-1 bg-[#102746] hover:bg-[#18385E] text-amber-400 rounded-lg text-[10px] font-bold flex items-center space-x-1 transition-colors"
+                            >
+                              <Eye className="w-3 h-3" />
+                              <span>Inspect Question</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setQuickAssignQuestion(m);
+                                setQuickAssignEventId(eventsList[0]?.id || '');
+                              }}
+                              className="px-2 py-1 bg-[#102746] hover:bg-[#18385E] text-[#A9BCD6] hover:text-white rounded-lg text-[10px]"
+                            >
+                              + Assign to Event
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}

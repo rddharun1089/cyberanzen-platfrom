@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.db.models import Team, TeamMembership, TeamMemberRole, User, AuditLog, Event, ParticipationMode
+from app.db.models import Team, TeamMembership, TeamMemberRole, User, AuditLog, Event, ParticipationMode, EventRegistration
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/teams", tags=["Squad & Team Operations"])
@@ -115,6 +115,23 @@ def create_team(req: CreateTeamRequest, db: Session = Depends(get_db), current_u
         joined_at=datetime.now(timezone.utc)
     )
     db.add(membership)
+
+    if req.event_id:
+        reg = db.query(EventRegistration).filter(
+            EventRegistration.event_id == req.event_id,
+            EventRegistration.user_id == current_user.id
+        ).first()
+        if reg:
+            reg.team_id = new_team.id
+            reg.selected_mode = "team"
+        else:
+            db.add(EventRegistration(
+                event_id=req.event_id,
+                user_id=current_user.id,
+                team_id=new_team.id,
+                selected_mode="team"
+            ))
+
     db.commit()
 
     return {
@@ -163,6 +180,23 @@ def join_team(req: JoinTeamRequest, db: Session = Depends(get_db), current_user:
         joined_at=datetime.now(timezone.utc)
     )
     db.add(membership)
+
+    if team.event_id:
+        reg = db.query(EventRegistration).filter(
+            EventRegistration.event_id == team.event_id,
+            EventRegistration.user_id == current_user.id
+        ).first()
+        if reg:
+            reg.team_id = team.id
+            reg.selected_mode = "team"
+        else:
+            db.add(EventRegistration(
+                event_id=team.event_id,
+                user_id=current_user.id,
+                team_id=team.id,
+                selected_mode="team"
+            ))
+
     db.commit()
 
     return {
