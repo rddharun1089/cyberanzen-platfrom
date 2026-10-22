@@ -87,21 +87,21 @@ export default function App() {
               }
             />
 
-            {/* Root Landing or Dashboard */}
+            {/* Root Landing */}
             <Route
               path="/"
               element={
                 isSetupNeeded ? (
                   <Navigate to="/setup" />
-                ) : user ? (
-                  <Dashboard user={user} />
                 ) : (
-                  <Landing />
+                  <Landing user={user} />
                 )
               }
             />
 
-            <Route path="/landing" element={<Landing />} />
+            <Route path="/landing" element={<Landing user={user} />} />
+            <Route path="/about" element={<Landing user={user} />} />
+            <Route path="/creator" element={<Landing user={user} />} />
             <Route
               path="/dashboard"
               element={user ? <Dashboard user={user} /> : <Navigate to="/login" />}
@@ -114,9 +114,10 @@ export default function App() {
             <Route path="/mcq/:id" element={<MCQWorkspace />} />
 
             {/* Competitions / Events */}
-            <Route path="/events" element={<EventsHub />} />
+            <Route path="/events" element={<EventsHub user={user} />} />
             <Route path="/events/:eventId" element={<EventWorkspace user={user} />} />
             <Route path="/events/:eventId/workspace" element={<EventWorkspace user={user} />} />
+            <Route path="/events/:eventId/:tab" element={<EventWorkspace user={user} />} />
 
             {/* Squads & Leaderboards */}
             <Route

@@ -10,7 +10,7 @@ from app.db.session import engine, Base, SessionLocal
 from app.db.init_db import init_db
 from app.api import (
     auth, events, teams, questions, mcqs, challenges,
-    labs, submissions, leaderboard, admin, imports
+    labs, submissions, leaderboard, admin, imports, content
 )
 
 # 1. Initialize Database Schema
@@ -83,6 +83,7 @@ app.include_router(submissions.router, prefix=settings.API_V1_STR)
 app.include_router(leaderboard.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
 app.include_router(imports.router, prefix=settings.API_V1_STR)
+app.include_router(content.router, prefix=f"{settings.API_V1_STR}/content")
 
 # Legacy alias: /cases -> questions
 app.include_router(questions.router, prefix=f"{settings.API_V1_STR}/cases", tags=["Legacy Cases Alias"])

@@ -1006,3 +1006,183 @@ def admin_batch_anti_cheat(
         "affected_questions": len(questions),
         "allow_copy_paste": req.allow_copy_paste
     }
+
+# ==============================================================================
+# SUBMISSIONS, TEAMS & SYSTEM SETTINGS MANAGEMENT
+# ==============================================================================
+
+@router.get("/submissions")
+def admin_list_submissions(
+    event_id: Optional[str] = None,
+    user_id: Optional[int] = None,
+    verdict: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    query = db.query(Submission)
+    if event_id:
+        query = query.filter(Submission.event_id == event_id)
+    if user_id:
+        query = query.filter(Submission.user_id == user_id)
+    if verdict:
+        query = query.filter(Submission.verdict == verdict)
+
+    total = query.count()
+    subs = query.order_by(Submission.created_at.desc()).offset(offset).limit(limit).all()
+
+    results = []
+    for s in subs:
+        u = db.query(User).filter(User.id == s.user_id).first()
+        q = db.query(DSAQuestion).filter(DSAQuestion.id == int(s.target_id)).first() if s.target_id and s.target_id.isdigit() else None
+        results.append({
+            "id": s.id,
+            "user_id": s.user_id,
+            "username": u.username if u else "Unknown",
+            "target_id": s.target_id,
+            "question_title": q.title if q else f"Target #{s.target_id}",
+            "event_id": s.event_id,
+            "language": s.language,
+            "source_code": s.source_code,
+            "verdict": s.verdict,
+            "execution_time_ms": s.execution_time_ms,
+            "memory_kb": s.memory_used_kb,
+            "points_awarded": s.score,
+            "created_at": s.created_at
+        })
+    return {"total": total, "submissions": results}
+
+@router.post("/submissions/{sub_id}/rejudge")
+def admin_rejudge_submission(
+    sub_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    sub = db.query(Submission).filter(Submission.id == sub_id).first()
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found.")
+
+    q = db.query(DSAQuestion).filter(DSAQuestion.id == int(sub.target_id)).first() if sub.target_id and sub.target_id.isdigit() else None
+    if not q:
+        raise HTTPException(status_code=404, detail="Question associated with submission not found.")
+
+    test_cases = [
+        {"input": tc.input_data, "output": tc.expected_output}
+        for tc in q.test_cases
+    ]
+    if not test_cases:
+        test_cases = [{"input": "", "output": ""}]
+
+    result = evaluate_submission(
+        language=sub.language,
+        source_code=sub.source_code,
+        test_cases=test_cases,
+        time_limit_ms=q.time_limit_ms or 2000,
+        memory_limit_mb=q.memory_limit_mb or 256
+    )
+
+    old_verdict = sub.verdict
+    sub.verdict = result.get("verdict", "ERROR")
+    sub.execution_time_ms = result.get("execution_time_ms", 0)
+    sub.memory_used_kb = result.get("memory_kb", 0)
+    db.commit()
+
+    audit = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="REJUDGE_SUBMISSION",
+        entity_type="SUBMISSION",
+        entity_id=str(sub.id),
+        details=f"Rejudged submission #{sub.id}: {old_verdict} -> {sub.verdict}"
+    )
+    db.add(audit)
+    db.commit()
+
+    return {"success": True, "old_verdict": old_verdict, "new_verdict": sub.verdict, "result": result}
+
+@router.get("/teams")
+def admin_list_teams(
+    event_id: Optional[str] = None,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    query = db.query(Team)
+    if event_id:
+        query = query.filter(Team.event_id == event_id)
+    teams = query.order_by(Team.created_at.desc()).limit(limit).all()
+
+    results = []
+    for t in teams:
+        leader = db.query(User).filter(User.id == t.owner_id).first()
+        results.append({
+            "id": t.id,
+            "name": t.name,
+            "invitation_code": t.invitation_code,
+            "leader_id": t.owner_id,
+            "leader_username": leader.username if leader else "Unknown",
+            "event_id": t.event_id,
+            "max_members": t.max_members,
+            "member_count": len(t.memberships),
+            "members": [
+                {
+                    "user_id": m.user_id,
+                    "username": m.user.username if m.user else "Unknown",
+                    "role": m.role
+                }
+                for m in t.memberships
+            ],
+            "created_at": t.created_at
+        })
+    return results
+
+@router.get("/settings")
+def admin_get_settings(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    from app.db.models import PlatformSetting
+    settings = db.query(PlatformSetting).all()
+    config_dict = {}
+    for s in settings:
+        try:
+            config_dict[s.setting_key] = json.loads(s.setting_value)
+        except Exception:
+            config_dict[s.setting_key] = s.setting_value
+    return config_dict
+
+@router.put("/settings/{setting_key}")
+def admin_update_setting(
+    setting_key: str,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    from app.db.models import PlatformSetting
+    row = db.query(PlatformSetting).filter(PlatformSetting.setting_key == setting_key).first()
+    if not row:
+        row = PlatformSetting(
+            setting_key=setting_key,
+            setting_value=json.dumps(payload),
+            updated_by_id=admin.id
+        )
+        db.add(row)
+    else:
+        row.setting_value = json.dumps(payload)
+        row.updated_by_id = admin.id
+        row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    audit = AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="UPDATE_SETTING",
+        entity_type="SETTING",
+        entity_id=setting_key,
+        details=f"Updated system setting: {setting_key}"
+    )
+    db.add(audit)
+    db.commit()
+    return {"success": True, "setting_key": setting_key, "value": payload}
+

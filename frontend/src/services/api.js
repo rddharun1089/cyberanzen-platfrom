@@ -149,6 +149,11 @@ export const eventService = {
   async getEventLeaderboard(eventId) {
     const res = await apiClient.get(`/events/${eventId}/leaderboard`);
     return res.data;
+  },
+
+  async getEventSubmissions(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/submissions`);
+    return res.data;
   }
 };
 
@@ -468,6 +473,52 @@ export const adminService = {
       category,
       allow_copy_paste: allowCopyPaste
     });
+    return res.data;
+  },
+
+  // Submissions & Rejudging
+  async listSubmissions(params = {}) {
+    const res = await apiClient.get('/admin/submissions', { params });
+    return res.data;
+  },
+  async rejudgeSubmission(subId) {
+    const res = await apiClient.post(`/admin/submissions/${subId}/rejudge`);
+    return res.data;
+  },
+
+  // Teams & Squads
+  async listTeams(params = {}) {
+    const res = await apiClient.get('/admin/teams', { params });
+    return res.data;
+  },
+
+  // Site Content & Creator Management
+  async getSiteContent() {
+    const res = await apiClient.get('/content/admin/content');
+    return res.data;
+  },
+  async updateSiteContent(data) {
+    const res = await apiClient.put('/content/admin/content', data);
+    return res.data;
+  },
+
+  // System Settings
+  async getSettings() {
+    const res = await apiClient.get('/admin/settings');
+    return res.data;
+  },
+  async updateSetting(key, payload) {
+    const res = await apiClient.put(`/admin/settings/${key}`, payload);
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// PUBLIC SITE CONTENT SERVICE
+// ==============================================================================
+export const contentService = {
+  async getPublicContent() {
+    const res = await apiClient.get('/content/public');
     return res.data;
   }
 };

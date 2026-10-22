@@ -56,6 +56,17 @@ export default function AdminStudio() {
   // Audits state
   const [auditLogs, setAuditLogs] = useState([]);
 
+  // Submissions state
+  const [submissionList, setSubmissionList] = useState([]);
+  const [rejudgingId, setRejudgingId] = useState(null);
+
+  // Site Content state
+  const [siteContent, setSiteContent] = useState(null);
+  const [contentSaving, setContentSaving] = useState(false);
+
+  // System Settings state
+  const [platformSettings, setPlatformSettings] = useState({});
+
   useEffect(() => {
     loadTabData();
   }, [activeTab]);
@@ -77,6 +88,15 @@ export default function AdminStudio() {
       } else if (activeTab === 'users') {
         const data = await adminService.listUsers();
         setUserList(data);
+      } else if (activeTab === 'submissions') {
+        const data = await adminService.listSubmissions();
+        setSubmissionList(data.submissions || []);
+      } else if (activeTab === 'content') {
+        const data = await adminService.getSiteContent();
+        setSiteContent(data.content || {});
+      } else if (activeTab === 'settings') {
+        const data = await adminService.getSettings();
+        setPlatformSettings(data || {});
       } else if (activeTab === 'audits') {
         const data = await adminService.getAuditLogs();
         setAuditLogs(data);
@@ -240,6 +260,24 @@ export default function AdminStudio() {
             className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'users' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             Cadets & Squads
+          </button>
+          <button
+            onClick={() => setActiveTab('submissions')}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'submissions' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            Submissions
+          </button>
+          <button
+            onClick={() => setActiveTab('content')}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'content' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            Site Content
+          </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            System Settings
           </button>
           <button
             onClick={() => setActiveTab('audits')}
@@ -836,6 +874,309 @@ export default function AdminStudio() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB: SUBMISSIONS & REJUDGING */}
+      {activeTab === 'submissions' && (
+        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
+          <div className="flex justify-between items-center pb-3 border-b border-slate-800">
+            <div>
+              <h3 className="text-base font-bold text-white font-mono">
+                CENTRAL SUBMISSIONS &amp; REJUDGING QUEUE ({submissionList.length})
+              </h3>
+              <p className="text-xs text-slate-400 font-sans mt-0.5">
+                Inspect cadet submissions across tournaments and re-evaluate code against sandboxes.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                adminService.listSubmissions()
+                  .then(data => setSubmissionList(data.submissions || []))
+                  .catch(() => {});
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700"
+            >
+              Refresh Submissions
+            </button>
+          </div>
+
+          {submissionList.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 font-mono text-xs">
+              No submissions recorded across the arena yet.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs">
+                <thead className="bg-slate-950 text-slate-400 text-[10px] uppercase border-b border-slate-800">
+                  <tr>
+                    <th className="p-3">ID</th>
+                    <th className="p-3">Cadet</th>
+                    <th className="p-3">Challenge / Target</th>
+                    <th className="p-3">Lang</th>
+                    <th className="p-3">Verdict</th>
+                    <th className="p-3">Runtime</th>
+                    <th className="p-3">Points</th>
+                    <th className="p-3">Time</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60">
+                  {submissionList.map(sub => (
+                    <tr key={sub.id} className="hover:bg-slate-800/30">
+                      <td className="p-3 text-slate-400">#{sub.id}</td>
+                      <td className="p-3 text-white font-bold">{sub.username}</td>
+                      <td className="p-3 text-slate-300">{sub.question_title}</td>
+                      <td className="p-3 text-cyan-400 uppercase">{sub.language}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          sub.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                          sub.verdict === 'WRONG_ANSWER' ? 'bg-rose-950 text-rose-400 border border-rose-800' :
+                          'bg-amber-950 text-amber-400 border border-amber-800'
+                        }`}>
+                          {sub.verdict}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-400">{sub.execution_time_ms ? `${sub.execution_time_ms}ms` : '—'}</td>
+                      <td className="p-3 text-emerald-400 font-bold">+{sub.points_awarded || 0}</td>
+                      <td className="p-3 text-slate-400">{new Date(sub.created_at).toLocaleTimeString()}</td>
+                      <td className="p-3 text-right">
+                        <button
+                          disabled={rejudgingId === sub.id}
+                          onClick={async () => {
+                            setRejudgingId(sub.id);
+                            try {
+                              const res = await adminService.rejudgeSubmission(sub.id);
+                              alert(`Rejudged #${sub.id}: ${res.old_verdict} -> ${res.new_verdict}`);
+                              const refreshed = await adminService.listSubmissions();
+                              setSubmissionList(refreshed.submissions || []);
+                            } catch (err) {
+                              alert('Rejudge failed: ' + (err.response?.data?.detail || err.message));
+                            } finally {
+                              setRejudgingId(null);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 font-bold text-[10px] disabled:opacity-40"
+                        >
+                          {rejudgingId === sub.id ? 'Rejudging...' : 'Rejudge'}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: SITE CONTENT & CREATOR PROFILE */}
+      {activeTab === 'content' && (
+        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6 max-w-4xl">
+          <div className="border-b border-slate-800 pb-3">
+            <h3 className="text-base font-bold text-white font-mono">
+              DYNAMIC SITE CONTENT &amp; CREATOR PROFILE STUDIO
+            </h3>
+            <p className="text-xs text-slate-400 font-sans mt-0.5">
+              Edit the public Landing page, Creator leadership profile, and About mission without touching source code.
+            </p>
+          </div>
+
+          {siteContent && (
+            <div className="space-y-6 text-xs font-mono">
+              {/* Creator Profile Section */}
+              <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
+                <h4 className="text-sm font-bold text-cyan-400 uppercase">Creator &amp; Maintainer Profile</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-slate-400 block mb-1">Creator Name / Organization:</label>
+                    <input
+                      type="text"
+                      value={siteContent.creator?.name || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        creator: { ...siteContent.creator, name: e.target.value }
+                      })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">Role / Title:</label>
+                    <input
+                      type="text"
+                      value={siteContent.creator?.role || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        creator: { ...siteContent.creator, role: e.target.value }
+                      })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-slate-400 block mb-1">Biography / Overview:</label>
+                  <textarea
+                    rows={3}
+                    value={siteContent.creator?.bio || ''}
+                    onChange={(e) => setSiteContent({
+                      ...siteContent,
+                      creator: { ...siteContent.creator, bio: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-sans text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-slate-400 block mb-1">GitHub URL:</label>
+                    <input
+                      type="text"
+                      value={siteContent.creator?.links?.github || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        creator: {
+                          ...siteContent.creator,
+                          links: { ...siteContent.creator?.links, github: e.target.value }
+                        }
+                      })}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">LinkedIn URL:</label>
+                    <input
+                      type="text"
+                      value={siteContent.creator?.links?.linkedin || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        creator: {
+                          ...siteContent.creator,
+                          links: { ...siteContent.creator?.links, linkedin: e.target.value }
+                        }
+                      })}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">Website URL:</label>
+                    <input
+                      type="text"
+                      value={siteContent.creator?.links?.website || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        creator: {
+                          ...siteContent.creator,
+                          links: { ...siteContent.creator?.links, website: e.target.value }
+                        }
+                      })}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Landing Page Hero Section */}
+              <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
+                <h4 className="text-sm font-bold text-emerald-400 uppercase">Landing Page Hero Copy</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-slate-400 block mb-1">Eyebrow Tagline:</label>
+                    <input
+                      type="text"
+                      value={siteContent.hero?.eyebrow || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        hero: { ...siteContent.hero, eyebrow: e.target.value }
+                      })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-400 block mb-1">Main Headline:</label>
+                    <input
+                      type="text"
+                      value={siteContent.hero?.headline || ''}
+                      onChange={(e) => setSiteContent({
+                        ...siteContent,
+                        hero: { ...siteContent.hero, headline: e.target.value }
+                      })}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-slate-400 block mb-1">Supporting Description:</label>
+                  <textarea
+                    rows={2}
+                    value={siteContent.hero?.description || ''}
+                    onChange={(e) => setSiteContent({
+                      ...siteContent,
+                      hero: { ...siteContent.hero, description: e.target.value }
+                    })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-sans text-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="flex justify-end pt-2">
+                <button
+                  disabled={contentSaving}
+                  onClick={async () => {
+                    setContentSaving(true);
+                    try {
+                      await adminService.updateSiteContent(siteContent);
+                      alert('Site content updated and published successfully!');
+                    } catch (err) {
+                      alert('Failed to update site content: ' + (err.response?.data?.detail || err.message));
+                    } finally {
+                      setContentSaving(false);
+                    }
+                  }}
+                  className="px-6 py-2.5 rounded-xl font-bold font-mono text-xs text-slate-950 bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-40"
+                >
+                  {contentSaving ? 'Saving Changes...' : 'Publish Content Updates'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB: SYSTEM SETTINGS */}
+      {activeTab === 'settings' && (
+        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6 max-w-4xl font-mono text-xs">
+          <div className="border-b border-slate-800 pb-3">
+            <h3 className="text-base font-bold text-white font-mono">
+              PLATFORM SYSTEM SETTINGS &amp; POLICIES
+            </h3>
+            <p className="text-xs text-slate-400 font-sans mt-0.5">
+              Configure system-wide parameters, judge ceilings, and participation security controls.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <h4 className="font-bold text-cyan-400 uppercase">File Upload Policy</h4>
+              <p className="text-slate-400 font-sans text-xs">
+                Maximum File Upload Ceiling: <span className="text-white font-bold">50 MB</span>
+              </p>
+              <p className="text-slate-400 font-sans text-xs">
+                Allowed Document Formats: <span className="text-white font-bold">PDF, DOCX, ZIP, JSON, CSV, MD</span>
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+              <h4 className="font-bold text-emerald-400 uppercase">Judge Sandbox Limits</h4>
+              <p className="text-slate-400 font-sans text-xs">
+                Default CPU Timeout: <span className="text-white font-bold">2000 ms</span>
+              </p>
+              <p className="text-slate-400 font-sans text-xs">
+                Default Memory Limit: <span className="text-white font-bold">256 MB (cgroups/setrlimit)</span>
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

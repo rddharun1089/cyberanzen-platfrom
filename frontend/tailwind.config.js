@@ -8,6 +8,19 @@ export default {
   theme: {
     extend: {
       colors: {
+        cyber: {
+          bg: '#030B12',
+          bgSecondary: '#061521',
+          surface: '#071B28',
+          cyan: '#00E5F0',
+          teal: '#00BFCB',
+          text: '#F2FAFF',
+          muted: '#9BB3C2',
+          border: '#123746',
+          success: '#20D49A',
+          warning: '#F5B942',
+          error: '#FF5263'
+        },
         forensic: {
           950: '#06090e',
           900: '#0b111a',

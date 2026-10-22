@@ -9,11 +9,11 @@ import {
 import { eventService, labService, challengeService, questionService, mcqService } from '../services/api';
 
 export default function EventWorkspace({ user }) {
-  const { eventId, id } = useParams();
+  const { eventId, id, tab } = useParams();
   const targetEventId = eventId || id;
   const [event, setEvent] = useState(null);
   const [config, setConfig] = useState(null);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(tab || 'overview');
   const [loading, setLoading] = useState(true);
 
   // Content states
@@ -21,6 +21,7 @@ export default function EventWorkspace({ user }) {
   const [challenges, setChallenges] = useState([]);
   const [mcqs, setMcqs] = useState([]);
   const [leaderboard, setLeaderboard] = useState(null);
+  const [userSubmissions, setUserSubmissions] = useState([]);
 
   // DSA interactive state
   const [selectedQuestion, setSelectedQuestion] = useState(null);
@@ -89,6 +90,12 @@ export default function EventWorkspace({ user }) {
       if (evConfig.leaderboard_visible) {
         const lbData = await eventService.getEventLeaderboard(targetEventId).catch(() => null);
         setLeaderboard(lbData);
+      }
+
+      // Load user submissions for this event if registered
+      if (evDetail.is_registered) {
+        const subData = await eventService.getEventSubmissions(targetEventId).catch(() => []);
+        setUserSubmissions(subData || []);
       }
     } catch (err) {
       console.error('Failed to load event workspace:', err);
@@ -221,6 +228,16 @@ export default function EventWorkspace({ user }) {
 
   return (
     <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 font-sans">
+      {/* Breadcrumb Back to Events */}
+      <div className="flex items-center space-x-2 text-xs font-mono text-slate-400">
+        <Link to="/events" className="hover:text-cyan-400 flex items-center space-x-1">
+          <ArrowRight className="w-3.5 h-3.5 rotate-180 text-cyan-400" />
+          <span>Back to All Events</span>
+        </Link>
+        <span>/</span>
+        <span className="text-white truncate max-w-md">{event.title}</span>
+      </div>
+
       {/* Event Header Banner */}
       <div className="p-6 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-cyan-950/40 border border-slate-800 shadow-xl relative overflow-hidden flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -777,6 +794,127 @@ export default function EventWorkspace({ user }) {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* 6. SUBMISSIONS TAB */}
+      {activeTab === 'submissions' && (
+        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4 font-mono text-xs">
+          <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-cyan-400" />
+              <span>YOUR EVENT SUBMISSION AUDIT LOG</span>
+            </h3>
+            <button
+              onClick={() => {
+                eventService.getEventSubmissions(targetEventId)
+                  .then(data => setUserSubmissions(data || []))
+                  .catch(() => {});
+              }}
+              className="text-[11px] text-cyan-400 hover:underline flex items-center space-x-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span>Refresh Log</span>
+            </button>
+          </div>
+
+          {userSubmissions.length === 0 ? (
+            <div className="py-12 text-center text-slate-500">
+              No submissions recorded yet for this event tournament.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-950/80 text-slate-400 text-[10px] uppercase border-b border-slate-800">
+                  <tr>
+                    <th className="p-3">ID</th>
+                    <th className="p-3">Problem / Target</th>
+                    <th className="p-3">Language</th>
+                    <th className="p-3">Verdict</th>
+                    <th className="p-3">Execution</th>
+                    <th className="p-3">Points</th>
+                    <th className="p-3">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 text-xs">
+                  {userSubmissions.map(sub => (
+                    <tr key={sub.id} className="hover:bg-slate-800/30">
+                      <td className="p-3 text-slate-400">#{sub.id}</td>
+                      <td className="p-3 text-white font-medium">{sub.question_title}</td>
+                      <td className="p-3 text-cyan-400 uppercase font-mono">{sub.language}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          sub.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                          sub.verdict === 'WRONG_ANSWER' ? 'bg-rose-950 text-rose-400 border border-rose-800' :
+                          'bg-amber-950 text-amber-400 border border-amber-800'
+                        }`}>
+                          {sub.verdict}
+                        </span>
+                      </td>
+                      <td className="p-3 text-slate-400">
+                        {sub.execution_time_ms ? `${sub.execution_time_ms}ms` : '—'}
+                      </td>
+                      <td className="p-3 text-emerald-400 font-bold">
+                        +{sub.points_awarded || 0}
+                      </td>
+                      <td className="p-3 text-slate-400">
+                        {sub.created_at ? new Date(sub.created_at).toLocaleTimeString() : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 7. RULES TAB */}
+      {activeTab === 'rules' && (
+        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6 font-mono text-xs max-w-4xl">
+          <div>
+            <h3 className="text-base font-bold text-white mb-2 flex items-center space-x-2">
+              <Shield className="w-5 h-5 text-cyan-400" />
+              <span>RULES OF ENGAGEMENT // TOURNAMENT PROTOCOL</span>
+            </h3>
+            <p className="text-slate-400 text-xs font-sans leading-relaxed">
+              All participants are required to conduct themselves in accordance with tournament policies, ethical security practices, and responsible disclosure.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+              <h4 className="font-bold text-cyan-400 uppercase mb-1">1. Anti-Cheat & Clipboard Restraints</h4>
+              <p className="text-slate-300 font-sans text-xs">
+                Policy Active: <span className="font-mono text-white font-bold uppercase">{event.clipboard_policy}</span>. 
+                External assistance, code sharing between competing squads, and unauthorized automation are strictly audited.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+              <h4 className="font-bold text-emerald-400 uppercase mb-1">2. Sandboxed Target Boundaries</h4>
+              <p className="text-slate-300 font-sans text-xs">
+                Do not attempt Denial-of-Service (DoS) attacks against competition infrastructure, scoring servers, or peer participants. All attacks must be targeted exclusively at assigned lab instances.
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+              <h4 className="font-bold text-amber-400 uppercase mb-1">3. Scoring & Tie-Breakers</h4>
+              <p className="text-slate-300 font-sans text-xs">
+                Scoring Policy: <span className="font-mono text-white font-bold uppercase">{event.scoring_policy}</span>. 
+                In the event of score parity, rankings are determined by submission timestamps (first to capture points ranks higher).
+              </p>
+            </div>
+
+            {event.rules && (
+              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                <h4 className="font-bold text-slate-200 uppercase mb-1">Event-Specific Directives</h4>
+                <div className="text-slate-300 font-sans text-xs whitespace-pre-line leading-relaxed">
+                  {event.rules}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

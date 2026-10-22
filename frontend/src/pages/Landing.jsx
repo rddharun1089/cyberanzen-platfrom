@@ -1,197 +1,309 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Shield, Terminal, Zap, Code2, Cpu, Trophy, 
-  ArrowRight, CheckCircle2, Lock, Flame, Laptop, Database
+  Shield, ArrowRight, ExternalLink, Github, Linkedin, 
+  Globe, Terminal, CheckCircle2, Lock, Cpu, Sparkles 
 } from 'lucide-react';
+import { contentService } from '../services/api';
 
-export default function Landing() {
+export default function Landing({ user }) {
+  const [content, setContent] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadContent();
+  }, []);
+
+  const loadContent = async () => {
+    try {
+      const data = await contentService.getPublicContent();
+      setContent(data);
+    } catch (err) {
+      console.warn('Could not fetch dynamic site content; fallback defaults will be used.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hero = content?.hero || {
+    eyebrow: "CYBERANZEN · SECURE · LEARN · COMPETE",
+    headline: "Think. Explore. Solve. Prove.",
+    description: "Build practical cybersecurity skills, solve technical challenges, and compete with a community of learners through events hosted by CyberAnzen."
+  };
+
+  const about = content?.about || {
+    title: "About CyberAnzen Arena",
+    description: "CyberAnzen is an advanced cybersecurity competition and algorithmic practice platform engineered to bridge practical defensive forensics, ethical exploitation, and competitive programming.",
+    principles: [
+      {
+        title: "Hands-on Cybersecurity Learning",
+        description: "Practical challenges in web security, cryptography, digital forensics, reverse engineering, binary exploitation, and network packet analysis."
+      },
+      {
+        title: "Competitive Programming & Problem Solving",
+        description: "Algorithmic challenges evaluated against kernel-level resource sandboxes supporting C, C++, and Python 3."
+      },
+      {
+        title: "Knowledge-Based Quizzes",
+        description: "Comprehensive technical assessments covering Linux internals, protocols, and defensive security architectures."
+      },
+      {
+        title: "Individual & Squad Operations",
+        description: "Dynamic participation models supporting both solo operatives and coordinated team operations with strict capacity controls."
+      },
+      {
+        title: "Responsible Security Research",
+        description: "A secure environment promoting ethical investigation, vulnerability analysis, and community knowledge sharing."
+      }
+    ]
+  };
+
+  const creator = content?.creator || {
+    name: "CyberAnzen Core Security Team",
+    role: "Security Engineering & Systems Architecture",
+    bio: "Platform maintained by the CyberAnzen team. Dedicated to hands-on cybersecurity research, competitive programming, and responsible vulnerability education.",
+    avatar_url: "/logo.png",
+    links: {
+      github: "https://github.com/rddharun1089/cyberanzen-platfrom",
+      linkedin: "",
+      website: ""
+    }
+  };
+
+  const footer = content?.footer || {
+    description: "CyberAnzen Arena — Digital Forensics, Cybersecurity CTF & Competitive Programming Platform.",
+    copyright: "© 2026 CyberAnzen Organization. All rights reserved."
+  };
+
   return (
-    <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden pt-20 pb-28 md:pt-28 md:pb-36 border-b border-slate-800/60">
+    <div className="flex-1 flex flex-col bg-[#030B12] text-[#F2FAFF] selection:bg-[#00E5F0]/30 selection:text-[#00E5F0] font-sans">
+      
+      {/* =========================================================================
+          HERO SECTION
+          ========================================================================= */}
+      <section id="home" className="relative overflow-hidden pt-20 pb-28 md:pt-32 md:pb-36 border-b border-[#123746]">
         {/* Ambient Glow & Grid Background */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-900/20 via-slate-950 to-slate-950 -z-10 pointer-events-none" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#00E5F0]/10 via-[#030B12] to-[#030B12] -z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#12374620_1px,transparent_1px),linear-gradient(to_bottom,#12374620_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10 pointer-events-none" />
 
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          {/* Status Badge */}
-          <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-800/80 text-cyan-400 text-xs font-mono font-medium tracking-wide mb-8 shadow-[0_0_20px_rgba(6,182,212,0.15)] animate-pulse">
-            <span className="w-2 h-2 rounded-full bg-cyan-400" />
-            <span>OPERATIONAL // CYBERANZEN ARENA ONLINE</span>
+          
+          {/* Eyebrow */}
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#071B28] border border-[#123746] text-[#00E5F0] text-xs font-mono font-medium tracking-wide mb-8 shadow-[0_0_20px_rgba(0,229,240,0.15)]">
+            <span className="w-2 h-2 rounded-full bg-[#00E5F0] animate-pulse" />
+            <span>{hero.eyebrow}</span>
           </div>
 
-          {/* Slogan */}
-          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white mb-6 font-mono leading-tight">
-            THE ARENA IS OPEN.<br />
-            <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
-              THINK YOU CAN BREAK IT?
-            </span><br />
-            PROVE IT.
+          {/* Official Logo Symbol Display */}
+          <div className="w-24 h-24 mx-auto mb-8 rounded-2xl bg-[#071B28] border border-[#123746] p-2 flex items-center justify-center shadow-[0_0_30px_rgba(0,229,240,0.2)]">
+            <img 
+              src="/logo.png" 
+              alt="CyberAnzen Official Brand" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                e.target.nextElementSibling.style.display = 'block';
+              }}
+            />
+            <Shield className="w-12 h-12 text-[#00E5F0] hidden" />
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-[#F2FAFF] mb-6 font-mono leading-tight">
+            {hero.headline}
           </h1>
 
-          {/* Supporting Message */}
-          <p className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-300 mb-10 font-sans font-normal leading-relaxed">
-            Investigate the evidence. Solve the challenge. Write the exploit. Master the code. Climb the leaderboard.
+          {/* Description */}
+          <p className="max-w-2xl mx-auto text-base sm:text-xl text-[#9BB3C2] mb-10 font-normal leading-relaxed">
+            {hero.description}
           </p>
 
-          {/* Primary Call to Actions */}
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-16">
+          {/* Primary Action Buttons: Exactly Explore Events + Get Started */}
+          <div className="flex flex-wrap items-center justify-center gap-4">
             <Link
-              to="/register"
-              className="flex items-center space-x-2 px-6 py-3.5 rounded-xl font-semibold text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-300 hover:from-cyan-300 hover:to-teal-200 shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] transition-all duration-300 transform hover:-translate-y-0.5"
+              to="/events"
+              className="flex items-center space-x-2 px-7 py-3.5 rounded-xl font-bold font-mono text-sm text-[#030B12] bg-[#00E5F0] hover:bg-[#00BFCB] shadow-[0_0_25px_rgba(0,229,240,0.4)] hover:shadow-[0_0_35px_rgba(0,229,240,0.6)] transition-all duration-200 transform hover:-translate-y-0.5"
             >
-              <span>Accept the Challenge</span>
+              <span>Explore Events</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
 
             <Link
-              to="/arena"
-              className="flex items-center space-x-2 px-6 py-3.5 rounded-xl font-medium text-slate-200 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700 hover:border-cyan-500/50 transition-all duration-200"
+              to={user ? "/events" : "/register"}
+              className="flex items-center space-x-2 px-6 py-3.5 rounded-xl font-medium font-mono text-sm text-[#F2FAFF] bg-[#071B28] hover:bg-[#061521] border border-[#123746] hover:border-[#00E5F0]/50 transition-all duration-200"
             >
-              <Terminal className="w-4 h-4 text-cyan-400" />
-              <span>Explore Challenges</span>
+              <span>{user ? "Enter Competitions" : "Get Started"}</span>
+              <ArrowRight className="w-4 h-4 text-[#00E5F0]" />
             </Link>
-
-            <Link
-              to="/events"
-              className="flex items-center space-x-2 px-5 py-3.5 rounded-xl font-medium text-slate-300 hover:text-white bg-slate-900/40 hover:bg-slate-900/80 border border-slate-800 transition-colors"
-            >
-              <Trophy className="w-4 h-4 text-amber-400" />
-              <span>View Competitions</span>
-            </Link>
-
-            <Link
-              to="/arena?tab=dsa"
-              className="flex items-center space-x-2 px-5 py-3.5 rounded-xl font-medium text-slate-300 hover:text-emerald-400 bg-slate-900/40 hover:bg-slate-900/80 border border-slate-800 transition-colors"
-            >
-              <Code2 className="w-4 h-4 text-emerald-400" />
-              <span>Learn and Practice</span>
-            </Link>
-
-            <Link
-              to="/login"
-              className="flex items-center space-x-1.5 px-4 py-3.5 rounded-xl font-medium text-slate-400 hover:text-cyan-400 transition-colors text-sm"
-            >
-              <span>Sign In</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-slate-800/60 font-mono text-left">
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
-              <span className="text-xs text-slate-400 block mb-1">EXECUTION ENGINE</span>
-              <span className="text-xl font-bold text-white">C11 | C++17 | Py3</span>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
-              <span className="text-xs text-slate-400 block mb-1">INTERACTIVE LABS</span>
-              <span className="text-xl font-bold text-cyan-400">Docker Isolated</span>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
-              <span className="text-xs text-slate-400 block mb-1">COMPETITION MODE</span>
-              <span className="text-xl font-bold text-emerald-400">Squad & Solo</span>
-            </div>
-            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
-              <span className="text-xs text-slate-400 block mb-1">ANTI-CHEAT LOCKDOWN</span>
-              <span className="text-xl font-bold text-amber-400">Exam Guard</span>
-            </div>
           </div>
         </div>
       </section>
 
-      {/* Core Capabilities */}
-      <section className="py-20 md:py-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      {/* =========================================================================
+          ABOUT SECTION
+          ========================================================================= */}
+      <section id="about" className="py-24 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-[#123746]">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest font-semibold block mb-2">
-            ADVANCED ARCHITECTURE
+          <span className="text-xs font-mono text-[#00E5F0] uppercase tracking-widest font-semibold block mb-2">
+            MISSION &amp; FOUNDATION
           </span>
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white font-mono">
-            ENGINEERED FOR MODERN FORENSICS & CODE
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-[#F2FAFF] font-mono">
+            {about.title}
           </h2>
-          <p className="mt-4 text-slate-400">
-            A battle-tested platform blending cybersecurity CTF operations, kernel sandboxing, dynamic testing, and competitive programming.
+          <p className="mt-4 text-[#9BB3C2] text-sm sm:text-base leading-relaxed">
+            {about.description}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Card 1 */}
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all duration-300 group">
-            <div className="w-12 h-12 rounded-xl bg-cyan-950/60 border border-cyan-800/80 flex items-center justify-center text-cyan-400 mb-5 group-hover:scale-110 transition-transform">
-              <Terminal className="w-6 h-6" />
+        {/* Pillars / Principles */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {about.principles?.map((p, idx) => (
+            <div 
+              key={idx}
+              className="p-6 rounded-2xl bg-[#071B28] border border-[#123746] hover:border-[#00E5F0]/40 transition-all duration-200 flex flex-col justify-between"
+            >
+              <div>
+                <div className="w-8 h-8 rounded-lg bg-[#00E5F0]/10 border border-[#00E5F0]/20 flex items-center justify-center text-[#00E5F0] font-mono font-bold text-xs mb-4">
+                  0{idx + 1}
+                </div>
+                <h3 className="text-base font-bold text-[#F2FAFF] font-mono mb-2">
+                  {p.title}
+                </h3>
+                <p className="text-xs text-[#9BB3C2] leading-relaxed">
+                  {p.description}
+                </p>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-white font-mono mb-2">Multi-Category CTF Arena</h3>
-            <p className="text-slate-400 text-sm leading-relaxed mb-4">
-              Explore web exploits, cryptography, digital forensics, reverse engineering, binary exploitation, network analysis, and OSINT challenges.
-            </p>
-            <ul className="space-y-1.5 text-xs text-slate-300 font-mono">
-              <li className="flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Static & Dynamic Flag Engines</span>
-              </li>
-              <li className="flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Secure Attachment Manager</span>
-              </li>
-            </ul>
-          </div>
+          ))}
+        </div>
+      </section>
 
-          {/* Card 2 */}
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all duration-300 group">
-            <div className="w-12 h-12 rounded-xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 mb-5 group-hover:scale-110 transition-transform">
-              <Cpu className="w-6 h-6" />
-            </div>
-            <h3 className="text-lg font-bold text-white font-mono mb-2">On-Demand Docker Labs</h3>
-            <p className="text-slate-400 text-sm leading-relaxed mb-4">
-              Spin up dedicated, isolated container environments per cadet or squad with dynamic port allocation, automated timeout reapers, and zero host exposure.
-            </p>
-            <ul className="space-y-1.5 text-xs text-slate-300 font-mono">
-              <li className="flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Unique ephemeral access ports</span>
-              </li>
-              <li className="flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Non-root & capability drops</span>
-              </li>
-            </ul>
-          </div>
+      {/* =========================================================================
+          CREATOR SECTION
+          ========================================================================= */}
+      <section id="creator" className="py-24 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <span className="text-xs font-mono text-[#00E5F0] uppercase tracking-widest font-semibold block mb-2">
+            MAINTAINED &amp; ENGINEERED
+          </span>
+          <h2 className="text-3xl font-extrabold text-[#F2FAFF] font-mono">
+            Platform Leadership
+          </h2>
+        </div>
 
-          {/* Card 3 */}
-          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all duration-300 group">
-            <div className="w-12 h-12 rounded-xl bg-purple-950/60 border border-purple-800/80 flex items-center justify-center text-purple-400 mb-5 group-hover:scale-110 transition-transform">
-              <Code2 className="w-6 h-6" />
+        <div className="p-8 sm:p-10 rounded-3xl bg-[#071B28] border border-[#123746] shadow-2xl relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-8">
+            {/* Avatar / Brand Icon */}
+            <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl bg-[#030B12] border border-[#123746] p-2 flex-shrink-0 flex items-center justify-center overflow-hidden">
+              <img 
+                src={creator.avatar_url || "/logo.png"} 
+                alt={creator.name} 
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.target.src = "/logo.png";
+                }}
+              />
             </div>
-            <h3 className="text-lg font-bold text-white font-mono mb-2">Sandboxed Code Judge</h3>
-            <p className="text-slate-400 text-sm leading-relaxed mb-4">
-              Execute C, C++, and Python 3 submissions under strict Linux kernel resource limits (`setrlimit`). Evaluates public samples and confidential hidden test suites.
-            </p>
-            <ul className="space-y-1.5 text-xs text-slate-300 font-mono">
-              <li className="flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
-                <span>CPU, memory, & process ceilings</span>
-              </li>
-              <li className="flex items-center space-x-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
-                <span>Dynamic question parameter generator</span>
-              </li>
-            </ul>
+
+            {/* Profile Info */}
+            <div className="flex-1 text-center sm:text-left">
+              <div className="inline-block px-2.5 py-0.5 rounded bg-[#00E5F0]/10 border border-[#00E5F0]/30 text-[#00E5F0] font-mono text-xs font-bold mb-2">
+                {creator.role || "Lead Architect"}
+              </div>
+              <h3 className="text-2xl font-bold text-[#F2FAFF] font-mono">
+                {creator.name || "CyberAnzen Core Team"}
+              </h3>
+              <p className="text-sm text-[#9BB3C2] mt-3 leading-relaxed max-w-2xl">
+                {creator.bio || "Platform maintained by the CyberAnzen team."}
+              </p>
+
+              {/* External Links */}
+              {creator.links && (
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-6">
+                  {creator.links.github && (
+                    <a
+                      href={creator.links.github}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-[#030B12] hover:bg-[#061521] border border-[#123746] text-[#9BB3C2] hover:text-[#00E5F0] transition-colors"
+                    >
+                      <Github className="w-3.5 h-3.5" />
+                      <span>GitHub</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                  )}
+
+                  {creator.links.linkedin && (
+                    <a
+                      href={creator.links.linkedin}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-[#030B12] hover:bg-[#061521] border border-[#123746] text-[#9BB3C2] hover:text-[#00E5F0] transition-colors"
+                    >
+                      <Linkedin className="w-3.5 h-3.5" />
+                      <span>LinkedIn</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                  )}
+
+                  {creator.links.website && (
+                    <a
+                      href={creator.links.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-[#030B12] hover:bg-[#061521] border border-[#123746] text-[#9BB3C2] hover:text-[#00E5F0] transition-colors"
+                    >
+                      <Globe className="w-3.5 h-3.5" />
+                      <span>Official Site</span>
+                      <ExternalLink className="w-3 h-3 ml-0.5" />
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="mt-auto py-8 border-t border-slate-800/80 bg-slate-950/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-4">
-          <div className="flex items-center space-x-2">
-            <Shield className="w-4 h-4 text-cyan-400" />
-            <span>CyberAnzen Arena — Digital Forensics & Competitive Programming</span>
+      {/* =========================================================================
+          PUBLIC FOOTER
+          ========================================================================= */}
+      <footer className="mt-auto py-12 border-t border-[#123746] bg-[#030B12]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-[#123746]/60">
+            {/* Brand in Footer */}
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-lg bg-[#071B28] border border-[#123746] p-1 flex items-center justify-center">
+                <img src="/logo.png" alt="CyberAnzen" className="w-full h-full object-contain" />
+              </div>
+              <div>
+                <span className="font-mono font-bold text-sm text-[#F2FAFF] tracking-wider">
+                  CYBER<span className="text-[#00E5F0]">ANZEN</span>
+                </span>
+                <p className="text-[11px] text-[#9BB3C2] mt-0.5">
+                  {footer.description}
+                </p>
+              </div>
+            </div>
+
+            {/* Navigation in Footer */}
+            <div className="flex flex-wrap items-center justify-center gap-6 text-xs font-mono text-[#9BB3C2]">
+              <Link to="/" className="hover:text-[#00E5F0] transition-colors">Home</Link>
+              <a href="#about" className="hover:text-[#00E5F0] transition-colors">About</a>
+              <a href="#creator" className="hover:text-[#00E5F0] transition-colors">Creator</a>
+              <Link to="/events" className="hover:text-[#00E5F0] transition-colors">Events</Link>
+              {!user && (
+                <>
+                  <Link to="/login" className="hover:text-[#00E5F0] transition-colors">Sign In</Link>
+                  <Link to="/register" className="hover:text-[#00E5F0] transition-colors">Sign Up</Link>
+                </>
+              )}
+            </div>
           </div>
-          <div className="flex items-center space-x-4">
-            <Link to="/arena" className="hover:text-cyan-400 transition-colors">Challenges</Link>
-            <Link to="/events" className="hover:text-cyan-400 transition-colors">Competitions</Link>
-            <Link to="/leaderboard" className="hover:text-cyan-400 transition-colors">Standings</Link>
-            <Link to="/login" className="hover:text-cyan-400 transition-colors">Cadet Portal</Link>
+
+          <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-[11px] text-[#9BB3C2]/70 font-mono gap-2">
+            <div>{footer.copyright}</div>
+            <div className="text-[10px]">Security, Forensics &amp; Algorithmic Excellence</div>
           </div>
         </div>
       </footer>

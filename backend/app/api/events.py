@@ -7,7 +7,8 @@ import json
 from app.db.session import get_db
 from app.db.models import (
     Event, EventRegistration, Team, Solve, User, EventStatus, ParticipationMode, EventType,
-    DSAQuestion, CTFChallenge, MCQQuestion, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion
+    DSAQuestion, CTFChallenge, MCQQuestion, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
+    Submission
 )
 from app.api.deps import get_current_user, get_optional_current_user
 
@@ -488,3 +489,39 @@ def get_event_leaderboard(event_id: int, db: Session = Depends(get_db)):
                 for idx, u in enumerate(users)
             ]
         }
+
+@router.get("/{event_id}/submissions")
+def get_event_submissions(
+    event_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if event_id.isdigit():
+        event = db.query(Event).filter(Event.id == int(event_id)).first()
+    else:
+        event = db.query(Event).filter(Event.slug == event_id).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    subs = db.query(Submission).filter(
+        Submission.event_id == event.id,
+        Submission.user_id == current_user.id
+    ).order_by(Submission.created_at.desc()).all()
+
+    results = []
+    for s in subs:
+        q = db.query(DSAQuestion).filter(DSAQuestion.id == int(s.target_id)).first() if s.target_id and s.target_id.isdigit() else None
+        results.append({
+            "id": s.id,
+            "target_id": s.target_id,
+            "question_title": q.title if q else f"Target #{s.target_id}",
+            "language": s.language,
+            "verdict": s.verdict,
+            "execution_time_ms": s.execution_time_ms,
+            "memory_kb": s.memory_used_kb,
+            "points_awarded": s.score,
+            "created_at": s.created_at
+        })
+    return results
+
