@@ -153,9 +153,9 @@ def test_user_deletion_security_and_cascade():
     assert updated_solved.solved_by_user_id is None
 
     # CHECK 8: Audit log was created
-    audit = db.query(AuditLog).filter(AuditLog.action == "DELETE_USER", AuditLog.target_id == str(victim_id)).order_by(AuditLog.id.desc()).first()
+    audit = db.query(AuditLog).filter(AuditLog.action == "DELETE_USER", AuditLog.entity_id == str(victim_id)).order_by(AuditLog.id.desc()).first()
     assert audit is not None
-    assert audit.user_id == admin1_id
+    assert audit.actor_id == admin1_id
 
     # Clean up test entities
     db.delete(updated_team)

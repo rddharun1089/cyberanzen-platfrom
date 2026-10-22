@@ -1,45 +1,64 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from app.db.session import get_db
-from app.db.models import User, Submission, Case, EvidenceToken
+from app.db.models import User, Team, Solve, Submission, DSAQuestion, CTFChallenge, MCQQuestion
 
-router = APIRouter(prefix="", tags=["Leaderboard & Statistics"])
+router = APIRouter(prefix="/leaderboard", tags=["Leaderboards & Standings"])
 
-@router.get("/leaderboard")
-def get_leaderboard(db: Session = Depends(get_db)):
-    users = db.query(User).order_by(User.points.desc()).limit(100).all()
-    rankings = []
-    for rank, u in enumerate(users, start=1):
-        solved_count = db.query(EvidenceToken).filter(EvidenceToken.user_id == u.id).count()
-        rankings.append({
-            "rank": rank,
+@router.get("")
+def get_global_leaderboard(db: Session = Depends(get_db)):
+    users = db.query(User).filter(User.is_active == True).order_by(
+        User.points.desc(), User.id.asc()
+    ).limit(100).all()
+
+    return [
+        {
+            "rank": idx + 1,
+            "user_id": u.id,
             "username": u.username,
-            "role": u.role,
             "points": u.points,
-            "cases_solved": solved_count
-        })
-    return rankings
+            "solved_count": len(u.solves),
+            "team_name": u.team_membership.team.name if (u.team_membership and u.team_membership.team) else None
+        }
+        for idx, u in enumerate(users)
+    ]
+
+@router.get("/teams")
+def get_team_leaderboard(db: Session = Depends(get_db)):
+    teams = db.query(Team).filter(Team.is_active == True).order_by(
+        Team.points.desc(), Team.updated_at.asc()
+    ).limit(100).all()
+
+    return [
+        {
+            "rank": idx + 1,
+            "team_id": t.id,
+            "team_name": t.name,
+            "points": t.points,
+            "solved_count": len(t.solves),
+            "member_count": len(t.memberships),
+            "updated_at": t.updated_at
+        }
+        for idx, t in enumerate(teams)
+    ]
 
 @router.get("/stats")
-def get_platform_statistics(db: Session = Depends(get_db)):
-    total_cases = db.query(Case).count()
-    total_users = db.query(User).count()
-    total_submissions = db.query(Submission).count()
-    total_accepted = db.query(Submission).filter(Submission.verdict == "ACCEPTED").count()
-
-    # Domain breakdown
-    domain_rows = db.query(Case.domain, func.count(Case.id)).group_by(Case.domain).all()
-    domain_stats = {d: cnt for d, cnt in domain_rows}
-
-    # Total points in catalog
-    total_possible_points = db.query(func.sum(Case.points)).scalar() or 0
+def get_platform_stats(db: Session = Depends(get_db)):
+    dsa_count = db.query(DSAQuestion).count()
+    ctf_count = db.query(CTFChallenge).count()
+    mcq_count = db.query(MCQQuestion).count()
+    users_count = db.query(User).count()
+    teams_count = db.query(Team).count()
+    subs_count = db.query(Submission).count()
+    solves_count = db.query(Solve).count()
 
     return {
-        "total_cases": total_cases,
-        "total_users": total_users,
-        "total_submissions": total_submissions,
-        "total_accepted": total_accepted,
-        "total_possible_points": total_possible_points,
-        "domain_distribution": domain_stats
+        "total_challenges": dsa_count + ctf_count + mcq_count,
+        "dsa_questions": dsa_count,
+        "ctf_challenges": ctf_count,
+        "mcq_questions": mcq_count,
+        "total_cadets": users_count,
+        "active_squads": teams_count,
+        "total_submissions": subs_count,
+        "total_solves": solves_count
     }

@@ -1,302 +1,200 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Terminal, Shield, Code2, Users, Trophy, Key, Cpu, Lock, 
-  ArrowRight, CheckCircle2, ChevronRight, Activity, Zap, Eye, Database
+  Shield, Terminal, Zap, Code2, Cpu, Trophy, 
+  ArrowRight, CheckCircle2, Lock, Flame, Laptop, Database
 } from 'lucide-react';
 
 export default function Landing() {
   return (
-    <div className="flex-1 flex flex-col bg-forensic-950 font-sans text-slate-100 overflow-x-hidden">
-      
-      {/* HERO SECTION */}
-      <section className="relative py-16 sm:py-24 border-b border-forensic-800 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-950/30 via-forensic-950 to-forensic-950">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          
-          {/* Top Status Pill */}
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-mono font-bold bg-cyan-950/80 border border-cyan-500/50 text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              ENIGMATRIX PLATFORM 2.0 • 80 FORENSIC CRIME CASES
-            </span>
+    <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 selection:bg-cyan-500/30 selection:text-cyan-200">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden pt-20 pb-28 md:pt-28 md:pb-36 border-b border-slate-800/60">
+        {/* Ambient Glow & Grid Background */}
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-cyan-900/20 via-slate-950 to-slate-950 -z-10 pointer-events-none" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#1e293b15_1px,transparent_1px),linear-gradient(to_bottom,#1e293b15_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] -z-10 pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          {/* Status Badge */}
+          <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-cyan-950/60 border border-cyan-800/80 text-cyan-400 text-xs font-mono font-medium tracking-wide mb-8 shadow-[0_0_20px_rgba(6,182,212,0.15)] animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-cyan-400" />
+            <span>OPERATIONAL // CYBERANZEN ARENA ONLINE</span>
           </div>
 
-          {/* Main Title & Subtitle */}
-          <div className="space-y-4 max-w-4xl">
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight font-sans text-white leading-tight">
-              Master Cyber Forensics <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-forensic-cyan via-teal-300 to-cyan-500">
-                Through Production Code.
-              </span>
-            </h1>
-            <p className="text-base sm:text-lg text-slate-300 font-sans max-w-3xl leading-relaxed">
-              Step into the role of a digital forensic investigator. Analyze corrupted memory dumps, decode encrypted malware protocols, rebuild breached servers, and verify your code in isolated sandboxed judge workers.
-            </p>
-          </div>
+          {/* Slogan */}
+          <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white mb-6 font-mono leading-tight">
+            THE ARENA IS OPEN.<br />
+            <span className="bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 bg-clip-text text-transparent">
+              THINK YOU CAN BREAK IT?
+            </span><br />
+            PROVE IT.
+          </h1>
 
-          {/* Primary CTA Action Row */}
-          <div className="flex flex-wrap items-center gap-4 pt-2 font-mono">
-            <Link
-              to="/register"
-              className="px-6 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm flex items-center gap-2.5 transition shadow-[0_0_20px_rgba(0,240,255,0.4)]"
-            >
-              <span>Enlist Investigator Clearance</span>
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-
-            <Link
-              to="/archive"
-              className="px-6 py-3.5 rounded-xl bg-forensic-900 hover:bg-forensic-850 border border-forensic-750 text-slate-200 font-bold text-sm flex items-center gap-2 transition"
-            >
-              <span>Explore 80 Case Catalog</span>
-              <ChevronRight className="w-4 h-4 text-cyan-400" />
-            </Link>
-
-            <Link
-              to="/login"
-              className="px-5 py-3.5 rounded-xl bg-transparent hover:bg-forensic-900 text-slate-400 hover:text-white text-sm transition"
-            >
-              Sign In Existing Agent →
-            </Link>
-          </div>
-
-          {/* Live Telemetry / Grid Counters */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-8 border-t border-forensic-800/80 font-mono">
-            <div className="p-4 rounded-xl bg-forensic-900/60 border border-forensic-800">
-              <span className="text-2xl sm:text-3xl font-extrabold text-cyan-400 block">80</span>
-              <span className="text-xs text-slate-400 uppercase tracking-wider">Sealed Crime Dossiers</span>
-            </div>
-            <div className="p-4 rounded-xl bg-forensic-900/60 border border-forensic-800">
-              <span className="text-2xl sm:text-3xl font-extrabold text-white block">3</span>
-              <span className="text-xs text-slate-400 uppercase tracking-wider">Sandboxed Runtimes (Py, C++, C)</span>
-            </div>
-            <div className="p-4 rounded-xl bg-forensic-900/60 border border-forensic-800">
-              <span className="text-2xl sm:text-3xl font-extrabold text-amber-400 block">&lt; 100ms</span>
-              <span className="text-xs text-slate-400 uppercase tracking-wider">RLIMIT Isolated Execution</span>
-            </div>
-            <div className="p-4 rounded-xl bg-forensic-900/60 border border-forensic-800">
-              <span className="text-2xl sm:text-3xl font-extrabold text-emerald-400 block">100%</span>
-              <span className="text-xs text-slate-400 uppercase tracking-wider">Anti-Cheat Clipboard Guard</span>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* INTERACTIVE FORENSIC TERMINAL PREVIEW */}
-      <section className="py-16 bg-forensic-900/40 border-b border-forensic-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <span className="text-xs font-mono uppercase text-forensic-cyan tracking-widest font-bold block mb-1">
-                LIVE INVESTIGATION SIMULATION
-              </span>
-              <h2 className="text-2xl sm:text-3xl font-bold text-white">
-                How Enigmatrix Challenges Work
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-400 max-w-md font-sans">
-              Each case provides real forensic context. Read the incident report, write analytical code, and pass automated judge vectors.
-            </p>
-          </div>
-
-          <div className="bg-forensic-950 border border-forensic-800 rounded-xl overflow-hidden shadow-2xl font-mono text-xs">
-            {/* Terminal Window Bar */}
-            <div className="bg-forensic-900 px-4 py-3 border-b border-forensic-800 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
-                <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
-                <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
-                <span className="text-slate-400 font-bold ml-2">case-01-the-dead-server.py — Python 3.14</span>
-              </div>
-              <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/60 text-[10px] font-bold">
-                VERDICT: ACCEPTED (0.012s)
-              </span>
-            </div>
-
-            {/* Simulated Code & Execution Split */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-forensic-800">
-              {/* Code Pane */}
-              <div className="p-4 sm:p-6 bg-[#161b22] text-slate-300 space-y-2 overflow-x-auto">
-                <span className="text-[10px] text-slate-500 uppercase font-bold block mb-2">Investigator Source Code</span>
-                <pre className="text-emerald-300 leading-relaxed">
-{`import sys
-
-def solve():
-    lines = sys.stdin.read().splitlines()
-    if not lines:
-        return
-    # Parse corrupted forensic log entries
-    anomalies = [line for line in lines if "CRITICAL_AUTH_FAIL" in line]
-    print(f"ANOMALY_COUNT:{len(anomalies)}")
-
-if __name__ == "__main__":
-    solve()`}
-                </pre>
-              </div>
-
-              {/* Execution Output Pane */}
-              <div className="p-4 sm:p-6 bg-forensic-950 space-y-4">
-                <span className="text-[10px] text-cyan-400 uppercase font-bold block">Automated Judge Sandbox Output</span>
-                
-                <div className="space-y-2 text-[11px]">
-                  <div className="p-3 rounded bg-forensic-900 border border-forensic-800 text-slate-300">
-                    <span className="text-slate-500 block text-[10px] uppercase">Input Evidence Stream:</span>
-                    <code>2026-10-15 03:12:00 [AUTH] CRITICAL_AUTH_FAIL user=admin ip=10.0.4.12</code>
-                  </div>
-
-                  <div className="p-3 rounded bg-cyan-950/60 border border-cyan-800/60 text-cyan-200">
-                    <span className="text-cyan-400 block text-[10px] uppercase">Judged Output:</span>
-                    <code className="text-cyan-300 font-bold">ANOMALY_COUNT:1</code>
-                  </div>
-
-                  <div className="p-3 rounded bg-emerald-950/60 border border-emerald-600/60 text-emerald-200 flex items-center justify-between">
-                    <div>
-                      <span className="text-emerald-400 block text-[10px] uppercase font-bold">Evidence Token Issued</span>
-                      <code className="text-emerald-300">TOKEN-EVD-DEAD-SERVER-9821</code>
-                    </div>
-                    <Key className="w-5 h-5 text-emerald-400" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* CORE CAPABILITIES GRID */}
-      <section className="py-16 border-b border-forensic-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <span className="text-xs font-mono uppercase text-forensic-cyan tracking-widest font-bold">
-              BUILT FOR CYBER FORENSICS & CONTEST COMPETITION
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-extrabold text-white">
-              Everything You Need to Run High-Stakes Programming Events
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-xs">
-            
-            {/* Card 1 */}
-            <div className="p-6 rounded-2xl bg-forensic-900 border border-forensic-800 hover:border-cyan-500/40 transition space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-800 text-cyan-400 flex items-center justify-center">
-                <Code2 className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-white font-sans">80 Progressive Forensic Cases</h3>
-              <p className="text-slate-400 leading-relaxed font-sans">
-                Carefully crafted cyber investigations spanning memory forensics, packet disassembly, cryptographic breaking, and incident response.
-              </p>
-            </div>
-
-            {/* Card 2 */}
-            <div className="p-6 rounded-2xl bg-forensic-900 border border-forensic-800 hover:border-cyan-500/40 transition space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-purple-950 border border-purple-800 text-purple-400 flex items-center justify-center">
-                <Users className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-white font-sans">Squad Room & Team Challenge</h3>
-              <p className="text-slate-400 leading-relaxed font-sans">
-                Commission an operative squad, share unique cryptographic invitation tokens, and solve challenges together with synchronized team progress.
-              </p>
-            </div>
-
-            {/* Card 3 */}
-            <div className="p-6 rounded-2xl bg-forensic-900 border border-forensic-800 hover:border-cyan-500/40 transition space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-800 text-emerald-400 flex items-center justify-center">
-                <Cpu className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-white font-sans">DMOJ Sandboxed Compiler</h3>
-              <p className="text-slate-400 leading-relaxed font-sans">
-                Native POSIX sandboxing with RLIMIT_CPU, RLIMIT_AS, and memory constraints. Automated test verification with sub-100ms response times.
-              </p>
-            </div>
-
-            {/* Card 4 */}
-            <div className="p-6 rounded-2xl bg-forensic-900 border border-forensic-800 hover:border-red-500/40 transition space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-red-950 border border-red-800 text-red-400 flex items-center justify-center">
-                <Lock className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-white font-sans">Anti-Cheat Clipboard Lockdown</h3>
-              <p className="text-slate-400 leading-relaxed font-sans">
-                Strict administrative lockdown. Intercepts Ctrl+C, Ctrl+V, Ctrl+Shift+C/V, context menus, and browser extension injection.
-              </p>
-            </div>
-
-            {/* Card 5 */}
-            <div className="p-6 rounded-2xl bg-forensic-900 border border-forensic-800 hover:border-amber-500/40 transition space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-950 border border-amber-800 text-amber-400 flex items-center justify-center">
-                <Trophy className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-white font-sans">Live Competitive Leaderboard</h3>
-              <p className="text-slate-400 leading-relaxed font-sans">
-                Real-time squad standings and individual operative rankings. Top-3 Gold/Silver/Bronze podiums with automatic 15-second polling.
-              </p>
-            </div>
-
-            {/* Card 6 */}
-            <div className="p-6 rounded-2xl bg-forensic-900 border border-forensic-800 hover:border-teal-500/40 transition space-y-3">
-              <div className="w-10 h-10 rounded-xl bg-teal-950 border border-teal-800 text-teal-400 flex items-center justify-center">
-                <Key className="w-5 h-5" />
-              </div>
-              <h3 className="text-base font-bold text-white font-sans">Cryptographic Evidence Vault</h3>
-              <p className="text-slate-400 leading-relaxed font-sans">
-                Every solved challenge yields a tamper-proof evidence token stored in your personal vault, chaining up to solve the final Case 80 mystery.
-              </p>
-            </div>
-
-          </div>
-
-        </div>
-      </section>
-
-      {/* FINAL CALL TO ACTION */}
-      <section className="py-20 bg-gradient-to-b from-forensic-950 to-forensic-900 text-center">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white font-sans">
-            Ready to Investigate?
-          </h2>
-          <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto font-sans leading-relaxed">
-            Begin with Case 01: "The Dead Server" or assemble your squad in the Squad Room. Free and open access for students, researchers, and competitive coders.
+          {/* Supporting Message */}
+          <p className="max-w-2xl mx-auto text-lg sm:text-xl text-slate-300 mb-10 font-sans font-normal leading-relaxed">
+            Investigate the evidence. Solve the challenge. Write the exploit. Master the code. Climb the leaderboard.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-4 font-mono">
+          {/* Primary Call to Actions */}
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 mb-16">
             <Link
               to="/register"
-              className="px-8 py-3.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-bold text-sm shadow-xl shadow-cyan-500/20 transition flex items-center gap-2"
+              className="flex items-center space-x-2 px-6 py-3.5 rounded-xl font-semibold text-slate-950 bg-gradient-to-r from-cyan-400 to-teal-300 hover:from-cyan-300 hover:to-teal-200 shadow-[0_0_30px_rgba(6,182,212,0.4)] hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] transition-all duration-300 transform hover:-translate-y-0.5"
             >
-              <span>Enlist Clearance Free</span>
+              <span>Accept the Challenge</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
 
             <Link
-              to="/login"
-              className="px-8 py-3.5 rounded-xl bg-forensic-850 hover:bg-forensic-800 border border-slate-700 text-slate-200 font-bold text-sm transition"
+              to="/arena"
+              className="flex items-center space-x-2 px-6 py-3.5 rounded-xl font-medium text-slate-200 bg-slate-900/90 hover:bg-slate-800/90 border border-slate-700 hover:border-cyan-500/50 transition-all duration-200"
             >
-              Sign In Existing Agent
+              <Terminal className="w-4 h-4 text-cyan-400" />
+              <span>Explore Challenges</span>
             </Link>
+
+            <Link
+              to="/events"
+              className="flex items-center space-x-2 px-5 py-3.5 rounded-xl font-medium text-slate-300 hover:text-white bg-slate-900/40 hover:bg-slate-900/80 border border-slate-800 transition-colors"
+            >
+              <Trophy className="w-4 h-4 text-amber-400" />
+              <span>View Competitions</span>
+            </Link>
+
+            <Link
+              to="/arena?tab=dsa"
+              className="flex items-center space-x-2 px-5 py-3.5 rounded-xl font-medium text-slate-300 hover:text-emerald-400 bg-slate-900/40 hover:bg-slate-900/80 border border-slate-800 transition-colors"
+            >
+              <Code2 className="w-4 h-4 text-emerald-400" />
+              <span>Learn and Practice</span>
+            </Link>
+
+            <Link
+              to="/login"
+              className="flex items-center space-x-1.5 px-4 py-3.5 rounded-xl font-medium text-slate-400 hover:text-cyan-400 transition-colors text-sm"
+            >
+              <span>Sign In</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-slate-800/60 font-mono text-left">
+            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
+              <span className="text-xs text-slate-400 block mb-1">EXECUTION ENGINE</span>
+              <span className="text-xl font-bold text-white">C11 | C++17 | Py3</span>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
+              <span className="text-xs text-slate-400 block mb-1">INTERACTIVE LABS</span>
+              <span className="text-xl font-bold text-cyan-400">Docker Isolated</span>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
+              <span className="text-xs text-slate-400 block mb-1">COMPETITION MODE</span>
+              <span className="text-xl font-bold text-emerald-400">Squad & Solo</span>
+            </div>
+            <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800/80">
+              <span className="text-xs text-slate-400 block mb-1">ANTI-CHEAT LOCKDOWN</span>
+              <span className="text-xl font-bold text-amber-400">Exam Guard</span>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer className="border-t border-forensic-800 py-8 bg-forensic-950 font-mono text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-forensic-cyan" />
-            <span className="font-bold text-slate-400">ENIGMATRIX FORENSICS</span>
-            <span>• 80 Investigational Crime Problems</span>
+      {/* Core Capabilities */}
+      <section className="py-20 md:py-28 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="text-center max-w-3xl mx-auto mb-16">
+          <span className="text-xs font-mono text-cyan-400 uppercase tracking-widest font-semibold block mb-2">
+            ADVANCED ARCHITECTURE
+          </span>
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-white font-mono">
+            ENGINEERED FOR MODERN FORENSICS & CODE
+          </h2>
+          <p className="mt-4 text-slate-400">
+            A battle-tested platform blending cybersecurity CTF operations, kernel sandboxing, dynamic testing, and competitive programming.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Card 1 */}
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all duration-300 group">
+            <div className="w-12 h-12 rounded-xl bg-cyan-950/60 border border-cyan-800/80 flex items-center justify-center text-cyan-400 mb-5 group-hover:scale-110 transition-transform">
+              <Terminal className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-mono mb-2">Multi-Category CTF Arena</h3>
+            <p className="text-slate-400 text-sm leading-relaxed mb-4">
+              Explore web exploits, cryptography, digital forensics, reverse engineering, binary exploitation, network analysis, and OSINT challenges.
+            </p>
+            <ul className="space-y-1.5 text-xs text-slate-300 font-mono">
+              <li className="flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Static & Dynamic Flag Engines</span>
+              </li>
+              <li className="flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Secure Attachment Manager</span>
+              </li>
+            </ul>
           </div>
 
-          <div className="flex items-center gap-4 text-slate-400">
-            <Link to="/archive" className="hover:text-cyan-400 transition">Cases</Link>
-            <Link to="/leaderboard" className="hover:text-cyan-400 transition">Leaderboard</Link>
-            <Link to="/login" className="hover:text-cyan-400 transition">Investigator Login</Link>
-            <Link to="/register" className="hover:text-cyan-400 transition">Enlist</Link>
+          {/* Card 2 */}
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all duration-300 group">
+            <div className="w-12 h-12 rounded-xl bg-emerald-950/60 border border-emerald-800/80 flex items-center justify-center text-emerald-400 mb-5 group-hover:scale-110 transition-transform">
+              <Cpu className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-mono mb-2">On-Demand Docker Labs</h3>
+            <p className="text-slate-400 text-sm leading-relaxed mb-4">
+              Spin up dedicated, isolated container environments per cadet or squad with dynamic port allocation, automated timeout reapers, and zero host exposure.
+            </p>
+            <ul className="space-y-1.5 text-xs text-slate-300 font-mono">
+              <li className="flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Unique ephemeral access ports</span>
+              </li>
+              <li className="flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Non-root & capability drops</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Card 3 */}
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-cyan-500/40 transition-all duration-300 group">
+            <div className="w-12 h-12 rounded-xl bg-purple-950/60 border border-purple-800/80 flex items-center justify-center text-purple-400 mb-5 group-hover:scale-110 transition-transform">
+              <Code2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-bold text-white font-mono mb-2">Sandboxed Code Judge</h3>
+            <p className="text-slate-400 text-sm leading-relaxed mb-4">
+              Execute C, C++, and Python 3 submissions under strict Linux kernel resource limits (`setrlimit`). Evaluates public samples and confidential hidden test suites.
+            </p>
+            <ul className="space-y-1.5 text-xs text-slate-300 font-mono">
+              <li className="flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
+                <span>CPU, memory, & process ceilings</span>
+              </li>
+              <li className="flex items-center space-x-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-purple-400" />
+                <span>Dynamic question parameter generator</span>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="mt-auto py-8 border-t border-slate-800/80 bg-slate-950/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 font-mono gap-4">
+          <div className="flex items-center space-x-2">
+            <Shield className="w-4 h-4 text-cyan-400" />
+            <span>CyberAnzen Arena — Digital Forensics & Competitive Programming</span>
+          </div>
+          <div className="flex items-center space-x-4">
+            <Link to="/arena" className="hover:text-cyan-400 transition-colors">Challenges</Link>
+            <Link to="/events" className="hover:text-cyan-400 transition-colors">Competitions</Link>
+            <Link to="/leaderboard" className="hover:text-cyan-400 transition-colors">Standings</Link>
+            <Link to="/login" className="hover:text-cyan-400 transition-colors">Cadet Portal</Link>
           </div>
         </div>
       </footer>
-
     </div>
   );
 }

@@ -11,7 +11,7 @@ const apiClient = axios.create({
 
 // Interceptor to attach JWT token
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('enigmatrix_token') || localStorage.getItem('cyberanzen_token');
+  const token = localStorage.getItem('arena_token') || localStorage.getItem('enigmatrix_token') || localStorage.getItem('cyberanzen_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -23,56 +23,73 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Clear token if expired
+      localStorage.removeItem('arena_token');
+      localStorage.removeItem('arena_user');
       localStorage.removeItem('enigmatrix_token');
-      localStorage.removeItem('enigmatrix_user');
       localStorage.removeItem('cyberanzen_token');
-      localStorage.removeItem('cyberanzen_user');
     }
     return Promise.reject(error);
   }
 );
 
+// ==============================================================================
+// AUTHENTICATION SERVICE
+// ==============================================================================
 export const authService = {
+  async getSetupStatus() {
+    const res = await apiClient.get('/auth/setup-status');
+    return res.data;
+  },
+
+  async firstRunSetup(username, email, password, organizationName = 'CyberAnzen Arena') {
+    const res = await apiClient.post('/auth/first-run-setup', {
+      username,
+      email,
+      password,
+      organization_name: organizationName
+    });
+    if (res.data.access_token) {
+      localStorage.setItem('arena_token', res.data.access_token);
+      localStorage.setItem('arena_user', JSON.stringify(res.data.user));
+    }
+    return res.data;
+  },
+
   async login(username, password) {
     const res = await apiClient.post('/auth/login', { username, password });
-    localStorage.setItem('enigmatrix_token', res.data.access_token);
-    localStorage.setItem('cyberanzen_token', res.data.access_token);
+    localStorage.setItem('arena_token', res.data.access_token);
     const userData = {
       id: res.data.id,
       username: res.data.username,
       role: res.data.role,
       points: res.data.points
     };
-    localStorage.setItem('enigmatrix_user', JSON.stringify(userData));
-    localStorage.setItem('cyberanzen_user', JSON.stringify(userData));
+    localStorage.setItem('arena_user', JSON.stringify(userData));
     return res.data;
   },
 
   async register(username, email, password) {
     const res = await apiClient.post('/auth/register', { username, email, password });
-    localStorage.setItem('enigmatrix_token', res.data.access_token);
-    localStorage.setItem('cyberanzen_token', res.data.access_token);
+    localStorage.setItem('arena_token', res.data.access_token);
     const userData = {
       id: res.data.id,
       username: res.data.username,
       role: res.data.role,
       points: res.data.points
     };
-    localStorage.setItem('enigmatrix_user', JSON.stringify(userData));
-    localStorage.setItem('cyberanzen_user', JSON.stringify(userData));
+    localStorage.setItem('arena_user', JSON.stringify(userData));
     return res.data;
   },
 
   logout() {
+    localStorage.removeItem('arena_token');
+    localStorage.removeItem('arena_user');
     localStorage.removeItem('enigmatrix_token');
-    localStorage.removeItem('enigmatrix_user');
     localStorage.removeItem('cyberanzen_token');
-    localStorage.removeItem('cyberanzen_user');
   },
 
   getCurrentUser() {
-    const data = localStorage.getItem('enigmatrix_user') || localStorage.getItem('cyberanzen_user');
+    const data = localStorage.getItem('arena_user') || localStorage.getItem('enigmatrix_user');
     return data ? JSON.parse(data) : null;
   },
 
@@ -82,183 +99,47 @@ export const authService = {
   }
 };
 
-export const caseService = {
-  async listCases(params = {}) {
-    const res = await apiClient.get('/cases', { params });
+// ==============================================================================
+// EVENTS SERVICE
+// ==============================================================================
+export const eventService = {
+  async listEvents(status = null) {
+    const params = status ? { status } : {};
+    const res = await apiClient.get('/events', { params });
     return res.data;
   },
 
-  async getCaseDetail(caseId) {
-    const res = await apiClient.get(`/cases/${caseId}`);
+  async getEventDetail(eventId) {
+    const res = await apiClient.get(`/events/${eventId}`);
+    return res.data;
+  },
+
+  async registerEvent(eventId) {
+    const res = await apiClient.post(`/events/${eventId}/register`);
+    return res.data;
+  },
+
+  async getEventLeaderboard(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/leaderboard`);
     return res.data;
   }
 };
 
-export const submissionService = {
-  async runSample(caseId, language, sourceCode) {
-    const res = await apiClient.post('/submissions/run-sample', {
-      case_id: caseId,
-      language,
-      source_code: sourceCode
-    });
-    return res.data;
-  },
-
-  async submitSolution(caseId, language, sourceCode) {
-    const res = await apiClient.post('/submissions/submit', {
-      case_id: caseId,
-      language,
-      source_code: sourceCode
-    });
-    return res.data;
-  },
-
-  async getSubmissions(caseId = null) {
-    const params = caseId ? { case_id: caseId } : {};
-    const res = await apiClient.get('/submissions', { params });
-    return res.data;
-  },
-
-  async getSubmissionDetail(id) {
-    const res = await apiClient.get(`/submissions/${id}`);
-    return res.data;
-  }
-};
-
-export const evidenceService = {
-  async getTokens() {
-    const res = await apiClient.get('/evidence/tokens');
-    return res.data;
-  },
-
-  async getEvidenceGraph() {
-    const res = await apiClient.get('/evidence/graph');
-    return res.data;
-  },
-
-  async runFinalConvergence() {
-    const res = await apiClient.post('/evidence/converge');
-    return res.data;
-  }
-};
-
-export const platformService = {
-  async getLeaderboard() {
-    const res = await apiClient.get('/leaderboard');
-    return res.data;
-  },
-
-  async getStats() {
-    const res = await apiClient.get('/stats');
-    return res.data;
-  }
-};
-
-export const adminService = {
-  async listCases() {
-    const res = await apiClient.get('/admin/cases');
-    return res.data;
-  },
-
-  async updateCase(caseId, data) {
-    const res = await apiClient.put(`/admin/cases/${caseId}`, data);
-    return res.data;
-  },
-
-  async addTestCase(caseId, testData) {
-    const res = await apiClient.post(`/admin/cases/${caseId}/tests`, testData);
-    return res.data;
-  },
-
-  async getAuditLogs() {
-    const res = await apiClient.get('/admin/audit-logs');
-    return res.data;
-  },
-
-  async getHealth() {
-    const res = await apiClient.get('/admin/health');
-    return res.data;
-  },
-
-  async gitPreview(repoPath = null) {
-    const res = await apiClient.post('/admin/git/preview', { repo_path: repoPath });
-    return res.data;
-  },
-
-  async listSolutions(params = {}) {
-    const res = await apiClient.get('/admin/solutions', { params });
-    return res.data;
-  },
-
-  async batchJudgeToggle(data) {
-    const res = await apiClient.post('/admin/cases/batch-judge-toggle', data);
-    return res.data;
-  },
-
-  async gitSync(repoPath = null, publishValidated = false) {
-    const res = await apiClient.post('/admin/git/sync', {
-      repo_path: repoPath,
-      publish_validated: publishValidated
-    });
-    return res.data;
-  },
-
-  async listUsers() {
-    const res = await apiClient.get('/admin/users');
-    return res.data;
-  },
-
-  async deleteUser(userId, confirmUsername) {
-    const res = await apiClient.delete(`/admin/users/${userId}`, {
-      params: { confirm_username: confirmUsername }
-    });
-    return res.data;
-  },
-
-  async listTeams() {
-    const res = await apiClient.get('/admin/teams');
-    return res.data;
-  },
-
-  async adminRotateTeamInvite(teamId) {
-    const res = await apiClient.post(`/admin/teams/${teamId}/rotate-invite`);
-    return res.data;
-  },
-
-  async adminRemoveTeamMember(teamId, userId) {
-    const res = await apiClient.delete(`/admin/teams/${teamId}/members/${userId}`);
-    return res.data;
-  },
-
-  async adminTransferTeamOwnership(teamId, newOwnerId) {
-    const res = await apiClient.post(`/admin/teams/${teamId}/transfer-ownership`, {
-      new_owner_id: newOwnerId
-    });
-    return res.data;
-  },
-
-  async adminAdjustTeamScore(teamId, pointsDelta, reason) {
-    const res = await apiClient.post(`/admin/teams/${teamId}/adjust-score`, {
-      points_delta: pointsDelta,
-      reason
-    });
-    return res.data;
-  },
-
-  async adminDeleteTeam(teamId) {
-    const res = await apiClient.delete(`/admin/teams/${teamId}`);
-    return res.data;
-  }
-};
-
+// ==============================================================================
+// SQUADS & TEAMS SERVICE
+// ==============================================================================
 export const teamService = {
-  async createTeam(name) {
-    const res = await apiClient.post('/teams', { name });
+  async getMyTeam() {
+    const res = await apiClient.get('/teams/me');
     return res.data;
   },
 
-  async getMyTeam() {
-    const res = await apiClient.get('/teams/my');
+  async createTeam(name, maxMembers = 4, eventId = null) {
+    const res = await apiClient.post('/teams', {
+      name,
+      max_members: maxMembers,
+      event_id: eventId
+    });
     return res.data;
   },
 
@@ -272,23 +153,253 @@ export const teamService = {
     return res.data;
   },
 
-  async rotateInviteCode() {
+  async rotateInvite() {
     const res = await apiClient.post('/teams/rotate-invite');
     return res.data;
   },
 
-  async removeMember(userId) {
-    const res = await apiClient.delete(`/teams/members/${userId}`);
+  async getTeamLeaderboard() {
+    const res = await apiClient.get('/leaderboard/teams');
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// DSA QUESTIONS SERVICE
+// ==============================================================================
+export const dsaService = {
+  async listQuestions(params = {}) {
+    const res = await apiClient.get('/questions', { params });
     return res.data;
   },
 
-  async transferOwnership(newOwnerId) {
-    const res = await apiClient.post('/teams/transfer-ownership', { new_owner_id: newOwnerId });
+  async getQuestionDetail(identifier) {
+    const res = await apiClient.get(`/questions/${identifier}`);
+    return res.data;
+  },
+
+  async runSample(identifier, language, sourceCode) {
+    const res = await apiClient.post(`/questions/${identifier}/run-sample`, {
+      language,
+      source_code: sourceCode
+    });
+    return res.data;
+  },
+
+  async submitSolution(identifier, language, sourceCode) {
+    const res = await apiClient.post(`/questions/${identifier}/submit`, {
+      language,
+      source_code: sourceCode
+    });
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// MCQ QUIZ SERVICE
+// ==============================================================================
+export const mcqService = {
+  async listMCQs(params = {}) {
+    const res = await apiClient.get('/mcqs', { params });
+    return res.data;
+  },
+
+  async getMCQDetail(mcqId) {
+    const res = await apiClient.get(`/mcqs/${mcqId}`);
+    return res.data;
+  },
+
+  async submitMCQ(mcqId, selectedOptionIds, timeTakenSec = 0) {
+    const res = await apiClient.post(`/mcqs/${mcqId}/submit`, {
+      selected_option_ids: selectedOptionIds,
+      time_taken_sec: timeTakenSec
+    });
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// CTF CHALLENGES SERVICE
+// ==============================================================================
+export const ctfService = {
+  async listChallenges(params = {}) {
+    const res = await apiClient.get('/challenges', { params });
+    return res.data;
+  },
+
+  async getChallengeDetail(identifier) {
+    const res = await apiClient.get(`/challenges/${identifier}`);
+    return res.data;
+  },
+
+  async submitFlag(identifier, flag) {
+    const res = await apiClient.post(`/challenges/${identifier}/submit-flag`, { flag });
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// DOCKER LABS SERVICE
+// ==============================================================================
+export const labService = {
+  async launchLab(challengeId) {
+    const res = await apiClient.post(`/labs/challenges/${challengeId}/launch`);
+    return res.data;
+  },
+
+  async stopLab(instanceId) {
+    const res = await apiClient.post(`/labs/instances/${instanceId}/stop`);
+    return res.data;
+  },
+
+  async resetLab(instanceId) {
+    const res = await apiClient.post(`/labs/instances/${instanceId}/reset`);
+    return res.data;
+  },
+
+  async getLabStatus(instanceId) {
+    const res = await apiClient.get(`/labs/instances/${instanceId}/status`);
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// LEADERBOARD & STATS SERVICE
+// ==============================================================================
+export const leaderboardService = {
+  async getLeaderboard() {
+    const res = await apiClient.get('/leaderboard');
     return res.data;
   },
 
   async getTeamLeaderboard() {
-    const res = await apiClient.get('/teams/leaderboard');
+    const res = await apiClient.get('/leaderboard/teams');
+    return res.data;
+  },
+
+  async getStats() {
+    const res = await apiClient.get('/leaderboard/stats');
+    return res.data;
+  }
+};
+
+export const platformService = leaderboardService;
+
+// ==============================================================================
+// SUBMISSIONS SERVICE
+// ==============================================================================
+export const submissionService = {
+  async getSubmissions(params = {}) {
+    const res = await apiClient.get('/submissions', { params });
+    return res.data;
+  },
+
+  async getSubmissionDetail(id) {
+    const res = await apiClient.get(`/submissions/${id}`);
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// ADMIN CONTROL CENTER SERVICE
+// ==============================================================================
+export const adminService = {
+  // DSA Question Studio
+  async createDSA(data) {
+    const res = await apiClient.post('/admin/dsa', data);
+    return res.data;
+  },
+  async listDSA() {
+    const res = await apiClient.get('/admin/dsa');
+    return res.data;
+  },
+  async getDSA(id) {
+    const res = await apiClient.get(`/admin/dsa/${id}`);
+    return res.data;
+  },
+  async addDSATestCase(id, data) {
+    const res = await apiClient.post(`/admin/dsa/${id}/test-cases`, data);
+    return res.data;
+  },
+  async deleteDSATestCase(testId) {
+    const res = await apiClient.delete(`/admin/dsa/test-cases/${testId}`);
+    return res.data;
+  },
+  async validateDSAReference(id) {
+    const res = await apiClient.post(`/admin/dsa/${id}/validate-reference`);
+    return res.data;
+  },
+
+  // MCQ Question Studio
+  async createMCQ(data) {
+    const res = await apiClient.post('/admin/mcqs', data);
+    return res.data;
+  },
+  async listMCQs() {
+    const res = await apiClient.get('/admin/mcqs');
+    return res.data;
+  },
+
+  // CTF Challenge Studio
+  async createCTF(data) {
+    const res = await apiClient.post('/admin/ctf', data);
+    return res.data;
+  },
+  async listCTF() {
+    const res = await apiClient.get('/admin/ctf');
+    return res.data;
+  },
+
+  // Dynamic Question Generator
+  async createTemplate(data) {
+    const res = await apiClient.post('/admin/dynamic-templates', data);
+    return res.data;
+  },
+  async listTemplates() {
+    const res = await apiClient.get('/admin/dynamic-templates');
+    return res.data;
+  },
+  async generateInstance(templateId, seed) {
+    const res = await apiClient.post(`/admin/dynamic-templates/${templateId}/generate`, { seed });
+    return res.data;
+  },
+
+  // Docker Labs
+  async listLabs() {
+    const res = await apiClient.get('/admin/labs');
+    return res.data;
+  },
+
+  // User Governance
+  async listUsers() {
+    const res = await apiClient.get('/admin/users');
+    return res.data;
+  },
+  async updateUserRole(userId, role) {
+    const res = await apiClient.put(`/admin/users/${userId}/role`, { role });
+    return res.data;
+  },
+  async deleteUser(userId, confirmUsername) {
+    const res = await apiClient.delete(`/admin/users/${userId}`, {
+      data: { confirm_username: confirmUsername }
+    });
+    return res.data;
+  },
+
+  // Audits & Security
+  async getAuditLogs(limit = 100) {
+    const res = await apiClient.get('/admin/audit-logs', { params: { limit } });
+    return res.data;
+  },
+  async getSecurityIncidents() {
+    const res = await apiClient.get('/admin/security-incidents');
+    return res.data;
+  },
+  async batchAntiCheat(category, allowCopyPaste) {
+    const res = await apiClient.post('/admin/batch-anti-cheat', {
+      category,
+      allow_copy_paste: allowCopyPaste
+    });
     return res.data;
   }
 };

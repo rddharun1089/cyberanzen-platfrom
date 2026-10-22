@@ -1,38 +1,40 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
+
 from app.core.config import settings
-from app.api import auth, cases, submissions, evidence, leaderboard, admin, git_sync, teams
 from app.db.session import engine, Base, SessionLocal
 from app.db.init_db import init_db
+from app.api import (
+    auth, events, teams, questions, mcqs, challenges,
+    labs, submissions, leaderboard, admin
+)
 
-# Ensure all database tables exist and default data (admin, users, 80 cases) is seeded on startup
+# 1. Initialize Database Schema
 Base.metadata.create_all(bind=engine)
 try:
     with SessionLocal() as db_session:
         init_db(db_session)
 except Exception as e:
-    print(f"[STARTUP] Notice during automatic database bootstrap: {e}")
+    print(f"[STARTUP] Notice during database initialization: {e}")
 
+# 2. FastAPI Application Instance
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
-    description="80-Case Crime Investigation & Digital Forensics Programming Platform API",
+    description="CyberAnzen Arena — Cybersecurity CTF, Digital Forensics & Competitive Programming Platform",
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-from fastapi import Request
-from starlette.middleware.base import BaseHTTPMiddleware
-from fastapi.responses import JSONResponse
-
-# Enterprise Security Headers & DoS Payload Size Limiter Middleware
+# 3. Enterprise Security Headers & DoS Payload Size Limiter Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # 1. Payload size check (prevent memory exhaustion DoS)
+        # Prevent memory exhaustion DoS (> 5MB upload)
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > 5 * 1024 * 1024:
             return JSONResponse(
@@ -42,7 +44,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        # 2. Attach strict defense-in-depth HTTP security headers
+        # Defense-in-depth HTTP security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
         response.headers["X-XSS-Protection"] = "1; mode=block"
@@ -50,7 +52,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
         response.headers["Content-Security-Policy"] = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdn.jsdelivr.net; frame-ancestors 'self';"
 
-        # 3. Strip server banner to minimize fingerprinting reconnaissance
+        # Strip server banners to reduce fingerprinting
         if "server" in response.headers:
             del response.headers["server"]
         if "x-powered-by" in response.headers:
@@ -60,7 +62,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(SecurityHeadersMiddleware)
 
-# CORS Middleware
+# 4. CORS Middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -69,32 +71,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Routers
+# 5. Register Subsystem Routers
 app.include_router(auth.router, prefix=settings.API_V1_STR)
-app.include_router(cases.router, prefix=settings.API_V1_STR)
-app.include_router(submissions.router, prefix=settings.API_V1_STR)
+app.include_router(events.router, prefix=settings.API_V1_STR)
 app.include_router(teams.router, prefix=settings.API_V1_STR)
-app.include_router(evidence.router, prefix=settings.API_V1_STR)
+app.include_router(questions.router, prefix=settings.API_V1_STR)
+app.include_router(mcqs.router, prefix=settings.API_V1_STR)
+app.include_router(challenges.router, prefix=settings.API_V1_STR)
+app.include_router(labs.router, prefix=settings.API_V1_STR)
+app.include_router(submissions.router, prefix=settings.API_V1_STR)
 app.include_router(leaderboard.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
-app.include_router(git_sync.router, prefix=settings.API_V1_STR)
+
+# Legacy alias: /cases -> questions
+app.include_router(questions.router, prefix=f"{settings.API_V1_STR}/cases", tags=["Legacy Cases Alias"])
 
 @app.get("/api/health")
 def health_check():
     return {
         "status": "HEALTHY",
         "service": settings.PROJECT_NAME,
-        "version": settings.VERSION
+        "version": settings.VERSION,
+        "mode": "PRODUCTION_ARENA"
     }
 
-# Frontend Static Files Mount (if dist built)
+# 6. Frontend Static Assets Mount
 frontend_dist = os.path.abspath(os.path.join(settings.BASE_DIR, "frontend/dist"))
 if os.path.exists(frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
 
     @app.get("/{full_path:path}")
     def serve_frontend_spa(full_path: str):
-        # Don't intercept API routes or docs
         if full_path.startswith("api/") or full_path.startswith("docs") or full_path.startswith("redoc"):
             return None
         file_path = os.path.join(frontend_dist, full_path)
@@ -111,5 +118,5 @@ else:
             "service": settings.PROJECT_NAME,
             "api_docs": "/docs",
             "version": settings.VERSION,
-            "cases_total": 80
+            "status": "ARENA_ONLINE"
         }

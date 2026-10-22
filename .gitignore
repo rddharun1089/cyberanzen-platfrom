@@ -9,4 +9,11 @@ frontend/node_modules/
 cyberanzen.db
 cyberanzen.db-shm
 cyberanzen.db-wal
+cyberanzen.db.bak
+*.db
+*.db.bak
+*.sqlite
+*.sqlite3
+.env
+.DS_Store
 /tmp/judge_run_*

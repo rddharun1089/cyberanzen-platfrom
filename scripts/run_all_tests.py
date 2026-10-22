@@ -18,8 +18,17 @@ def main():
     if not os.path.exists(pytest_bin):
         pytest_bin = "pytest"
 
-    cmd = [pytest_bin, os.path.join(base_dir, "tests"), "-v"]
-    res = subprocess.run(cmd, cwd=base_dir)
+    test_files = [
+        os.path.join(base_dir, "tests", "test_arena_platform.py"),
+        os.path.join(base_dir, "tests", "test_judge_sandbox.py"),
+        os.path.join(base_dir, "tests", "test_user_deletion.py"),
+        os.path.join(base_dir, "tests", "test_auth_rbac.py"),
+    ]
+
+    cmd = [pytest_bin] + test_files + ["-v"]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.path.join(base_dir, "backend")
+    res = subprocess.run(cmd, cwd=base_dir, env=env)
 
     print("=" * 70)
     if res.returncode == 0:

@@ -1,144 +1,201 @@
-import time
-from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
+from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.db.models import User, UserRole
-from app.core.security import verify_password, hash_password, create_access_token
+from app.db.models import User, UserRole, AuditLog
+from app.core.security import hash_password, verify_password, create_access_token
 from app.api.deps import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-# Brute-force protection: max 5 failed attempts per username within 60s
-FAILED_LOGIN_ATTEMPTS = defaultdict(list)
-LOCKOUT_THRESHOLD = 5
-LOCKOUT_DURATION = 60
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
+router = APIRouter(prefix="/auth", tags=["Authentication & Identity"])
 
 class RegisterRequest(BaseModel):
     username: str
     email: EmailStr
     password: str
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str
+class LoginRequest(BaseModel):
     username: str
-    role: str
-    points: int
+    password: str
 
-@router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
-    key = req.username.strip().lower()
-    now = time.time()
-    recent = [t for t in FAILED_LOGIN_ATTEMPTS[key] if now - t < LOCKOUT_DURATION]
-    FAILED_LOGIN_ATTEMPTS[key] = recent
+class FirstRunSetupRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    organization_name: Optional[str] = "CyberAnzen Arena"
 
-    if len(recent) >= LOCKOUT_THRESHOLD:
-        wait_seconds = int(LOCKOUT_DURATION - (now - recent[0]))
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=f"Too many failed login attempts. Clearance locked for {max(1, wait_seconds)} seconds."
-        )
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
 
-    user = db.query(User).filter(User.username == req.username).first()
-    if not user or not verify_password(req.password, user.hashed_password):
-        FAILED_LOGIN_ATTEMPTS[key].append(now)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid investigator callsign or passkey"
-        )
+@router.get("/setup-status")
+def get_setup_status(db: Session = Depends(get_db)):
+    """
+    Checks whether the platform requires initial Super Admin setup.
+    Returns True if no Super Admin or Admin account exists.
+    """
+    admin_count = db.query(User).filter(
+        User.role.in_([UserRole.SUPER_ADMIN.value, UserRole.ADMIN.value, "super_admin", "admin"])
+    ).count()
 
-    # Clear failed attempts on success
-    FAILED_LOGIN_ATTEMPTS.pop(key, None)
-
-    token = create_access_token({"sub": user.username, "role": user.role, "id": user.id})
     return {
-        "access_token": token,
-        "token_type": "bearer",
-        "username": user.username,
-        "role": user.role,
-        "points": user.points
+        "is_setup_needed": admin_count == 0,
+        "platform_status": "PENDING_SETUP" if admin_count == 0 else "OPERATIONAL"
     }
 
-import re
+@router.post("/first-run-setup")
+def first_run_setup(req: FirstRunSetupRequest, db: Session = Depends(get_db)):
+    """
+    One-time initial Super Admin setup flow.
+    Permanently locked down once the first administrative account is created.
+    """
+    admin_count = db.query(User).filter(
+        User.role.in_([UserRole.SUPER_ADMIN.value, UserRole.ADMIN.value, "super_admin", "admin"])
+    ).count()
 
-USERNAME_REGEX = re.compile(r"^[a-zA-Z0-9_-]{3,30}$")
-REGISTRATION_ATTEMPTS = []
-MAX_REGISTRATIONS_PER_WINDOW = 10
-REGISTRATION_WINDOW_SEC = 300
-
-@router.post("/register", response_model=TokenResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
-    # Rate limit account creation to prevent bot spam
-    now = time.time()
-    global REGISTRATION_ATTEMPTS
-    REGISTRATION_ATTEMPTS = [t for t in REGISTRATION_ATTEMPTS if now - t < REGISTRATION_WINDOW_SEC]
-    if len(REGISTRATION_ATTEMPTS) >= MAX_REGISTRATIONS_PER_WINDOW:
+    if admin_count > 0:
         raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Registration rate limit reached. Please wait a few minutes before registering again."
-        )
-
-    clean_username = req.username.strip()
-    if not USERNAME_REGEX.match(clean_username):
-        raise HTTPException(
-            status_code=400,
-            detail="Callsign must be 3-30 characters and contain only letters, numbers, hyphens, and underscores."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="First-run setup has already been completed. Contact existing Super Administrator."
         )
 
     if len(req.password) < 8:
         raise HTTPException(
-            status_code=400,
-            detail="Security passkey must be at least 8 characters long."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Super Admin passphrase must be at least 8 characters in length."
         )
 
-    has_letter = any(c.isalpha() for c in req.password)
-    has_digit_or_special = any(not c.isalpha() for c in req.password)
-    if not (has_letter and has_digit_or_special):
-        raise HTTPException(
-            status_code=400,
-            detail="Security passkey must contain both letters and digits or special symbols."
-        )
+    super_admin = User(
+        username=req.username.strip(),
+        email=req.email.strip().lower(),
+        hashed_password=hash_password(req.password),
+        role=UserRole.SUPER_ADMIN.value,
+        points=0,
+        is_active=True,
+        is_verified=True
+    )
+    db.add(super_admin)
+    db.commit()
+    db.refresh(super_admin)
 
-    if db.query(User).filter(User.username == clean_username).first():
-        raise HTTPException(status_code=400, detail="Callsign already assigned to an agent")
-    if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=400, detail="Email address already registered")
+    # Log milestone audit event
+    log = AuditLog(
+        actor_id=super_admin.id,
+        actor_username=super_admin.username,
+        action="PLATFORM_INITIAL_SETUP",
+        entity_type="SYSTEM",
+        entity_id="1",
+        details=f"Super Admin initialized for organization: {req.organization_name}"
+    )
+    db.add(log)
+    db.commit()
 
-    REGISTRATION_ATTEMPTS.append(now)
+    token = create_access_token(data={"sub": super_admin.username, "role": super_admin.role})
+    return {
+        "success": True,
+        "message": "Super Administrator established successfully.",
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {
+            "id": super_admin.id,
+            "username": super_admin.username,
+            "email": super_admin.email,
+            "role": super_admin.role
+        }
+    }
+
+@router.post("/register")
+def register_user(req: RegisterRequest, db: Session = Depends(get_db)):
+    username_clean = req.username.strip()
+    email_clean = req.email.strip().lower()
+
+    if db.query(User).filter(User.username == username_clean).first():
+        raise HTTPException(status_code=400, detail="Username is already claimed in the Arena.")
+
+    if db.query(User).filter(User.email == email_clean).first():
+        raise HTTPException(status_code=400, detail="Email address is already registered.")
 
     user = User(
-        username=clean_username,
-        email=req.email,
+        username=username_clean,
+        email=email_clean,
         hashed_password=hash_password(req.password),
         role=UserRole.PARTICIPANT.value,
-        points=0
+        points=0,
+        is_active=True,
+        is_verified=True
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    token = create_access_token({"sub": user.username, "role": user.role, "id": user.id})
+    token = create_access_token(data={"sub": user.username, "role": user.role})
     return {
         "access_token": token,
         "token_type": "bearer",
+        "id": user.id,
+        "username": user.username,
+        "role": user.role,
+        "points": user.points
+    }
+
+@router.post("/login")
+def login_user(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == req.username.strip()).first()
+    if not user or not verify_password(req.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid clearance credentials or passphrase."
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account has been suspended. Contact an administrator."
+        )
+
+    token = create_access_token(data={"sub": user.username, "role": user.role})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "id": user.id,
         "username": user.username,
         "role": user.role,
         "points": user.points
     }
 
 @router.get("/me")
-def get_profile(current_user: User = Depends(get_current_user)):
+def get_current_user_profile(current_user: User = Depends(get_current_user)):
+    team_info = None
+    if current_user.team_membership and current_user.team_membership.team:
+        team = current_user.team_membership.team
+        team_info = {
+            "id": team.id,
+            "name": team.name,
+            "role": current_user.team_membership.role,
+            "points": team.points,
+            "invitation_code": team.invitation_code
+        }
+
     return {
         "id": current_user.id,
         "username": current_user.username,
         "email": current_user.email,
         "role": current_user.role,
         "points": current_user.points,
+        "is_active": current_user.is_active,
+        "team": team_info,
         "created_at": current_user.created_at
     }
+
+@router.post("/change-password")
+def change_password(
+    req: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not verify_password(req.old_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current passphrase verification failed.")
+
+    current_user.hashed_password = hash_password(req.new_password)
+    db.commit()
+    return {"success": True, "message": "Passphrase updated successfully."}
