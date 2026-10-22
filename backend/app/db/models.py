@@ -271,6 +271,7 @@ class Event(Base):
     question_navigation_policy = Column(String(50), default="free", nullable=False)  # free | sequential | unlock
     question_order_mode = Column(String(50), default="fixed", nullable=False)  # fixed | random_participant | random_team
     show_progress = Column(Boolean, default=True, nullable=False)
+    enable_mentor = Column(Boolean, default=True, nullable=False)
     mark_solved_immediately = Column(Boolean, default=True, nullable=False)
     revisit_solved_questions = Column(Boolean, default=True, nullable=False)
     result_publication_time = Column(DateTime, nullable=True)

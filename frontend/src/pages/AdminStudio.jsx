@@ -94,6 +94,31 @@ export default function AdminStudio({ user, defaultView = null }) {
   const [quickAssignQuestion, setQuickAssignQuestion] = useState(null);
   const [quickAssignEventId, setQuickAssignEventId] = useState('');
 
+  // Participant-Wise Audit Log State
+  const [participantLogs, setParticipantLogs] = useState([]);
+  const [auditSubTab, setAuditSubTab] = useState('participant_wise'); // 'participant_wise' | 'all_participant_logs' | 'platform_audits'
+  const [auditSelectedParticipant, setAuditSelectedParticipant] = useState('');
+  const [auditEventFilter, setAuditEventFilter] = useState('all');
+  const [auditActionFilter, setAuditActionFilter] = useState('all');
+  const [loadingParticipantLogs, setLoadingParticipantLogs] = useState(false);
+  const [journeySortOrder, setJourneySortOrder] = useState('asc'); // 'asc' (entrance to finish) | 'desc'
+
+  const fetchParticipantLogs = async (eventId = auditEventFilter) => {
+    setLoadingParticipantLogs(true);
+    try {
+      const params = { limit: 500 };
+      if (eventId && eventId !== 'all') {
+        params.event_id = parseInt(eventId);
+      }
+      const data = await adminService.getParticipantActivityLogs(params);
+      setParticipantLogs(data || []);
+    } catch (err) {
+      console.error('Failed to fetch participant activity logs:', err);
+    } finally {
+      setLoadingParticipantLogs(false);
+    }
+  };
+
   // Forms
   const [dsaForm, setDsaForm] = useState({
     title: '', statement: '', input_spec: '', output_spec: '', constraints: '',
@@ -219,6 +244,12 @@ export default function AdminStudio({ user, defaultView = null }) {
       if (tab === 'audits' || tab === 'dashboard') {
         const a = await adminService.getAuditLogs();
         setAuditLogs(a || []);
+        try {
+          const pLogs = await adminService.getParticipantActivityLogs({ limit: 500 });
+          setParticipantLogs(pLogs || []);
+        } catch (e) {
+          console.error("Failed to load participant logs:", e);
+        }
       }
       if (tab === 'settings') {
         const setts = await adminService.getSettings();
@@ -1807,6 +1838,7 @@ int main() {
                     <th className="p-3">Email</th>
                     <th className="p-3">Role</th>
                     <th className="p-3">Points</th>
+                    <th className="p-3 text-right">Audit Journey</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#18385E]/60">
@@ -1824,6 +1856,19 @@ int main() {
                         </span>
                       </td>
                       <td className="p-3 text-[#00CFFF] font-bold">{u.points || 0}</td>
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={() => {
+                            setAuditSelectedParticipant(u.username);
+                            setAuditSubTab('participant_wise');
+                            handleSelectTab('audits');
+                          }}
+                          className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-[#102746] hover:bg-[#18385E] text-[#00CFFF] text-[11px] font-bold border border-[#18385E]"
+                        >
+                          <span>View Logs</span>
+                          <ArrowRight className="w-3 h-3 ml-0.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -2445,28 +2490,472 @@ int main() {
         )}
 
         {/* =======================================================================
-            VIEW 16: AUDIT LOGS
+            VIEW 16: AUDIT INTELLIGENCE & PARTICIPANT-WISE JOURNEY LOGS
             ======================================================================= */}
-        {activeTab === 'audits' && (
-          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4 font-mono text-xs">
-            <h3 className="font-bold text-sm text-white flex items-center space-x-2">
-              <Database className="w-4 h-4 text-[#00CFFF]" />
-              <span>IMMUTABLE AUDIT LOGS ({auditLogs.length})</span>
-            </h3>
-            <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-              {auditLogs.map((log, idx) => (
-                <div key={idx} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex justify-between items-center text-[11px]">
-                  <div>
-                    <span className="text-[#00CFFF] font-bold">{log.action}</span>
-                    <span className="text-slate-400 ml-2">by {log.actor_username || 'SYSTEM'}</span>
-                    <span className="text-slate-500 ml-2">[{log.entity_type} #{log.entity_id}]</span>
-                  </div>
-                  <span className="text-slate-500 text-[10px]">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
+        {activeTab === 'audits' && (() => {
+          // Filtered participant logs by event and action
+          const filteredLogs = participantLogs.filter(log => {
+            if (auditEventFilter !== 'all' && String(log.event_id) !== String(auditEventFilter)) return false;
+            if (auditActionFilter !== 'all' && log.action !== auditActionFilter) return false;
+            return true;
+          });
+
+          // Group logs by participant (username / user_id)
+          const participantGroups = {};
+          for (const log of participantLogs) {
+            if (auditEventFilter !== 'all' && String(log.event_id) !== String(auditEventFilter)) continue;
+            const key = log.username || `User_${log.user_id}`;
+            if (!participantGroups[key]) {
+              participantGroups[key] = {
+                userId: log.user_id,
+                username: log.username || `User #${log.user_id}`,
+                logs: [],
+                eventTitle: log.event_title || `Event #${log.event_id}`,
+                eventId: log.event_id,
+                totalActions: 0,
+                solvesCount: 0,
+                mentorCount: 0,
+                errorCount: 0,
+                lastActive: log.time_display || log.timestamp || log.created_at,
+                firstActive: log.time_display || log.timestamp || log.created_at,
+                hasCompleted: false
+              };
+            }
+            participantGroups[key].logs.push(log);
+            participantGroups[key].totalActions += 1;
+            if (log.action === 'SOLVED') participantGroups[key].solvesCount += 1;
+            if (log.action === 'MENTOR_GUIDANCE') participantGroups[key].mentorCount += 1;
+            if (log.action === 'EVENT_COMPLETED') participantGroups[key].hasCompleted = true;
+            if (['WRONG_ANSWER', 'TIME_LIMIT_EXCEEDED', 'COMPILE_ERROR', 'RUNTIME_ERROR', 'ERROR'].includes(log.status)) {
+              participantGroups[key].errorCount += 1;
+            }
+            // Logs come sorted desc from backend; keep updating firstActive to capture earliest
+            participantGroups[key].firstActive = log.time_display || log.timestamp || log.created_at;
+          }
+
+          const participantKeys = Object.keys(participantGroups);
+          const activeParticipantKey = (auditSelectedParticipant && participantGroups[auditSelectedParticipant])
+            ? auditSelectedParticipant
+            : (participantKeys[0] || '');
+          const currentGroup = activeParticipantKey ? participantGroups[activeParticipantKey] : null;
+
+          // Order current participant's logs
+          const activeLogs = currentGroup ? [...currentGroup.logs] : [];
+          if (journeySortOrder === 'asc') {
+            activeLogs.reverse(); // Earliest entrance to completion
+          }
+
+          return (
+            <div className="p-4 md:p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-5 font-mono text-xs">
+              {/* Header Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#18385E] pb-4">
+                <div>
+                  <h3 className="font-bold text-sm md:text-base text-white flex items-center space-x-2">
+                    <Activity className="w-5 h-5 text-[#00CFFF]" />
+                    <span>AUDIT INTELLIGENCE // PARTICIPANT JOURNEYS &amp; SYSTEM AUDITS</span>
+                  </h3>
+                  <p className="text-slate-400 text-xs mt-1">
+                    End-to-end candidate lifecycle tracking: entrances, sample runs, judge submissions, AI mentor guidance calls, and tournament completions.
+                  </p>
                 </div>
-              ))}
+
+                {/* Scope Filters & Refresh */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex items-center space-x-1.5 bg-[#061329] border border-[#18385E] px-2.5 py-1 rounded-xl">
+                    <span className="text-[#A9BCD6] text-[10px] uppercase">Tournament:</span>
+                    <select
+                      value={auditEventFilter}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setAuditEventFilter(val);
+                        fetchParticipantLogs(val);
+                      }}
+                      className="bg-transparent text-white text-xs font-bold focus:outline-none"
+                    >
+                      <option value="all" className="bg-[#08172B]">All Tournaments</option>
+                      {eventsList.map(ev => (
+                        <option key={ev.id} value={ev.id} className="bg-[#08172B]">
+                          {ev.title} (#{ev.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      fetchParticipantLogs(auditEventFilter);
+                      loadTabData('audits');
+                    }}
+                    disabled={loadingParticipantLogs}
+                    className="flex items-center space-x-1 px-3 py-1.5 rounded-xl bg-[#102746] hover:bg-[#18385E] text-[#00CFFF] border border-[#18385E]"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loadingParticipantLogs ? 'animate-spin' : ''}`} />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Subtabs Selector */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-[#18385E]/60 pb-3">
+                <button
+                  onClick={() => setAuditSubTab('participant_wise')}
+                  className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                    auditSubTab === 'participant_wise'
+                      ? 'bg-[#00CFFF] text-slate-950 shadow-md shadow-cyan-900/30'
+                      : 'bg-[#061329] text-[#A9BCD6] hover:text-white border border-[#18385E]'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Participant-Wise Journeys</span>
+                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
+                    auditSubTab === 'participant_wise' ? 'bg-slate-950 text-[#00CFFF]' : 'bg-[#102746] text-white'
+                  }`}>
+                    {participantKeys.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setAuditSubTab('all_participant_logs')}
+                  className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                    auditSubTab === 'all_participant_logs'
+                      ? 'bg-[#00CFFF] text-slate-950 shadow-md shadow-cyan-900/30'
+                      : 'bg-[#061329] text-[#A9BCD6] hover:text-white border border-[#18385E]'
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5" />
+                  <span>Chronological Stream</span>
+                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
+                    auditSubTab === 'all_participant_logs' ? 'bg-slate-950 text-[#00CFFF]' : 'bg-[#102746] text-white'
+                  }`}>
+                    {participantLogs.length}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => setAuditSubTab('platform_audits')}
+                  className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                    auditSubTab === 'platform_audits'
+                      ? 'bg-[#00CFFF] text-slate-950 shadow-md shadow-cyan-900/30'
+                      : 'bg-[#061329] text-[#A9BCD6] hover:text-white border border-[#18385E]'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Platform System Audits</span>
+                  <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
+                    auditSubTab === 'platform_audits' ? 'bg-slate-950 text-[#00CFFF]' : 'bg-[#102746] text-white'
+                  }`}>
+                    {auditLogs.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* ===============================================================
+                  SUBTAB 1: PARTICIPANT-WISE JOURNEY EXPLORER
+                  =============================================================== */}
+              {auditSubTab === 'participant_wise' && (
+                participantKeys.length === 0 ? (
+                  <div className="py-16 text-center text-[#A9BCD6] space-y-3 bg-[#061329] rounded-2xl border border-[#18385E]">
+                    <Clock className="w-10 h-10 text-slate-600 mx-auto" />
+                    <p className="text-sm font-bold text-white">No Participant Journeys Recorded Yet</p>
+                    <p className="text-xs text-slate-400 max-w-md mx-auto font-sans">
+                      As cadets log into events, view problems, run sample tests, request AI mentor guidance, and submit code, their complete journey will populate here automatically.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                    {/* Left Column: Participant Roster */}
+                    <div className="lg:col-span-4 space-y-2.5">
+                      <div className="flex items-center justify-between text-[#A9BCD6] px-1 text-[11px]">
+                        <span>Select Candidate Operative:</span>
+                        <span>{participantKeys.length} Cadets</span>
+                      </div>
+
+                      <div className="space-y-2 max-h-[72vh] overflow-y-auto pr-1">
+                        {participantKeys.map(key => {
+                          const group = participantGroups[key];
+                          const isSelected = activeParticipantKey === key;
+
+                          return (
+                            <div
+                              key={key}
+                              onClick={() => setAuditSelectedParticipant(key)}
+                              className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#102746] border-[#00CFFF] shadow-[0_0_15px_rgba(0,207,255,0.15)] ring-1 ring-[#00CFFF]/40'
+                                  : 'bg-[#061329] border-[#18385E] hover:border-[#00CFFF]/50 hover:bg-[#0a1a33]'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className={`font-bold text-sm ${isSelected ? 'text-[#00CFFF]' : 'text-white'}`}>
+                                      {group.username}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">#{group.userId}</span>
+                                  </div>
+                                  <span className="text-[10px] text-slate-400 block truncate max-w-[190px]">
+                                    {group.eventTitle}
+                                  </span>
+                                </div>
+
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                  group.hasCompleted
+                                    ? 'bg-cyan-950 text-[#00CFFF] border border-cyan-800'
+                                    : 'bg-emerald-950 text-[#20C997] border border-emerald-800'
+                                }`}>
+                                  {group.hasCompleted ? 'COMPLETED' : 'ACTIVE'}
+                                </span>
+                              </div>
+
+                              {/* Stat Chips */}
+                              <div className="grid grid-cols-3 gap-1.5 mt-3 pt-2.5 border-t border-[#18385E]/60 text-center">
+                                <div className="p-1 rounded bg-[#08172B]">
+                                  <span className="block text-[9px] text-[#A9BCD6]">Solves</span>
+                                  <span className="text-xs font-bold text-emerald-400">{group.solvesCount}</span>
+                                </div>
+                                <div className="p-1 rounded bg-[#08172B]">
+                                  <span className="block text-[9px] text-[#A9BCD6]">Mentor</span>
+                                  <span className="text-xs font-bold text-purple-400">{group.mentorCount}</span>
+                                </div>
+                                <div className="p-1 rounded bg-[#08172B]">
+                                  <span className="block text-[9px] text-[#A9BCD6]">Actions</span>
+                                  <span className="text-xs font-bold text-[#00CFFF]">{group.totalActions}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Right Column: Selected Participant's Journey Timeline */}
+                    <div className="lg:col-span-8 space-y-4">
+                      {currentGroup ? (
+                        <>
+                          {/* Operative Header Dossier */}
+                          <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] flex flex-wrap items-center justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center space-x-2">
+                                <UserCheck className="w-5 h-5 text-[#00CFFF]" />
+                                <span className="text-base font-bold text-white">{currentGroup.username}</span>
+                                <span className="text-xs text-slate-400 font-mono">Cadet ID #{currentGroup.userId}</span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                                  currentGroup.hasCompleted ? 'bg-cyan-950 text-[#00CFFF] border-cyan-800' : 'bg-emerald-950 text-[#20C997] border-emerald-800'
+                                }`}>
+                                  {currentGroup.hasCompleted ? 'TOURNAMENT COMPLETED' : 'IN PROGRESS'}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-[#A9BCD6] space-x-3">
+                                <span>Event: <strong className="text-white">{currentGroup.eventTitle}</strong></span>
+                                <span>•</span>
+                                <span>First Active: <strong className="text-slate-300">{currentGroup.firstActive}</strong></span>
+                                <span>•</span>
+                                <span>Latest: <strong className="text-slate-300">{currentGroup.lastActive}</strong></span>
+                              </div>
+                            </div>
+
+                            {/* Sort Direction Toggle */}
+                            <div className="flex items-center space-x-2">
+                              <button
+                                type="button"
+                                onClick={() => setJourneySortOrder(journeySortOrder === 'asc' ? 'desc' : 'asc')}
+                                className="px-3 py-1.5 rounded-lg bg-[#08172B] hover:bg-[#102746] border border-[#18385E] text-[#00CFFF] text-xs font-bold"
+                              >
+                                {journeySortOrder === 'asc' ? 'Order: Entrance → Exit (Asc)' : 'Order: Latest First (Desc)'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Timeline List */}
+                          <div className="space-y-3 max-h-[64vh] overflow-y-auto pr-1">
+                            {activeLogs.map((log, idx) => {
+                              const isEntrance = log.action === 'EVENT_ENTERED';
+                              const isView = log.action === 'PROBLEM_VIEWED';
+                              const isRun = log.action === 'RUN_SAMPLE';
+                              const isSubmit = log.action === 'SUBMIT_CODE';
+                              const isMentor = log.action === 'MENTOR_GUIDANCE';
+                              const isSolved = log.action === 'SOLVED';
+                              const isCompleted = log.action === 'EVENT_COMPLETED';
+                              const isAlert = log.action === 'SECURITY_ALERT';
+
+                              // Badge and border styling
+                              const cardBg = isMentor
+                                ? 'bg-gradient-to-r from-purple-950/40 to-[#08172B] border-purple-800/60'
+                                : isSolved
+                                ? 'bg-gradient-to-r from-emerald-950/40 to-[#08172B] border-emerald-800/60'
+                                : isCompleted
+                                ? 'bg-gradient-to-r from-cyan-950/40 to-[#08172B] border-cyan-800/60'
+                                : isAlert
+                                ? 'bg-gradient-to-r from-rose-950/40 to-[#08172B] border-rose-800/60'
+                                : isSubmit
+                                ? (log.status === 'ACCEPTED' ? 'bg-[#08172B] border-emerald-800/40' : 'bg-[#08172B] border-rose-800/40')
+                                : 'bg-[#08172B] border-[#18385E]';
+
+                              const badgeStyle = isMentor
+                                ? 'bg-purple-950 text-purple-300 border-purple-800'
+                                : isSolved
+                                ? 'bg-emerald-950 text-[#20C997] border-emerald-800'
+                                : isCompleted
+                                ? 'bg-cyan-950 text-[#00CFFF] border-cyan-800'
+                                : isAlert
+                                ? 'bg-rose-950 text-rose-300 border-rose-800'
+                                : isSubmit
+                                ? (log.status === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : 'bg-rose-950 text-rose-300 border-rose-800')
+                                : isRun
+                                ? 'bg-teal-950 text-teal-300 border-teal-800'
+                                : isView
+                                ? 'bg-blue-950 text-blue-300 border-blue-800'
+                                : 'bg-[#102746] text-[#A9BCD6] border-[#18385E]';
+
+                              return (
+                                <div key={log.id || idx} className={`p-3.5 rounded-xl border ${cardBg} transition-all space-y-2`}>
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="text-slate-500 font-mono text-[10px]">#{idx + 1}</span>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${badgeStyle}`}>
+                                        {log.action.replace('_', ' ')}
+                                      </span>
+                                      {log.entity_title && (
+                                        <span className="text-white font-bold text-xs truncate max-w-[280px]">
+                                          • {log.entity_title}
+                                        </span>
+                                      )}
+                                      {log.status && log.status !== 'INFO' && (
+                                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold ${
+                                          log.status === 'ACCEPTED' || log.status === 'SUCCESS' ? 'text-emerald-400' : 'text-rose-400'
+                                        }`}>
+                                          [{log.status}]
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <span className="text-[10px] text-slate-400 font-mono">
+                                      {log.time_display || log.timestamp}
+                                    </span>
+                                  </div>
+
+                                  {/* Log Details / Mentorship Callout */}
+                                  {log.details && (
+                                    <div className={
+                                      isMentor
+                                        ? 'p-2.5 rounded-lg bg-purple-950/50 border border-purple-800/40 text-purple-200 text-xs font-sans space-y-1'
+                                        : isSolved
+                                        ? 'p-2 rounded-lg bg-emerald-950/30 border border-emerald-800/30 text-emerald-300 text-xs font-sans'
+                                        : isAlert
+                                        ? 'p-2 rounded-lg bg-rose-950/40 border border-rose-800/40 text-rose-300 text-xs font-sans'
+                                        : 'text-[11px] text-[#A9BCD6] font-sans pl-1'
+                                    }>
+                                      {isMentor && (
+                                        <div className="flex items-center space-x-1.5 text-purple-300 font-bold font-mono text-[11px] mb-1">
+                                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                          <span>CYBERANZEN MENTOR // DIAGNOSIS DELIVERED:</span>
+                                        </div>
+                                      )}
+                                      <p className="leading-relaxed">{log.details}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="py-20 text-center text-slate-400">
+                          Select an operative on the left to inspect their journey.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              )}
+
+              {/* ===============================================================
+                  SUBTAB 2: UNIFIED CHRONOLOGICAL STREAM
+                  =============================================================== */}
+              {auditSubTab === 'all_participant_logs' && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-[#061329] p-3 rounded-xl border border-[#18385E]">
+                    <div className="flex items-center space-x-2">
+                      <Filter className="w-4 h-4 text-[#00CFFF]" />
+                      <span className="text-[#A9BCD6] text-xs">Filter Action:</span>
+                      <select
+                        value={auditActionFilter}
+                        onChange={(e) => setAuditActionFilter(e.target.value)}
+                        className="px-2.5 py-1 bg-[#08172B] border border-[#18385E] rounded-lg text-white text-xs"
+                      >
+                        <option value="all">All Actions ({participantLogs.length})</option>
+                        <option value="SUBMIT_CODE">DSA Submissions</option>
+                        <option value="MENTOR_GUIDANCE">AI Mentor Guidance</option>
+                        <option value="RUN_SAMPLE">Sample Code Runs</option>
+                        <option value="SOLVED">Problems Solved</option>
+                        <option value="SECURITY_ALERT">Security Incidents</option>
+                        <option value="EVENT_ENTERED">Event Entrances</option>
+                        <option value="EVENT_COMPLETED">Event Completions</option>
+                      </select>
+                    </div>
+
+                    <span className="text-slate-400 text-xs">
+                      Showing {filteredLogs.length} events
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 max-h-[68vh] overflow-y-auto">
+                    {filteredLogs.map((log) => (
+                      <div key={log.id} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex flex-wrap items-start justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="text-white font-bold">{log.username || `User #${log.user_id}`}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[#102746] text-[#00CFFF] border border-[#18385E]">
+                              {log.action}
+                            </span>
+                            {log.entity_title && (
+                              <span className="text-[#A9BCD6] text-[11px] truncate max-w-[280px]">
+                                • {log.entity_title}
+                              </span>
+                            )}
+                            {log.event_title && (
+                              <span className="text-slate-400 text-[10px]">
+                                [{log.event_title}]
+                              </span>
+                            )}
+                          </div>
+                          {log.details && (
+                            <p className="text-[11px] text-[#A9BCD6] font-sans">
+                              {log.details}
+                            </p>
+                          )}
+                        </div>
+
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {log.time_display || log.timestamp}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ===============================================================
+                  SUBTAB 3: PLATFORM MUTATION AUDITS
+                  =============================================================== */}
+              {auditSubTab === 'platform_audits' && (
+                <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+                  {auditLogs.map((log, idx) => (
+                    <div key={idx} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex justify-between items-center text-[11px]">
+                      <div>
+                        <span className="text-[#00CFFF] font-bold">{log.action}</span>
+                        <span className="text-slate-400 ml-2">by {log.actor_username || 'SYSTEM'}</span>
+                        <span className="text-slate-500 ml-2">[{log.entity_type} #{log.entity_id}]</span>
+                        {log.details && <span className="text-slate-400 ml-2 font-sans font-normal">- {log.details}</span>}
+                      </div>
+                      <span className="text-slate-500 text-[10px]">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </main>
 
       {/* =========================================================================

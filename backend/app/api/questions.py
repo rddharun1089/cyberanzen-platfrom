@@ -43,6 +43,16 @@ class SubmitCodeRequest(BaseModel):
     source_code: str
     event_id: Optional[int] = None
 
+class MentorGuidanceRequest(BaseModel):
+    source_code: str
+    language: str  # python3, cpp, c
+    failed_case_input: Optional[str] = None
+    expected_output: Optional[str] = None
+    actual_output: Optional[str] = None
+    error_message: Optional[str] = None
+    verdict: Optional[str] = "WRONG_ANSWER"
+    event_id: Optional[int] = None
+
 def get_question_by_id_or_slug(identifier: str, db: Session) -> DSAQuestion:
     if identifier.isdigit():
         q = db.query(DSAQuestion).filter(DSAQuestion.id == int(identifier)).first()
@@ -373,4 +383,181 @@ def submit_solution(
         "compile_log": sub.compile_log,
         "test_results": eval_res["test_results"],
         "solve_summary": solve_res
+    }
+
+# ==============================================================================
+# DSA AI MENTOR // DIAGNOSTIC GUIDANCE ENGINE (ENABLED BY ADMIN)
+# ==============================================================================
+
+@router.post("/{identifier}/mentor-guidance")
+def get_mentor_guidance(
+    identifier: str,
+    req: MentorGuidanceRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    q = get_question_by_id_or_slug(identifier, db)
+
+    # Check if admin disabled mentor in this event
+    event = None
+    if req.event_id:
+        event = db.query(Event).filter(Event.id == req.event_id).first()
+        if event and not getattr(event, "enable_mentor", True):
+            raise HTTPException(
+                status_code=403,
+                detail="The DSA AI Debugging Mentor has been disabled for this competition by the tournament administrator."
+            )
+
+    verdict = (req.verdict or "WRONG_ANSWER").upper()
+    code = req.source_code or ""
+    err = (req.error_message or "").strip()
+    exp = (req.expected_output or "").strip()
+    act = (req.actual_output or "").strip()
+    inp = (req.failed_case_input or "").strip()
+
+    root_cause = ""
+    actionable_hints = []
+    pedagogical_concept = ""
+    suggested_action = ""
+
+    # Diagnosis Category 1: Compilation Error
+    if "COMPILE" in verdict or "SYNTAX" in err.upper() or "ERROR:" in err.upper():
+        pedagogical_concept = "Language Syntax & Standard Library Bindings"
+        if "indentationerror" in err.lower():
+            root_cause = "Indentation / Block alignment error. Python relies on consistent 4 spaces per indentation level."
+            actionable_hints.append("Check lines around the reported line number for mixed tabs/spaces or missing `:` after if/for/def.")
+            suggested_action = "Align your block under the preceding function or loop header with uniform spacing."
+        elif "was not declared in this scope" in err.lower():
+            missing_name = err.split("‘")[-1].split("’")[0] if "‘" in err else "a symbol"
+            root_cause = f"Undeclared identifier ({missing_name}). Variable or standard container was used before definition or missing include."
+            actionable_hints.append("Verify spelling, variable declaration, and check required headers like `#include <vector>` or `#include <unordered_map>`.")
+            suggested_action = "Ensure `using namespace std;` and appropriate includes are declared at top of file."
+        else:
+            root_cause = f"Compilation failure during binary build: {err[:140] if err else 'Syntax error'}"
+            actionable_hints.append("Carefully inspect the compiler error output in the diagnostic tab for line numbers and tokens.")
+            suggested_action = "Resolve compiler errors before re-testing against sample vectors."
+
+    # Diagnosis Category 2: Runtime Exception / Crash
+    elif "RUNTIME" in verdict or "error" in err.lower() or "exception" in err.lower() or "dump" in err.lower():
+        pedagogical_concept = "Defensive Bounds Checking & Memory Access"
+        if "indexerror" in err.lower() or "out of range" in err.lower():
+            root_cause = "Array Index Out of Bounds. An array or list element was accessed using an index >= size or < -size."
+            actionable_hints.append("Remember that array indices run from 0 to N - 1. A loop condition checking `nums[i + 1]` can overflow on the last element.")
+            actionable_hints.append("If checking adjacent items, stop loop at `len(nums) - 1`.")
+            suggested_action = "Add boundary checks `if i + 1 < len(nums)` or verify length of input vector before indexing."
+        elif "keyerror" in err.lower():
+            root_cause = "Dictionary Key Missing. Accessing `hash_map[key]` when `key` does not exist raises KeyError."
+            actionable_hints.append("Use `if key in hash_map:` or `hash_map.get(key)` to safely check presence before retrieving.")
+            suggested_action = "Check key existence before fetching: `if complement in seen: return seen[complement], i`."
+        elif "recursionerror" in err.lower() or "maximum recursion" in err.lower():
+            root_cause = "Stack Overflow / Unbounded Recursion. Recursive function missing a terminating base case or excessive depth."
+            actionable_hints.append("Ensure your base case returns immediately when constraints are met.")
+            suggested_action = "Convert recursive traversal to an iterative queue/stack or memoize subproblems."
+        elif "zerodivisionerror" in err.lower():
+            root_cause = "Division by zero occurred during arithmetic evaluation."
+            actionable_hints.append("Guard division operations with `if denominator != 0:`.")
+            suggested_action = "Check for zero values before modulo or division."
+        else:
+            root_cause = f"Runtime Crash ({err[:120] if err else 'Signal termination or non-zero exit code'})."
+            actionable_hints.append("Verify input reading: empty inputs or trailing whitespace might produce unhandled None/null values.")
+            suggested_action = "Use safe input handling: `input_data = sys.stdin.read().split()` and verify `if not input_data: return`."
+
+    # Diagnosis Category 3: Time Limit Exceeded (TLE)
+    elif "TIME_LIMIT" in verdict or "TLE" in verdict:
+        pedagogical_concept = "Algorithmic Time Complexity Optimization"
+        if "for " in code and code.count("for ") >= 2 and ("in range" in code or "i++" in code):
+            root_cause = "Quadratic Time Complexity $O(N^2)$. Nested loops iterating over N elements will time out when $N \\ge 10^4$."
+            actionable_hints.append("For $N = 10^5$, an $O(N^2)$ algorithm performs $10^{10}$ operations, taking ~10 seconds (limit is 2 seconds).")
+            actionable_hints.append("Optimal strategy: Trade $O(N)$ space for $O(1)$ lookups using an unordered hash map or two-pointer sliding window.")
+            suggested_action = "Replace the inner loop with a hash table lookup: store elements in `seen` as you iterate in a single pass."
+        else:
+            root_cause = "Execution took longer than the 2000ms judge cutoff. Possible non-terminating while loop or unoptimized I/O."
+            actionable_hints.append("In C++, speed up standard stream I/O with `ios_base::sync_with_stdio(false); cin.tie(NULL);`.")
+            actionable_hints.append("In Python, avoid repeated string concatenation in loops; use list/join or dictionary lookups.")
+            suggested_action = "Check your loop termination conditions to ensure pointers advance on every cycle."
+
+    # Diagnosis Category 4: Output Mismatch / Wrong Answer
+    else:
+        pedagogical_concept = "Correctness, Edge Cases & Output Specifications"
+
+        # Sub-case: Empty output
+        if not act:
+            root_cause = "Zero standard output produced. Your program executed to completion but wrote nothing to stdout."
+            actionable_hints.append("Make sure your solution actually prints the final result via `print(...)` in Python or `cout << ... << '\\n'` in C++.")
+            suggested_action = "Ensure your code is not exiting prematurely before printing results."
+
+        # Sub-case: Boolean case mismatch (e.g. Python "True" vs lowercase "true")
+        elif exp.lower() in ("true", "false") and act in ("True", "False") and exp != act:
+            root_cause = f"Boolean formatting mismatch: Expected lowercase '{exp}', but your program output '{act}' with a capital letter."
+            actionable_hints.append("Python's default `print(True)` outputs `'True'`. The problem judge specifically checks for lowercase `'true'` and `'false'`.")
+            suggested_action = "Format your output as: `print('true' if condition else 'false')` or `print(str(result).lower())`."
+
+        # Sub-case: Array / bracket formatting mismatch (e.g. expected "0 1" vs "[0, 1]")
+        elif "[" in act and "]" in act and "[" not in exp and exp.replace(" ", "").isdigit():
+            root_cause = f"Data format mismatch: Expected space-separated integers, but your program printed a raw list/array string '{act}'."
+            actionable_hints.append("The judge specification expects `print(f'{i} {j}')` or `print(i, j)` instead of `print([i, j])`.")
+            suggested_action = "Unpack or format your indices: `print(f'{idx1} {idx2}')`."
+
+        # Sub-case: Reversed index order (e.g. expected "0 1" vs actual "1 0")
+        elif len(exp.split()) == 2 and len(act.split()) == 2:
+            e_parts = exp.split()
+            a_parts = act.split()
+            if sorted(e_parts) == sorted(a_parts) and e_parts != a_parts:
+                root_cause = f"Index Ordering Flaw: Your program found the right pair but printed them in inverted order ('{act}' instead of '{exp}')."
+                actionable_hints.append("The specification requires ascending index order (`index1 < index2`).")
+                suggested_action = "Print smaller index first: `print(f'{min(i, j)} {max(i, j)}')` or ensure `index1 < index2`."
+            else:
+                root_cause = f"Result value mismatch: Expected '{exp}', but your program output '{act}'."
+                actionable_hints.append(f"Input tested: {inp if inp else 'vector data'}.")
+                actionable_hints.append("Trace the state of your variables through this specific test case.")
+                suggested_action = "Consider edge cases: duplicate values, negative numbers, or non-adjacent items."
+
+        # Sub-case: String anagram or length mismatch
+        elif "anagram" in q.slug.lower() or "anagram" in q.title.lower():
+            root_cause = "Anagram character frequency mismatch. For two strings to be anagrams, their lengths must be identical AND each character must appear with identical counts."
+            actionable_hints.append("First check length: `if len(s) != len(t): return False`.")
+            actionable_hints.append("Compare sorted characters `sorted(s) == sorted(t)` or use an array of 26 frequency counts.")
+            suggested_action = "Check: `print('true' if sorted(s) == sorted(t) else 'false')`."
+
+        # Sub-case: Sliding window / Substring unique sequence
+        elif "substring" in q.slug.lower() or "unique" in q.slug.lower():
+            root_cause = "Sliding window pointer shift flaw. When encountering a previously seen character, your left window pointer did not advance correctly."
+            actionable_hints.append("When a duplicate is encountered at index `last_seen[ch]`, the left bound must jump to `max(left, last_seen[ch] + 1)`.")
+            actionable_hints.append("Never move `left` backward if the duplicate was already outside the current window!")
+            suggested_action = "Update left pointer as: `if ch in seen and seen[ch] >= left: left = seen[ch] + 1`."
+
+        else:
+            root_cause = f"Output mismatch: Expected '{exp}', but program generated '{act}'."
+            actionable_hints.append(f"Analyze the input vectors: {inp[:80] if inp else 'test case'}.")
+            actionable_hints.append("Check whether all constraints and boundary cases are handled.")
+            suggested_action = "Re-read the specification carefully for output format requirements or off-by-one errors."
+
+    # Log mentor consultation event in EventActivityLog if event is present
+    if event:
+        try:
+            db.add(EventActivityLog(
+                event_id=event.id,
+                user_id=current_user.id,
+                username=current_user.username,
+                action="MENTOR_GUIDANCE",
+                entity_type="dsa_question",
+                entity_id=str(q.id),
+                entity_title=q.title,
+                status="INFO",
+                details=f"Mentor diagnosed candidate error on {verdict}: {root_cause}",
+                created_at=datetime.now(timezone.utc)
+            ))
+            db.commit()
+        except Exception:
+            pass
+
+    return {
+        "status": "DIAGNOSIS_READY",
+        "question_id": q.id,
+        "question_title": q.title,
+        "verdict": verdict,
+        "pedagogical_concept": pedagogical_concept,
+        "root_cause": root_cause,
+        "actionable_hints": actionable_hints,
+        "suggested_action": suggested_action
     }

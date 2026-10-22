@@ -36,7 +36,8 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
     question_order_mode: 'fixed',
     show_progress: true,
     mark_solved_immediately: true,
-    revisit_solved_questions: true
+    revisit_solved_questions: true,
+    enable_mentor: true
   });
 
   // Banner modal state
@@ -93,7 +94,8 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
       question_order_mode: ev.question_order_mode || 'fixed',
       show_progress: ev.show_progress !== false,
       mark_solved_immediately: ev.mark_solved_immediately !== false,
-      revisit_solved_questions: ev.revisit_solved_questions !== false
+      revisit_solved_questions: ev.revisit_solved_questions !== false,
+      enable_mentor: ev.enable_mentor !== false
     });
 
     try {
@@ -820,6 +822,15 @@ export default function EventsManagementTab({ onOpenWizard, preselectedTemplate 
                         className="rounded border-[#18385E] text-[#00CFFF]"
                       />
                       <span>Allow revisiting already-solved questions</span>
+                    </label>
+                    <label className="flex items-center space-x-2 text-cyan-300 font-bold pt-1 border-t border-[#18385E]/50">
+                      <input
+                        type="checkbox"
+                        checked={expForm.enable_mentor}
+                        onChange={(e) => setExpForm({ ...expForm, enable_mentor: e.target.checked })}
+                        className="rounded border-[#18385E] text-[#00CFFF]"
+                      />
+                      <span>Enable DSA AI Debugging Mentor (Assists participants on failed test cases)</span>
                     </label>
                   </div>
 

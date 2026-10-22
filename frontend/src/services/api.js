@@ -255,6 +255,11 @@ export const dsaService = {
 
   async submitCode(identifier, sourceCode, language, eventId = null) {
     return this.submitSolution(identifier, language, sourceCode, eventId);
+  },
+
+  async getMentorGuidance(identifier, payload) {
+    const res = await apiClient.post(`/questions/${identifier}/mentor-guidance`, payload);
+    return res.data;
   }
 };
 export const questionService = dsaService;
@@ -564,6 +569,10 @@ export const adminService = {
   // Audits & Security
   async getAuditLogs(limit = 100) {
     const res = await apiClient.get('/admin/audit-logs', { params: { limit } });
+    return res.data;
+  },
+  async getParticipantActivityLogs(params = {}) {
+    const res = await apiClient.get('/admin/participant-activity-logs', { params });
     return res.data;
   },
   async getSecurityIncidents() {

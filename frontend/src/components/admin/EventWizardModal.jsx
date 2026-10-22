@@ -59,6 +59,7 @@ export default function EventWizardModal({ isOpen, onClose, onEventCreated, init
     question_navigation_policy: 'free', // 'free' | 'sequential' | 'unlock'
     question_order_mode: 'fixed', // 'fixed' | 'random_participant' | 'random_team'
     show_progress: true,
+    enable_mentor: true,
     mark_solved_immediately: true,
     revisit_solved_questions: true,
     clipboard_policy: 'restricted',
@@ -863,6 +864,15 @@ export default function EventWizardModal({ isOpen, onClose, onEventCreated, init
                       className="rounded border-[#18385E] text-[#00CFFF]"
                     />
                     <span>Show live solve progress (e.g. "Solved 8 / 20")</span>
+                  </label>
+                  <label className="flex items-center space-x-2 text-[#F2F7FF]">
+                    <input
+                      type="checkbox"
+                      checked={form.enable_mentor}
+                      onChange={(e) => setForm({ ...form, enable_mentor: e.target.checked })}
+                      className="rounded border-[#18385E] text-[#00CFFF]"
+                    />
+                    <span className="text-amber-300 font-medium">Enable DSA AI Debugging Mentor (Help participants understand failed test cases)</span>
                   </label>
                   <label className="flex items-center space-x-2 text-[#F2F7FF]">
                     <input

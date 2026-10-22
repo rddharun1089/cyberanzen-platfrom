@@ -8,7 +8,7 @@ import {
   Flag, Settings, Crown, ChevronRight, Award, Sparkles, CheckSquare,
   Smartphone, RotateCcw, Send, ShieldAlert, Calendar, UserPlus,
   Copy, LogOut, ExternalLink, X, ChevronDown, ChevronUp, AlertCircle,
-  ChevronLeft, Maximize2, Minimize2, List, Eye, LogIn, History, Activity
+  ChevronLeft, Maximize2, Minimize2, List, Eye, LogIn, History, Activity, Brain
 } from 'lucide-react';
 import { eventService, labService, challengeService, questionService, dsaService, authService, mcqService, teamService } from '../services/api';
 
@@ -57,6 +57,8 @@ export default function EventWorkspace({ user }) {
   const [activityLogs, setActivityLogs] = useState([]);
   const [loadingActivityLogs, setLoadingActivityLogs] = useState(false);
   const [completingEvent, setCompletingEvent] = useState(false);
+  const [mentorDiagnosis, setMentorDiagnosis] = useState({});
+  const [mentorLoading, setMentorLoading] = useState(false);
 
   // CTF interactive state
   const [selectedChallenge, setSelectedChallenge] = useState(null);
@@ -463,6 +465,36 @@ export default function EventWorkspace({ user }) {
       }));
     } finally {
       setIsSubmittingDSA(false);
+    }
+  };
+
+  const handleRequestMentorGuidance = async (currentCase, caseIdx) => {
+    if (!selectedQuestion) return;
+    const key = `${selectedQuestion.id}_${caseIdx}`;
+    setMentorLoading(true);
+    try {
+      const code = getCurrentCode();
+      const expected = currentCase.expected_output !== undefined ? currentCase.expected_output : (currentCase.output || '');
+      const actual = currentCase.actual_output !== undefined ? currentCase.actual_output : (currentCase.actual || '');
+      const err = currentCase.error || executionResults[selectedQuestion.id]?.compile_log || '';
+      const verdict = currentCase.verdict || executionResults[selectedQuestion.id]?.verdict || 'WRONG_ANSWER';
+
+      const res = await questionService.getMentorGuidance(selectedQuestion.id, {
+        source_code: code,
+        language,
+        failed_case_input: currentCase.input || '',
+        expected_output: expected,
+        actual_output: actual,
+        error_message: err,
+        verdict,
+        event_id: targetEventId ? (isNaN(targetEventId) ? null : parseInt(targetEventId)) : null
+      });
+
+      setMentorDiagnosis(prev => ({ ...prev, [key]: res }));
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to generate mentor diagnosis. Please ensure the AI mentor is enabled by the event administrator.');
+    } finally {
+      setMentorLoading(false);
     }
   };
 
@@ -2133,6 +2165,70 @@ export default function EventWorkspace({ user }) {
                                             <pre className="p-2 rounded-lg bg-rose-950/40 border border-rose-900/60 text-rose-200 text-[11px] overflow-x-auto whitespace-pre-wrap">
                                               {currentCase.error}
                                             </pre>
+                                          </div>
+                                        )}
+
+                                        {/* AI DSA Debugging Mentor (Enabled by Admin) */}
+                                        {!isPassed && (
+                                          <div className="mt-3 pt-3 border-t border-[#18385E]/70 space-y-2">
+                                            <div className="flex items-center justify-between">
+                                              <div className="flex items-center space-x-1.5 text-xs font-bold text-amber-300">
+                                                <Brain className="w-4 h-4 text-amber-400" />
+                                                <span className="tracking-wider uppercase">CYBERANZEN MENTOR // DIAGNOSTIC ASSISTANT</span>
+                                              </div>
+
+                                              {config?.enable_mentor !== false ? (
+                                                <button
+                                                  onClick={() => handleRequestMentorGuidance(currentCase, selectedTestCaseIndex)}
+                                                  disabled={mentorLoading}
+                                                  className="px-3 py-1 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-600/60 text-amber-300 text-[10px] font-bold transition-all shadow-[0_0_10px_rgba(245,185,66,0.2)] flex items-center space-x-1"
+                                                >
+                                                  <Sparkles className={`w-3 h-3 ${mentorLoading ? 'animate-spin' : ''}`} />
+                                                  <span>{mentorLoading ? 'Diagnosing...' : mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`] ? 'Re-Analyze Mistake' : 'Ask Mentor What Mistake Was Made'}</span>
+                                                </button>
+                                              ) : (
+                                                <span className="text-[10px] text-slate-500 font-mono italic">
+                                                  [Mentor disabled by event admin]
+                                                </span>
+                                              )}
+                                            </div>
+
+                                            {/* Mentor Diagnostic Output Box */}
+                                            {mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`] && (
+                                              <div className="p-3.5 rounded-xl bg-[#08172B] border border-amber-500/40 text-xs space-y-2 animate-fade-in shadow-xl">
+                                                {/* Mistake Root Cause */}
+                                                <div>
+                                                  <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block mb-0.5">
+                                                    🔍 Diagnosed Mistake / Flaw:
+                                                  </span>
+                                                  <p className="text-slate-200 text-xs font-sans leading-relaxed">
+                                                    {mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`].root_cause}
+                                                  </p>
+                                                </div>
+
+                                                {/* Concept & Actionable Hints */}
+                                                {mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`].actionable_hints?.length > 0 && (
+                                                  <div>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block mb-1">
+                                                      💡 Actionable Guidance:
+                                                    </span>
+                                                    <ul className="list-disc list-inside space-y-1 text-slate-300 font-sans text-xs">
+                                                      {mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`].actionable_hints.map((hint, hIdx) => (
+                                                        <li key={hIdx} className="leading-relaxed">{hint}</li>
+                                                      ))}
+                                                    </ul>
+                                                  </div>
+                                                )}
+
+                                                {/* Suggested Action */}
+                                                {mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`].suggested_action && (
+                                                  <div className="pt-1 border-t border-[#18385E]/60 text-[11px] font-mono text-emerald-300">
+                                                    <strong className="text-emerald-400">Recommended Fix: </strong>
+                                                    <span>{mentorDiagnosis[`${selectedQuestion.id}_${selectedTestCaseIndex}`].suggested_action}</span>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </div>

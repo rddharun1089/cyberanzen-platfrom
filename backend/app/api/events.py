@@ -95,6 +95,7 @@ def serialize_event(e: Event, current_user: Optional[User] = None, db: Optional[
         "question_navigation_policy": e.question_navigation_policy or "free",
         "question_order_mode": e.question_order_mode or "fixed",
         "show_progress": e.show_progress,
+        "enable_mentor": getattr(e, "enable_mentor", True),
         "mark_solved_immediately": e.mark_solved_immediately,
         "revisit_solved_questions": e.revisit_solved_questions,
         "result_publication_time": e.result_publication_time,
@@ -295,6 +296,7 @@ def get_event_workspace_config(
         "question_navigation_policy": event.question_navigation_policy or "free",
         "question_order_mode": event.question_order_mode or "fixed",
         "show_progress": event.show_progress,
+        "enable_mentor": getattr(event, "enable_mentor", True),
         "mark_solved_immediately": event.mark_solved_immediately,
         "revisit_solved_questions": event.revisit_solved_questions,
         "leaderboard_visible": event.leaderboard_visible,
@@ -680,8 +682,10 @@ def log_event_activity(
             EventActivityLog.action == req.action,
             EventActivityLog.entity_id == (str(req.entity_id) if req.entity_id else None)
         ).order_by(EventActivityLog.id.desc()).first()
-        if recent and (now - recent.created_at).total_seconds() < 10:
-            return {"status": "DEDUPED", "id": recent.id, "message": "Recent duplicate activity suppressed."}
+        if recent and recent.created_at:
+            recent_time = recent.created_at.replace(tzinfo=timezone.utc) if recent.created_at.tzinfo is None else recent.created_at
+            if (now - recent_time).total_seconds() < 10:
+                return {"status": "DEDUPED", "id": recent.id, "message": "Recent duplicate activity suppressed."}
 
     activity = EventActivityLog(
         event_id=event.id,
@@ -723,6 +727,12 @@ def get_my_event_activity(
     first_log = logs[0] if logs else None
     start_time = first_log.created_at if first_log else None
 
+    def calc_elapsed(t1, t0):
+        if not t1 or not t0: return 0
+        t1_u = t1.replace(tzinfo=timezone.utc) if t1.tzinfo is None else t1
+        t0_u = t0.replace(tzinfo=timezone.utc) if t0.tzinfo is None else t0
+        return int((t1_u - t0_u).total_seconds())
+
     return [
         {
             "id": l.id,
@@ -734,7 +744,7 @@ def get_my_event_activity(
             "details": l.details,
             "timestamp": l.created_at.isoformat(),
             "time_display": l.created_at.strftime("%H:%M:%S"),
-            "elapsed_seconds": int((l.created_at - start_time).total_seconds()) if start_time else 0
+            "elapsed_seconds": calc_elapsed(l.created_at, start_time)
         }
         for l in logs
     ]

@@ -14,7 +14,7 @@ from app.db.models import (
     DynamicTemplate, DockerLabInstance, AuditLog, SecurityIncident, Team,
     TeamMembership, TeamMemberRole, TeamSolvedCase, Submission, Solve, ChallengeStatus, FlagType, LabStatus,
     Event, EventStatus, EventType, ParticipationMode, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
-    EventRegistration, QuestionImportJob, DynamicFlag, MCQAttempt, CompetitionTemplate
+    EventRegistration, QuestionImportJob, DynamicFlag, MCQAttempt, CompetitionTemplate, EventActivityLog
 )
 from app.api.deps import get_current_admin, get_current_super_admin, get_current_event_admin
 from app.judge.worker import evaluate_submission
@@ -156,6 +156,7 @@ class EventCreateRequest(BaseModel):
     question_navigation_policy: Optional[str] = "free"  # free | sequential | unlock
     question_order_mode: Optional[str] = "fixed"  # fixed | random_participant | random_team
     show_progress: Optional[bool] = True
+    enable_mentor: Optional[bool] = True
     mark_solved_immediately: Optional[bool] = True
     revisit_solved_questions: Optional[bool] = True
     result_publication_time: Optional[datetime] = None
@@ -221,6 +222,7 @@ class QuestionExperienceUpdateRequest(BaseModel):
     question_navigation_policy: Optional[str] = "free"
     question_order_mode: Optional[str] = "fixed"
     show_progress: Optional[bool] = True
+    enable_mentor: Optional[bool] = True
     mark_solved_immediately: Optional[bool] = True
     revisit_solved_questions: Optional[bool] = True
 
@@ -336,6 +338,7 @@ def admin_create_event(
         question_navigation_policy=req.question_navigation_policy or "free",
         question_order_mode=req.question_order_mode or "fixed",
         show_progress=req.show_progress if req.show_progress is not None else True,
+        enable_mentor=req.enable_mentor if req.enable_mentor is not None else True,
         mark_solved_immediately=req.mark_solved_immediately if req.mark_solved_immediately is not None else True,
         revisit_solved_questions=req.revisit_solved_questions if req.revisit_solved_questions is not None else True,
         result_publication_time=req.result_publication_time,
@@ -1021,6 +1024,7 @@ def admin_update_event_question_experience(
     if req.question_navigation_policy: event.question_navigation_policy = req.question_navigation_policy
     if req.question_order_mode: event.question_order_mode = req.question_order_mode
     if req.show_progress is not None: event.show_progress = req.show_progress
+    if req.enable_mentor is not None: event.enable_mentor = req.enable_mentor
     if req.mark_solved_immediately is not None: event.mark_solved_immediately = req.mark_solved_immediately
     if req.revisit_solved_questions is not None: event.revisit_solved_questions = req.revisit_solved_questions
 
@@ -1745,6 +1749,50 @@ def admin_get_audit_logs(
             "entity_id": l.entity_id,
             "details": l.details,
             "created_at": l.created_at
+        }
+        for l in logs
+    ]
+
+@router.get("/participant-activity-logs")
+def admin_get_participant_activity_logs(
+    event_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 500,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    query = db.query(EventActivityLog)
+    if event_id:
+        query = query.filter(EventActivityLog.event_id == event_id)
+    if user_id:
+        query = query.filter(EventActivityLog.user_id == user_id)
+    if action:
+        query = query.filter(EventActivityLog.action == action)
+    logs = query.order_by(EventActivityLog.created_at.desc()).limit(limit).all()
+
+    # Pre-fetch event titles
+    event_ids = list({l.event_id for l in logs if l.event_id})
+    event_map = {}
+    if event_ids:
+        events = db.query(Event.id, Event.title).filter(Event.id.in_(event_ids)).all()
+        event_map = {e.id: e.title for e in events}
+
+    return [
+        {
+            "id": l.id,
+            "event_id": l.event_id,
+            "event_title": event_map.get(l.event_id, f"Event #{l.event_id}"),
+            "user_id": l.user_id,
+            "username": l.username,
+            "action": l.action,
+            "entity_type": l.entity_type,
+            "entity_id": l.entity_id,
+            "entity_title": l.entity_title,
+            "status": l.status,
+            "details": l.details,
+            "created_at": l.created_at.isoformat() if l.created_at else None,
+            "time_display": l.created_at.strftime("%Y-%m-%d %H:%M:%S") if l.created_at else ""
         }
         for l in logs
     ]

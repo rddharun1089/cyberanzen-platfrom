@@ -53,6 +53,7 @@ def run_migrations():
         ("question_navigation_policy", "VARCHAR(50) DEFAULT 'free'"),
         ("question_order_mode", "VARCHAR(50) DEFAULT 'fixed'"),
         ("show_progress", "BOOLEAN DEFAULT 1"),
+        ("enable_mentor", "BOOLEAN DEFAULT 1"),
         ("mark_solved_immediately", "BOOLEAN DEFAULT 1"),
         ("revisit_solved_questions", "BOOLEAN DEFAULT 1"),
         ("result_publication_time", "DATETIME"),
