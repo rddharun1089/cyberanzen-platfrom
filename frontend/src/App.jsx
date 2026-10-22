@@ -87,21 +87,50 @@ export default function App() {
               }
             />
 
-            {/* Root Landing */}
+            {/* Root Landing: If signed in, only view Events/Admin; visitors see Landing */}
             <Route
               path="/"
               element={
                 isSetupNeeded ? (
                   <Navigate to="/setup" />
+                ) : user ? (
+                  isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/events" replace />
                 ) : (
                   <Landing user={user} />
                 )
               }
             />
 
-            <Route path="/landing" element={<Landing user={user} />} />
-            <Route path="/about" element={<Landing user={user} />} />
-            <Route path="/creator" element={<Landing user={user} />} />
+            <Route
+              path="/landing"
+              element={
+                user ? (
+                  isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/events" replace />
+                ) : (
+                  <Landing user={user} />
+                )
+              }
+            />
+            <Route
+              path="/about"
+              element={
+                user ? (
+                  isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/events" replace />
+                ) : (
+                  <Landing user={user} />
+                )
+              }
+            />
+            <Route
+              path="/creator"
+              element={
+                user ? (
+                  isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/events" replace />
+                ) : (
+                  <Landing user={user} />
+                )
+              }
+            />
             <Route
               path="/dashboard"
               element={<Navigate to="/events" replace />}

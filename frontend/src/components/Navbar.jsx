@@ -38,7 +38,7 @@ export default function Navbar({ user, onLogout }) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
         {/* Brand / Logo */}
-        <Link to="/" className="flex items-center space-x-3 group">
+        <Link to={user ? (isAdmin ? "/admin" : "/events") : "/"} className="flex items-center space-x-3 group">
           <div className="w-10 h-10 rounded-xl bg-[#0B1D38] border border-[#18385E] flex items-center justify-center group-hover:border-[#00CFFF] group-hover:shadow-[0_0_20px_rgba(0,207,255,0.3)] transition-all duration-300 overflow-hidden p-1">
             <img 
               src="/logo.png" 
@@ -63,33 +63,37 @@ export default function Navbar({ user, onLogout }) {
           </div>
         </Link>
 
-        {/* Primary Desktop Navigation: Exactly Home, About, Creator, Events */}
+        {/* Primary Desktop Navigation: Only Events when signed in; Home, About, Creator for visitors */}
         <nav className="hidden md:flex items-center space-x-1 lg:space-x-3">
-          <Link
-            to="/"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors ${
-              location.pathname === '/' && !location.hash
-                ? 'text-[#00CFFF] bg-[#0B1D38] border border-[#18385E]'
-                : 'text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]'
-            }`}
-          >
-            Home
-          </Link>
+          {!user && (
+            <>
+              <Link
+                to="/"
+                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors ${
+                  location.pathname === '/' && !location.hash
+                    ? 'text-[#00CFFF] bg-[#0B1D38] border border-[#18385E]'
+                    : 'text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]'
+                }`}
+              >
+                Home
+              </Link>
 
-          <button
-            onClick={() => scrollToSection('about')}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746] transition-colors"
-          >
-            About
-          </button>
+              <button
+                onClick={() => scrollToSection('about')}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746] transition-colors"
+              >
+                About
+              </button>
 
-          <button
-            onClick={() => scrollToSection('creator')}
-            className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746] transition-colors"
-          >
-            Creator
-          </button>
+              <button
+                onClick={() => scrollToSection('creator')}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746] transition-colors"
+              >
+                Creator
+              </button>
+            </>
+          )}
 
           <Link
             to="/events"
@@ -102,6 +106,20 @@ export default function Navbar({ user, onLogout }) {
             <Calendar className="w-3.5 h-3.5 text-[#00CFFF]" />
             <span>Events</span>
           </Link>
+
+          {user && isAdmin && (
+            <Link
+              to="/admin"
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
+                location.pathname.startsWith('/admin')
+                  ? 'text-[#00CFFF] bg-[#0B1D38] border border-[#18385E]'
+                  : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#102746]'
+              }`}
+            >
+              <Settings className="w-3.5 h-3.5 text-[#00CFFF]" />
+              <span>Admin Studio</span>
+            </Link>
+          )}
         </nav>
 
         {/* User Account / Sign In & Sign Up Controls */}
@@ -201,28 +219,32 @@ export default function Navbar({ user, onLogout }) {
       {/* Mobile Collapsible Navigation Menu */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-[#0B1D38] border-b border-[#18385E] px-4 pt-3 pb-6 space-y-3 font-sans">
-          <Link
-            to="/"
-            onClick={() => {
-              setMobileMenuOpen(false);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
-            className="block px-3 py-2 rounded-xl text-sm font-medium text-[#F2F7FF] hover:bg-[#102746]"
-          >
-            Home
-          </Link>
-          <button
-            onClick={() => scrollToSection('about')}
-            className="w-full text-left block px-3 py-2 rounded-xl text-sm font-medium text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]"
-          >
-            About
-          </button>
-          <button
-            onClick={() => scrollToSection('creator')}
-            className="w-full text-left block px-3 py-2 rounded-xl text-sm font-medium text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]"
-          >
-            Creator
-          </button>
+          {!user && (
+            <>
+              <Link
+                to="/"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="block px-3 py-2 rounded-xl text-sm font-medium text-[#F2F7FF] hover:bg-[#102746]"
+              >
+                Home
+              </Link>
+              <button
+                onClick={() => scrollToSection('about')}
+                className="w-full text-left block px-3 py-2 rounded-xl text-sm font-medium text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]"
+              >
+                About
+              </button>
+              <button
+                onClick={() => scrollToSection('creator')}
+                className="w-full text-left block px-3 py-2 rounded-xl text-sm font-medium text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]"
+              >
+                Creator
+              </button>
+            </>
+          )}
           <Link
             to="/events"
             onClick={() => setMobileMenuOpen(false)}
