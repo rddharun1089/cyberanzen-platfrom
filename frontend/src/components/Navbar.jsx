@@ -75,7 +75,7 @@ export default function Navbar({ user, onLogout }) {
             </>
           )}
 
-          {!isAuthPage && (
+          {user && (
             <Link
               to="/events"
               className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
@@ -105,8 +105,8 @@ export default function Navbar({ user, onLogout }) {
 
         {/* User Account / Sign In & Sign Up Controls */}
         <div className="hidden md:flex items-center space-x-3">
-          {/* Search Button */}
-          {!isAuthPage && (
+          {/* Search Button (Accessible when signed in) */}
+          {user && (
             <button
               onClick={() => navigate('/events')}
               className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] hover:border-[#00CFFF]/40 transition-colors"
@@ -199,7 +199,7 @@ export default function Navbar({ user, onLogout }) {
 
         {/* Mobile Action Controls */}
         <div className="flex md:hidden items-center space-x-2">
-          {!isAuthPage && (
+          {user && (
             <button
               onClick={() => navigate('/events')}
               className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF]"
@@ -247,7 +247,7 @@ export default function Navbar({ user, onLogout }) {
               </button>
             </>
           )}
-          {!isAuthPage && (
+          {user && (
             <Link
               to="/events"
               onClick={() => setMobileMenuOpen(false)}

@@ -142,11 +142,23 @@ export default function App() {
             <Route path="/dsa/:identifier" element={<DSAWorkspace />} />
             <Route path="/mcq/:id" element={<MCQWorkspace />} />
 
-            {/* Competitions / Events */}
-            <Route path="/events" element={<EventsHub user={user} />} />
-            <Route path="/events/:eventId" element={<EventWorkspace user={user} />} />
-            <Route path="/events/:eventId/workspace" element={<EventWorkspace user={user} />} />
-            <Route path="/events/:eventId/:tab" element={<EventWorkspace user={user} />} />
+            {/* Competitions / Events - Protected, accessible only after signing in */}
+            <Route
+              path="/events"
+              element={user ? <EventsHub user={user} /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/events/:eventId"
+              element={user ? <EventWorkspace user={user} /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/events/:eventId/workspace"
+              element={user ? <EventWorkspace user={user} /> : <Navigate to="/login" replace />}
+            />
+            <Route
+              path="/events/:eventId/:tab"
+              element={user ? <EventWorkspace user={user} /> : <Navigate to="/login" replace />}
+            />
 
             {/* Squads & Leaderboards */}
             <Route

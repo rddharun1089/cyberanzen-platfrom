@@ -77,18 +77,18 @@ export default function Landing({ user }) {
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-4 pt-1">
                 <Link
-                  to={user ? "/events" : "/login"}
+                  to={user ? "/events" : "/register"}
                   className="inline-flex items-center space-x-2 px-6 py-3 rounded-full font-bold font-mono text-xs sm:text-sm text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_25px_rgba(0,207,255,0.45)] hover:shadow-[0_0_35px_rgba(0,207,255,0.7)] transition-all duration-200 transform hover:-translate-y-0.5"
                 >
-                  <span>Explore Events</span>
+                  <span>Get Started</span>
                   <ArrowRight className="w-4 h-4 ml-0.5" />
                 </Link>
 
                 <Link
-                  to={user ? "/events" : "/register"}
+                  to={user ? "/events" : "/login"}
                   className="inline-flex items-center space-x-2 px-6 py-3 rounded-full font-medium font-mono text-xs sm:text-sm text-[#F2F7FF] bg-[#07182B] hover:bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200"
                 >
-                  <span>Get Started</span>
+                  <span>Sign In</span>
                 </Link>
               </div>
 
@@ -391,7 +391,6 @@ export default function Landing({ user }) {
               <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-[#00CFFF] transition-colors">Home</Link>
               <button onClick={() => scrollToSection('about')} className="hover:text-[#00CFFF] transition-colors">About</button>
               <button onClick={() => scrollToSection('creator')} className="hover:text-[#00CFFF] transition-colors">Creator</button>
-              <Link to={user ? "/events" : "/login"} className="hover:text-[#00CFFF] transition-colors">Events</Link>
             </div>
 
             {/* Right Socials & Copyright */}
