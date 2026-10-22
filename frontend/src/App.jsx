@@ -9,6 +9,7 @@ import CTFWorkspace from './pages/CTFWorkspace';
 import DSAWorkspace from './pages/DSAWorkspace';
 import MCQWorkspace from './pages/MCQWorkspace';
 import EventsHub from './pages/EventsHub';
+import EventWorkspace from './pages/EventWorkspace';
 import TeamWorkspace from './pages/TeamWorkspace';
 import Leaderboard from './pages/Leaderboard';
 import AdminStudio from './pages/AdminStudio';
@@ -114,7 +115,8 @@ export default function App() {
 
             {/* Competitions / Events */}
             <Route path="/events" element={<EventsHub />} />
-            <Route path="/events/:id" element={<EventsHub />} />
+            <Route path="/events/:eventId" element={<EventWorkspace user={user} />} />
+            <Route path="/events/:eventId/workspace" element={<EventWorkspace user={user} />} />
 
             {/* Squads & Leaderboards */}
             <Route

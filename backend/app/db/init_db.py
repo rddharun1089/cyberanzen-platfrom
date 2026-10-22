@@ -4,13 +4,16 @@ from app.db.session import engine, Base
 from app.db.models import User, UserRole, DSAQuestion, MCQQuestion, CTFChallenge
 from app.core.security import hash_password
 
+from app.db.migrate_event_upgrade import run_migrations
+
 def init_db(db: Session, seed_test_admin: bool = False):
     """
     Initializes the database schema for CyberAnzen Arena.
     Strictly enforces empty question banks (0 seeded DSA/MCQ/CTF questions).
     All challenges must be authored via the Admin Studio or validated dynamic templates.
     """
-    # 1. Create all database tables
+    # 1. Run migrations and create all database tables
+    run_migrations()
     Base.metadata.create_all(bind=engine)
 
     # 2. Check Super Admin status

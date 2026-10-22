@@ -41,11 +41,21 @@ class UserRole(str, enum.Enum):
 
 class EventStatus(str, enum.Enum):
     DRAFT = "draft"
+    PUBLISHED = "published"
+    REGISTRATION_OPEN = "registration_open"
+    LIVE = "live"
     UPCOMING = "upcoming"
     ACTIVE = "active"
     PAUSED = "paused"
+    ENDED = "ended"
     COMPLETED = "completed"
+    RESULTS_PUBLISHED = "results_published"
     ARCHIVED = "archived"
+
+class EventType(str, enum.Enum):
+    DSA = "dsa"
+    CTF = "ctf"
+    MCQ = "mcq"
 
 class ParticipationMode(str, enum.Enum):
     TEAM = "team"
@@ -179,19 +189,48 @@ class Event(Base):
     id = Column(Integer, primary_key=True, index=True)
     slug = Column(String(100), unique=True, index=True, nullable=False)
     title = Column(String(200), nullable=False)
+    event_type = Column(String(30), default=EventType.DSA.value, nullable=False, index=True)  # dsa | ctf | mcq
+    short_description = Column(String(500), nullable=True)
     description = Column(Text, nullable=False)
     banner_url = Column(String(255), nullable=True)
     rules = Column(Text, nullable=True)
+    organizer = Column(String(100), default="CyberAnzen Organization", nullable=True)
+    category = Column(String(100), default="General", nullable=True)
+    difficulty = Column(String(30), default="Intermediate", nullable=False)
+    timezone = Column(String(50), default="UTC", nullable=False)
+    eligibility = Column(Text, nullable=True)
+    visibility = Column(String(30), default="public", nullable=False)  # public | unlisted | restricted
+    capacity = Column(Integer, nullable=True)
+    contact_info = Column(String(200), nullable=True)
     status = Column(String(30), default=EventStatus.DRAFT.value, nullable=False, index=True)
     participation_mode = Column(String(30), default=ParticipationMode.TEAM.value, nullable=False)
     team_size_min = Column(Integer, default=1, nullable=False)
     team_size_max = Column(Integer, default=4, nullable=False)
+
+    # Team configuration policies
+    team_allow_create = Column(Boolean, default=True, nullable=False)
+    team_allow_join_code = Column(Boolean, default=True, nullable=False)
+    team_require_approval = Column(Boolean, default=False, nullable=False)
+    team_allow_member_changes = Column(Boolean, default=True, nullable=False)
+    team_lock_on_start = Column(Boolean, default=True, nullable=False)
+    team_allow_ownership_transfer = Column(Boolean, default=True, nullable=False)
+    team_allow_delete_empty = Column(Boolean, default=True, nullable=False)
+    team_show_members_leaderboard = Column(Boolean, default=True, nullable=False)
+
+    # Leaderboard & visibility settings
+    leaderboard_type = Column(String(30), default="individual", nullable=False)  # individual | team | both
+    leaderboard_visible = Column(Boolean, default=True, nullable=False)
+    leaderboard_frozen = Column(Boolean, default=False, nullable=False)
+    scores_visible_during_event = Column(Boolean, default=True, nullable=False)
+    auto_publish_results = Column(Boolean, default=True, nullable=False)
+    show_solve_times = Column(Boolean, default=True, nullable=False)
+    show_solve_counts = Column(Boolean, default=True, nullable=False)
+    anonymize_participants = Column(Boolean, default=False, nullable=False)
+
     start_time = Column(DateTime, nullable=True, index=True)
     end_time = Column(DateTime, nullable=True, index=True)
     registration_open = Column(Boolean, default=True, nullable=False)
     registration_close = Column(DateTime, nullable=True)
-    leaderboard_visible = Column(Boolean, default=True, nullable=False)
-    leaderboard_frozen = Column(Boolean, default=False, nullable=False)
     clipboard_policy = Column(String(30), default=ClipboardPolicy.RESTRICTED.value, nullable=False)
     scoring_policy = Column(String(30), default=ScoringPolicy.STANDARD.value, nullable=False)
     allowed_languages = Column(Text, default='["python3", "cpp", "c"]', nullable=False)
@@ -202,6 +241,9 @@ class Event(Base):
     registrations = relationship("EventRegistration", back_populates="event", cascade="all, delete-orphan")
     teams = relationship("Team", back_populates="event", cascade="all, delete-orphan")
     solves = relationship("Solve", back_populates="event", cascade="all, delete-orphan")
+    dsa_questions = relationship("EventDSAQuestion", back_populates="event", cascade="all, delete-orphan")
+    ctf_challenges = relationship("EventCTFChallenge", back_populates="event", cascade="all, delete-orphan")
+    mcq_questions = relationship("EventMCQQuestion", back_populates="event", cascade="all, delete-orphan")
 
 class EventRegistration(Base):
     __tablename__ = "event_registrations"
@@ -210,6 +252,7 @@ class EventRegistration(Base):
     event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     team_id = Column(Integer, ForeignKey("teams.id", ondelete="SET NULL"), nullable=True, index=True)
+    selected_mode = Column(String(30), default="individual", nullable=False)  # individual | team (for mixed mode)
     registered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     event = relationship("Event", back_populates="registrations")
@@ -219,6 +262,73 @@ class EventRegistration(Base):
     __table_args__ = (
         UniqueConstraint('event_id', 'user_id', name='uq_event_user_reg'),
     )
+
+class EventDSAQuestion(Base):
+    __tablename__ = "event_dsa_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("dsa_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    points_override = Column(Integer, nullable=True)
+    release_time = Column(DateTime, nullable=True)
+    order_index = Column(Integer, default=0, nullable=False)
+
+    event = relationship("Event", back_populates="dsa_questions")
+    question = relationship("DSAQuestion")
+
+    __table_args__ = (
+        UniqueConstraint('event_id', 'question_id', name='uq_event_dsa_q'),
+    )
+
+class EventCTFChallenge(Base):
+    __tablename__ = "event_ctf_challenges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    challenge_id = Column(Integer, ForeignKey("ctf_challenges.id", ondelete="CASCADE"), nullable=False, index=True)
+    points_override = Column(Integer, nullable=True)
+    release_time = Column(DateTime, nullable=True)
+    order_index = Column(Integer, default=0, nullable=False)
+
+    event = relationship("Event", back_populates="ctf_challenges")
+    challenge = relationship("CTFChallenge")
+
+    __table_args__ = (
+        UniqueConstraint('event_id', 'challenge_id', name='uq_event_ctf_c'),
+    )
+
+class EventMCQQuestion(Base):
+    __tablename__ = "event_mcq_questions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    mcq_id = Column(Integer, ForeignKey("mcq_questions.id", ondelete="CASCADE"), nullable=False, index=True)
+    points_override = Column(Integer, nullable=True)
+    order_index = Column(Integer, default=0, nullable=False)
+
+    event = relationship("Event", back_populates="mcq_questions")
+    mcq = relationship("MCQQuestion")
+
+    __table_args__ = (
+        UniqueConstraint('event_id', 'mcq_id', name='uq_event_mcq_q'),
+    )
+
+class QuestionImportJob(Base):
+    __tablename__ = "question_import_jobs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_type = Column(String(30), nullable=False)  # pdf | docx | markdown | json | csv | zip | git
+    source_name = Column(String(255), nullable=False)
+    status = Column(String(30), default="extracted", nullable=False)  # uploaded | extracting | extracted | failed | completed
+    total_detected = Column(Integer, default=0, nullable=False)
+    total_imported = Column(Integer, default=0, nullable=False)
+    extracted_data_json = Column(Text, default='[]', nullable=False)  # JSON array of extracted questions
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    created_by = relationship("User")
 
 # ==============================================================================
 # SQUADS & TEAMS

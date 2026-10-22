@@ -6,6 +6,18 @@ from app.db.models import User, UserRole
 from app.core.security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+def get_optional_current_user(token: str = Depends(oauth2_scheme_optional), db: Session = Depends(get_db)) -> User:
+    if not token:
+        return None
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+    username = payload.get("sub")
+    if not username:
+        return None
+    return db.query(User).filter(User.username == username, User.is_active == True).first()
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(

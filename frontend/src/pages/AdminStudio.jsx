@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Settings, Code2, HelpCircle, Shield, Cpu, Users, 
-  FileText, Plus, Trash2, CheckCircle2, AlertTriangle, Play, RefreshCw, Key, ShieldAlert
+  FileText, Plus, Trash2, CheckCircle2, AlertTriangle, Play, RefreshCw, Key, ShieldAlert,
+  Calendar, Upload, Sparkles
 } from 'lucide-react';
 import { adminService } from '../services/api';
+import EventsManagementTab from '../components/admin/EventsManagementTab';
+import QuestionImportTab from '../components/admin/QuestionImportTab';
 
 export default function AdminStudio() {
-  const [activeTab, setActiveTab] = useState('dsa'); // 'dsa' | 'mcq' | 'ctf' | 'dynamic' | 'labs' | 'users' | 'audits'
+  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'imports' | 'dsa' | 'mcq' | 'ctf' | 'dynamic' | 'labs' | 'users' | 'audits'
 
   // DSA state
   const [dsaList, setDsaList] = useState([]);
@@ -193,45 +196,69 @@ export default function AdminStudio() {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-wrap rounded-xl bg-slate-900/80 p-1 border border-slate-800 text-xs font-mono">
+        <div className="flex flex-wrap rounded-xl bg-slate-900/80 p-1 border border-slate-800 text-xs font-mono gap-1">
+          <button
+            onClick={() => setActiveTab('events')}
+            className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors ${activeTab === 'events' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Event Builder</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('imports')}
+            className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors ${activeTab === 'imports' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span>Question Imports</span>
+          </button>
           <button
             onClick={() => setActiveTab('dsa')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'dsa' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'dsa' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             DSA Studio
           </button>
           <button
             onClick={() => setActiveTab('mcq')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'mcq' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'mcq' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             MCQ Studio
           </button>
           <button
             onClick={() => setActiveTab('ctf')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'ctf' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'ctf' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             CTF Studio
           </button>
           <button
             onClick={() => setActiveTab('dynamic')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'dynamic' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'dynamic' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             Dynamic Generator
           </button>
           <button
             onClick={() => setActiveTab('users')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'users' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'users' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             Cadets & Squads
           </button>
           <button
             onClick={() => setActiveTab('audits')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'audits' ? 'bg-cyan-500/20 text-cyan-300 font-bold' : 'text-slate-400 hover:text-white'}`}
+            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'audits' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
           >
             Audit Logs
           </button>
         </div>
       </div>
+
+      {/* TAB 0: EVENT BUILDER */}
+      {activeTab === 'events' && (
+        <EventsManagementTab />
+      )}
+
+      {/* TAB 0.5: QUESTION IMPORT ENGINE */}
+      {activeTab === 'imports' && (
+        <QuestionImportTab onQuestionsPublished={loadTabData} />
+      )}
 
       {/* TAB 1: DSA STUDIO */}
       {activeTab === 'dsa' && (

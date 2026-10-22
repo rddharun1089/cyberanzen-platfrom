@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.db.session import get_db
-from app.db.models import Team, TeamMembership, TeamMemberRole, User, AuditLog
+from app.db.models import Team, TeamMembership, TeamMemberRole, User, AuditLog, Event, ParticipationMode
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/teams", tags=["Squad & Team Operations"])
@@ -76,6 +76,18 @@ def create_team(req: CreateTeamRequest, db: Session = Depends(get_db), current_u
     if len(clean_name) < 3 or len(clean_name) > 50:
         raise HTTPException(status_code=400, detail="Squad name must be between 3 and 50 characters.")
 
+    # Event mode verification
+    max_capacity = max(2, min(8, req.max_members or 4))
+    if req.event_id:
+        event = db.query(Event).filter(Event.id == req.event_id).first()
+        if not event:
+            raise HTTPException(status_code=404, detail="Target event not found.")
+        if event.participation_mode == ParticipationMode.INDIVIDUAL.value:
+            raise HTTPException(status_code=400, detail="Solo competition mode does not permit squad creation.")
+        if not event.team_allow_create:
+            raise HTTPException(status_code=400, detail="Squad creation is restricted by tournament directors.")
+        max_capacity = event.team_size_max
+
     existing_name = db.query(Team).filter(Team.name.ilike(clean_name), Team.is_active == True).first()
     if existing_name:
         raise HTTPException(status_code=400, detail="Squad name is already claimed. Choose a unique squad name.")
@@ -87,7 +99,7 @@ def create_team(req: CreateTeamRequest, db: Session = Depends(get_db), current_u
         owner_id=current_user.id,
         event_id=req.event_id,
         points=0,
-        max_members=max(2, min(8, req.max_members or 4)),
+        max_members=max_capacity,
         is_active=True,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc)
@@ -130,11 +142,18 @@ def join_team(req: JoinTeamRequest, db: Session = Depends(get_db), current_user:
     if team.is_locked:
         raise HTTPException(status_code=400, detail="Squad roster is locked for competition.")
 
+    effective_max = team.max_members
+    if team.event:
+        if not team.event.team_allow_join_code:
+            raise HTTPException(status_code=400, detail="Enlistment via invitation token is disabled for this tournament.")
+        if team.event.team_size_max:
+            effective_max = min(effective_max, team.event.team_size_max)
+
     current_member_count = db.query(TeamMembership).filter(TeamMembership.team_id == team.id).count()
-    if current_member_count >= team.max_members:
+    if current_member_count >= effective_max:
         raise HTTPException(
             status_code=400,
-            detail=f"Squad '{team.name}' has reached its maximum operative capacity ({team.max_members})."
+            detail=f"Squad '{team.name}' has reached its maximum operative capacity ({effective_max})."
         )
 
     membership = TeamMembership(

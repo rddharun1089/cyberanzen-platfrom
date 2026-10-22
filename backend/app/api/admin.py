@@ -9,9 +9,11 @@ from app.db.session import get_db
 from app.db.models import (
     User, UserRole, DSAQuestion, DSATestCase, MCQQuestion, CTFChallenge,
     DynamicTemplate, DockerLabInstance, AuditLog, SecurityIncident, Team,
-    TeamMembership, TeamMemberRole, TeamSolvedCase, Submission, Solve, ChallengeStatus, FlagType, LabStatus
+    TeamMembership, TeamMemberRole, TeamSolvedCase, Submission, Solve, ChallengeStatus, FlagType, LabStatus,
+    Event, EventStatus, EventType, ParticipationMode, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
+    EventRegistration, QuestionImportJob
 )
-from app.api.deps import get_current_admin, get_current_super_admin
+from app.api.deps import get_current_admin, get_current_super_admin, get_current_event_admin
 from app.judge.worker import evaluate_submission
 from app.services.dynamic_generator import DynamicGeneratorService
 from app.services.lab_service import DockerLabService
@@ -102,6 +104,387 @@ class BatchAntiCheatRequest(BaseModel):
     category: Optional[str] = None
     allow_copy_paste: bool
 
+class EventCreateRequest(BaseModel):
+    title: str
+    slug: Optional[str] = None
+    event_type: str = "dsa"  # dsa | ctf | mcq
+    short_description: Optional[str] = ""
+    description: str
+    banner_url: Optional[str] = ""
+    rules: Optional[str] = ""
+    organizer: Optional[str] = "CyberAnzen Organization"
+    category: Optional[str] = "General"
+    difficulty: Optional[str] = "Intermediate"
+    timezone: Optional[str] = "UTC"
+    eligibility: Optional[str] = "Open to all verified operatives"
+    visibility: Optional[str] = "public"
+    capacity: Optional[int] = None
+    contact_info: Optional[str] = "support@cyberanzen.io"
+    status: Optional[str] = "draft"
+    participation_mode: Optional[str] = "team"
+    team_size_min: Optional[int] = 1
+    team_size_max: Optional[int] = 4
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    registration_open: Optional[bool] = True
+    registration_close: Optional[datetime] = None
+    clipboard_policy: Optional[str] = "restricted"
+    scoring_policy: Optional[str] = "standard"
+    allowed_languages: Optional[List[str]] = ["python3", "cpp", "c"]
+    # Team policies
+    team_allow_create: Optional[bool] = True
+    team_allow_join_code: Optional[bool] = True
+    team_require_approval: Optional[bool] = False
+    team_allow_member_changes: Optional[bool] = True
+    team_lock_on_start: Optional[bool] = True
+    team_allow_ownership_transfer: Optional[bool] = True
+    team_allow_delete_empty: Optional[bool] = True
+    team_show_members_leaderboard: Optional[bool] = True
+    # Leaderboard & visibility
+    leaderboard_type: Optional[str] = "individual"
+    leaderboard_visible: Optional[bool] = True
+    leaderboard_frozen: Optional[bool] = False
+    scores_visible_during_event: Optional[bool] = True
+    auto_publish_results: Optional[bool] = True
+    show_solve_times: Optional[bool] = True
+    show_solve_counts: Optional[bool] = True
+    anonymize_participants: Optional[bool] = False
+    # Initial question assignment
+    question_ids: Optional[List[int]] = []
+
+class EventAssignQuestionsRequest(BaseModel):
+    question_ids: List[int]
+    points_overrides: Optional[Dict[str, int]] = {}
+
+class EventStatusUpdateRequest(BaseModel):
+    status: str
+
+# ==============================================================================
+# 0. EVENT BUILDER & LIFECYCLE MANAGEMENT
+# ==============================================================================
+
+@router.get("/events")
+def admin_list_events(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    events = db.query(Event).order_by(Event.id.desc()).all()
+    result = []
+    for e in events:
+        q_count = 0
+        if e.event_type == "dsa":
+            q_count = len(e.dsa_questions) if e.dsa_questions else db.query(DSAQuestion).filter(DSAQuestion.event_id == e.id).count()
+        elif e.event_type == "ctf":
+            q_count = len(e.ctf_challenges) if e.ctf_challenges else db.query(CTFChallenge).filter(CTFChallenge.event_id == e.id).count()
+        elif e.event_type == "mcq":
+            q_count = len(e.mcq_questions) if e.mcq_questions else db.query(MCQQuestion).filter(MCQQuestion.event_id == e.id).count()
+
+        reg_count = len(e.registrations) if e.registrations else 0
+        team_count = len(e.teams) if e.teams else 0
+
+        result.append({
+            "id": e.id,
+            "slug": e.slug,
+            "title": e.title,
+            "event_type": e.event_type,
+            "status": e.status,
+            "participation_mode": e.participation_mode,
+            "team_size_max": e.team_size_max,
+            "start_time": e.start_time,
+            "end_time": e.end_time,
+            "registration_open": e.registration_open,
+            "question_count": q_count,
+            "registration_count": reg_count,
+            "team_count": team_count,
+            "visibility": e.visibility,
+            "created_at": e.created_at
+        })
+    return result
+
+@router.post("/events")
+def admin_create_event(
+    req: EventCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    # Validate date range if both provided
+    if req.start_time and req.end_time and req.start_time >= req.end_time:
+        raise HTTPException(status_code=400, detail="Event start time must precede end time.")
+
+    slug = req.slug or req.title.lower().replace(" ", "-").replace("/", "-")
+    existing = db.query(Event).filter(Event.slug == slug).first()
+    if existing:
+        slug = f"{slug}-{secrets.token_hex(3)}"
+
+    new_event = Event(
+        slug=slug,
+        title=req.title.strip(),
+        event_type=req.event_type.lower(),
+        short_description=req.short_description or "",
+        description=req.description,
+        banner_url=req.banner_url or "",
+        rules=req.rules or "",
+        organizer=req.organizer or "CyberAnzen Organization",
+        category=req.category or "General",
+        difficulty=req.difficulty or "Intermediate",
+        timezone=req.timezone or "UTC",
+        eligibility=req.eligibility or "Open to all verified operatives",
+        visibility=req.visibility or "public",
+        capacity=req.capacity,
+        contact_info=req.contact_info or "support@cyberanzen.io",
+        status=req.status or EventStatus.DRAFT.value,
+        participation_mode=req.participation_mode or ParticipationMode.TEAM.value,
+        team_size_min=max(1, req.team_size_min or 1),
+        team_size_max=max(1, min(10, req.team_size_max or 4)),
+        team_allow_create=req.team_allow_create if req.team_allow_create is not None else True,
+        team_allow_join_code=req.team_allow_join_code if req.team_allow_join_code is not None else True,
+        team_require_approval=req.team_require_approval or False,
+        team_allow_member_changes=req.team_allow_member_changes if req.team_allow_member_changes is not None else True,
+        team_lock_on_start=req.team_lock_on_start if req.team_lock_on_start is not None else True,
+        team_allow_ownership_transfer=req.team_allow_ownership_transfer if req.team_allow_ownership_transfer is not None else True,
+        team_allow_delete_empty=req.team_allow_delete_empty if req.team_allow_delete_empty is not None else True,
+        team_show_members_leaderboard=req.team_show_members_leaderboard if req.team_show_members_leaderboard is not None else True,
+        leaderboard_type=req.leaderboard_type or "individual",
+        leaderboard_visible=req.leaderboard_visible if req.leaderboard_visible is not None else True,
+        leaderboard_frozen=req.leaderboard_frozen or False,
+        scores_visible_during_event=req.scores_visible_during_event if req.scores_visible_during_event is not None else True,
+        auto_publish_results=req.auto_publish_results if req.auto_publish_results is not None else True,
+        show_solve_times=req.show_solve_times if req.show_solve_times is not None else True,
+        show_solve_counts=req.show_solve_counts if req.show_solve_counts is not None else True,
+        anonymize_participants=req.anonymize_participants or False,
+        start_time=req.start_time,
+        end_time=req.end_time,
+        registration_open=req.registration_open if req.registration_open is not None else True,
+        registration_close=req.registration_close,
+        clipboard_policy=req.clipboard_policy or "restricted",
+        scoring_policy=req.scoring_policy or "standard",
+        allowed_languages=json.dumps(req.allowed_languages or ["python3", "cpp", "c"]),
+        created_by_id=admin.id
+    )
+    db.add(new_event)
+    db.commit()
+    db.refresh(new_event)
+
+    # Initial question assignments if provided
+    if req.question_ids:
+        for idx, qid in enumerate(req.question_ids):
+            if new_event.event_type == "dsa":
+                db.add(EventDSAQuestion(event_id=new_event.id, question_id=qid, order_index=idx))
+            elif new_event.event_type == "ctf":
+                db.add(EventCTFChallenge(event_id=new_event.id, challenge_id=qid, order_index=idx))
+            elif new_event.event_type == "mcq":
+                db.add(EventMCQQuestion(event_id=new_event.id, mcq_id=qid, order_index=idx))
+        db.commit()
+
+    db.add(AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="CREATE_EVENT",
+        entity_type="EVENT",
+        entity_id=str(new_event.id),
+        details=json.dumps({"title": new_event.title, "event_type": new_event.event_type, "status": new_event.status})
+    ))
+    db.commit()
+
+    return {"success": True, "event_id": new_event.id, "slug": new_event.slug, "status": new_event.status}
+
+@router.get("/events/{event_id}")
+def admin_get_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    assigned_questions = []
+    if event.event_type == "dsa":
+        assigned = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).order_by(EventDSAQuestion.order_index.asc()).all()
+        for a in assigned:
+            if a.question:
+                assigned_questions.append({
+                    "id": a.question.id,
+                    "title": a.question.title,
+                    "difficulty": a.question.difficulty,
+                    "points": a.points_override or a.question.points,
+                    "order_index": a.order_index
+                })
+    elif event.event_type == "ctf":
+        assigned = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).order_by(EventCTFChallenge.order_index.asc()).all()
+        for a in assigned:
+            if a.challenge:
+                assigned_questions.append({
+                    "id": a.challenge.id,
+                    "title": a.challenge.title,
+                    "category": a.challenge.category,
+                    "points": a.points_override or a.challenge.points,
+                    "order_index": a.order_index
+                })
+    elif event.event_type == "mcq":
+        assigned = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).order_by(EventMCQQuestion.order_index.asc()).all()
+        for a in assigned:
+            if a.mcq:
+                assigned_questions.append({
+                    "id": a.mcq.id,
+                    "title": a.mcq.title,
+                    "category": a.mcq.category,
+                    "points": a.points_override or a.mcq.points_positive,
+                    "order_index": a.order_index
+                })
+
+    return {
+        "id": event.id,
+        "slug": event.slug,
+        "title": event.title,
+        "event_type": event.event_type,
+        "short_description": event.short_description,
+        "description": event.description,
+        "banner_url": event.banner_url,
+        "rules": event.rules,
+        "organizer": event.organizer,
+        "category": event.category,
+        "difficulty": event.difficulty,
+        "timezone": event.timezone,
+        "eligibility": event.eligibility,
+        "visibility": event.visibility,
+        "capacity": event.capacity,
+        "contact_info": event.contact_info,
+        "status": event.status,
+        "participation_mode": event.participation_mode,
+        "team_size_min": event.team_size_min,
+        "team_size_max": event.team_size_max,
+        "team_allow_create": event.team_allow_create,
+        "team_allow_join_code": event.team_allow_join_code,
+        "team_require_approval": event.team_require_approval,
+        "team_allow_member_changes": event.team_allow_member_changes,
+        "team_lock_on_start": event.team_lock_on_start,
+        "team_allow_ownership_transfer": event.team_allow_ownership_transfer,
+        "team_allow_delete_empty": event.team_allow_delete_empty,
+        "team_show_members_leaderboard": event.team_show_members_leaderboard,
+        "leaderboard_type": event.leaderboard_type,
+        "leaderboard_visible": event.leaderboard_visible,
+        "leaderboard_frozen": event.leaderboard_frozen,
+        "scores_visible_during_event": event.scores_visible_during_event,
+        "auto_publish_results": event.auto_publish_results,
+        "show_solve_times": event.show_solve_times,
+        "show_solve_counts": event.show_solve_counts,
+        "anonymize_participants": event.anonymize_participants,
+        "start_time": event.start_time,
+        "end_time": event.end_time,
+        "registration_open": event.registration_open,
+        "registration_close": event.registration_close,
+        "clipboard_policy": event.clipboard_policy,
+        "scoring_policy": event.scoring_policy,
+        "allowed_languages": json.loads(event.allowed_languages) if event.allowed_languages else ["python3", "cpp", "c"],
+        "assigned_questions": assigned_questions,
+        "registration_count": len(event.registrations) if event.registrations else 0,
+        "team_count": len(event.teams) if event.teams else 0
+    }
+
+@router.post("/events/{event_id}/assign-questions")
+def admin_assign_event_questions(
+    event_id: int,
+    req: EventAssignQuestionsRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    # Remove prior assignments
+    if event.event_type == "dsa":
+        db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).delete()
+        for idx, qid in enumerate(req.question_ids):
+            override = req.points_overrides.get(str(qid))
+            db.add(EventDSAQuestion(event_id=event.id, question_id=qid, points_override=override, order_index=idx))
+    elif event.event_type == "ctf":
+        db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).delete()
+        for idx, cid in enumerate(req.question_ids):
+            override = req.points_overrides.get(str(cid))
+            db.add(EventCTFChallenge(event_id=event.id, challenge_id=cid, points_override=override, order_index=idx))
+    elif event.event_type == "mcq":
+        db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).delete()
+        for idx, mid in enumerate(req.question_ids):
+            override = req.points_overrides.get(str(mid))
+            db.add(EventMCQQuestion(event_id=event.id, mcq_id=mid, points_override=override, order_index=idx))
+
+    db.add(AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="ASSIGN_EVENT_QUESTIONS",
+        entity_type="EVENT",
+        entity_id=str(event.id),
+        details=json.dumps({"question_ids": req.question_ids, "event_type": event.event_type})
+    ))
+    db.commit()
+
+    return {"success": True, "message": f"Successfully assigned {len(req.question_ids)} questions to event.", "event_id": event.id}
+
+@router.post("/events/{event_id}/status")
+def admin_update_event_status(
+    event_id: int,
+    req: EventStatusUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    valid_statuses = [
+        EventStatus.DRAFT.value, EventStatus.PUBLISHED.value,
+        EventStatus.REGISTRATION_OPEN.value, EventStatus.LIVE.value,
+        EventStatus.ENDED.value, EventStatus.RESULTS_PUBLISHED.value,
+        EventStatus.ARCHIVED.value, EventStatus.ACTIVE.value, EventStatus.COMPLETED.value
+    ]
+    if req.status not in valid_statuses:
+        raise HTTPException(status_code=400, detail=f"Invalid event status '{req.status}'. Permitted: {valid_statuses}")
+
+    old_status = event.status
+    event.status = req.status
+    if req.status in (EventStatus.REGISTRATION_OPEN.value, EventStatus.LIVE.value, EventStatus.ACTIVE.value):
+        event.registration_open = True
+    elif req.status in (EventStatus.ENDED.value, EventStatus.ARCHIVED.value):
+        event.registration_open = False
+
+    db.add(AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="UPDATE_EVENT_STATUS",
+        entity_type="EVENT",
+        entity_id=str(event.id),
+        details=json.dumps({"old_status": old_status, "new_status": req.status})
+    ))
+    db.commit()
+
+    return {"success": True, "event_id": event.id, "new_status": event.status}
+
+@router.delete("/events/{event_id}")
+def admin_delete_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_super_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    event_title = event.title
+    db.delete(event)
+    db.add(AuditLog(
+        actor_id=admin.id,
+        actor_username=admin.username,
+        action="DELETE_EVENT",
+        entity_type="EVENT",
+        entity_id=str(event_id),
+        details=json.dumps({"deleted_title": event_title})
+    ))
+    db.commit()
+
+    return {"success": True, "message": f"Event '{event_title}' permanently deleted."}
+
 # ==============================================================================
 # 1. DSA QUESTION STUDIO
 # ==============================================================================
@@ -150,7 +533,7 @@ def admin_create_dsa(req: DSACreateRequest, db: Session = Depends(get_db), admin
     db.add(log)
     db.commit()
 
-    return {"success": True, "id": q.id, "slug": q.slug, "title": q.title}
+    return {"success": True, "id": q.id, "question_id": q.id, "slug": q.slug, "title": q.title}
 
 @router.get("/dsa")
 def admin_list_dsa(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):

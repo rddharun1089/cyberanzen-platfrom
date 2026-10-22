@@ -20,6 +20,8 @@ def main():
 
     test_files = [
         os.path.join(base_dir, "tests", "test_arena_platform.py"),
+        os.path.join(base_dir, "tests", "test_event_engine.py"),
+        os.path.join(base_dir, "tests", "test_question_importer.py"),
         os.path.join(base_dir, "tests", "test_judge_sandbox.py"),
         os.path.join(base_dir, "tests", "test_user_deletion.py"),
         os.path.join(base_dir, "tests", "test_auth_rbac.py"),

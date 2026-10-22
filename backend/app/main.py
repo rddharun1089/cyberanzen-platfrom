@@ -10,7 +10,7 @@ from app.db.session import engine, Base, SessionLocal
 from app.db.init_db import init_db
 from app.api import (
     auth, events, teams, questions, mcqs, challenges,
-    labs, submissions, leaderboard, admin
+    labs, submissions, leaderboard, admin, imports
 )
 
 # 1. Initialize Database Schema
@@ -34,12 +34,12 @@ app = FastAPI(
 # 3. Enterprise Security Headers & DoS Payload Size Limiter Middleware
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Prevent memory exhaustion DoS (> 5MB upload)
+        # Prevent memory exhaustion DoS (> 50MB upload)
         content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > 5 * 1024 * 1024:
+        if content_length and int(content_length) > 50 * 1024 * 1024:
             return JSONResponse(
                 status_code=413,
-                content={"detail": "Payload Too Large: Maximum allowed upload size is 5MB."}
+                content={"detail": "Payload Too Large: Maximum allowed upload size is 50MB."}
             )
 
         response = await call_next(request)
@@ -82,6 +82,7 @@ app.include_router(labs.router, prefix=settings.API_V1_STR)
 app.include_router(submissions.router, prefix=settings.API_V1_STR)
 app.include_router(leaderboard.router, prefix=settings.API_V1_STR)
 app.include_router(admin.router, prefix=settings.API_V1_STR)
+app.include_router(imports.router, prefix=settings.API_V1_STR)
 
 # Legacy alias: /cases -> questions
 app.include_router(questions.router, prefix=f"{settings.API_V1_STR}/cases", tags=["Legacy Cases Alias"])

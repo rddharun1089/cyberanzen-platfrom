@@ -103,8 +103,10 @@ export const authService = {
 // EVENTS SERVICE
 // ==============================================================================
 export const eventService = {
-  async listEvents(status = null) {
-    const params = status ? { status } : {};
+  async listEvents(status = null, event_type = null) {
+    const params = {};
+    if (status) params.status = status;
+    if (event_type) params.event_type = event_type;
     const res = await apiClient.get('/events', { params });
     return res.data;
   },
@@ -114,8 +116,33 @@ export const eventService = {
     return res.data;
   },
 
-  async registerEvent(eventId) {
-    const res = await apiClient.post(`/events/${eventId}/register`);
+  async registerEvent(eventId, selectedMode = 'individual') {
+    const res = await apiClient.post(`/events/${eventId}/register`, { selected_mode: selectedMode });
+    return res.data;
+  },
+
+  async unregisterEvent(eventId) {
+    const res = await apiClient.delete(`/events/${eventId}/register`);
+    return res.data;
+  },
+
+  async getWorkspaceConfig(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/workspace-config`);
+    return res.data;
+  },
+
+  async getEventQuestions(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/questions`);
+    return res.data;
+  },
+
+  async getEventChallenges(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/challenges`);
+    return res.data;
+  },
+
+  async getEventMCQs(eventId) {
+    const res = await apiClient.get(`/events/${eventId}/mcqs`);
     return res.data;
   },
 
@@ -186,14 +213,17 @@ export const dsaService = {
     return res.data;
   },
 
-  async submitSolution(identifier, language, sourceCode) {
-    const res = await apiClient.post(`/questions/${identifier}/submit`, {
+  async submitSolution(identifier, language, sourceCode, eventId = null) {
+    const payload = {
       language,
       source_code: sourceCode
-    });
+    };
+    if (eventId) payload.event_id = eventId;
+    const res = await apiClient.post(`/questions/${identifier}/submit`, payload);
     return res.data;
   }
 };
+export const questionService = dsaService;
 
 // ==============================================================================
 // MCQ QUIZ SERVICE
@@ -209,12 +239,18 @@ export const mcqService = {
     return res.data;
   },
 
-  async submitMCQ(mcqId, selectedOptionIds, timeTakenSec = 0) {
-    const res = await apiClient.post(`/mcqs/${mcqId}/submit`, {
+  async submitMCQ(mcqId, selectedOptionIds, timeTakenSec = 0, eventId = null) {
+    const payload = {
       selected_option_ids: selectedOptionIds,
       time_taken_sec: timeTakenSec
-    });
+    };
+    if (eventId) payload.event_id = eventId;
+    const res = await apiClient.post(`/mcqs/${mcqId}/submit`, payload);
     return res.data;
+  },
+
+  async submitAttempt(mcqId, selectedOptionIds, timeTakenSec = 0, eventId = null) {
+    return this.submitMCQ(mcqId, selectedOptionIds, timeTakenSec, eventId);
   }
 };
 
@@ -232,11 +268,14 @@ export const ctfService = {
     return res.data;
   },
 
-  async submitFlag(identifier, flag) {
-    const res = await apiClient.post(`/challenges/${identifier}/submit-flag`, { flag });
+  async submitFlag(identifier, flag, eventId = null) {
+    const payload = { flag };
+    if (eventId) payload.event_id = eventId;
+    const res = await apiClient.post(`/challenges/${identifier}/submit-flag`, payload);
     return res.data;
   }
 };
+export const challengeService = ctfService;
 
 // ==============================================================================
 // DOCKER LABS SERVICE
@@ -304,6 +343,35 @@ export const submissionService = {
 // ADMIN CONTROL CENTER SERVICE
 // ==============================================================================
 export const adminService = {
+  // Event Management & Builder
+  async listEvents() {
+    const res = await apiClient.get('/admin/events');
+    return res.data;
+  },
+  async createEvent(data) {
+    const res = await apiClient.post('/admin/events', data);
+    return res.data;
+  },
+  async getEvent(id) {
+    const res = await apiClient.get(`/admin/events/${id}`);
+    return res.data;
+  },
+  async assignEventQuestions(id, questionIds, pointsOverrides = {}) {
+    const res = await apiClient.post(`/admin/events/${id}/assign-questions`, {
+      question_ids: questionIds,
+      points_overrides: pointsOverrides
+    });
+    return res.data;
+  },
+  async updateEventStatus(id, status) {
+    const res = await apiClient.post(`/admin/events/${id}/status`, { status });
+    return res.data;
+  },
+  async deleteEvent(id) {
+    const res = await apiClient.delete(`/admin/events/${id}`);
+    return res.data;
+  },
+
   // DSA Question Studio
   async createDSA(data) {
     const res = await apiClient.post('/admin/dsa', data);
@@ -399,6 +467,57 @@ export const adminService = {
     const res = await apiClient.post('/admin/batch-anti-cheat', {
       category,
       allow_copy_paste: allowCopyPaste
+    });
+    return res.data;
+  }
+};
+
+// ==============================================================================
+// QUESTION IMPORT SERVICE (PDF, DOCX, MD, JSON, CSV, ZIP, GIT)
+// ==============================================================================
+export const importService = {
+  async uploadFile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.post('/imports/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return res.data;
+  },
+
+  async importGit(repoUrl, branch = null, commitSha = null) {
+    const res = await apiClient.post('/imports/git', {
+      repo_url: repoUrl,
+      branch: branch || undefined,
+      commit_sha: commitSha || undefined
+    });
+    return res.data;
+  },
+
+  async listJobs(limit = 20) {
+    const res = await apiClient.get('/imports/jobs', { params: { limit } });
+    return res.data;
+  },
+
+  async getJob(jobId) {
+    const res = await apiClient.get(`/imports/jobs/${jobId}`);
+    return res.data;
+  },
+
+  async updateQuestion(jobId, idx, data) {
+    const res = await apiClient.put(`/imports/jobs/${jobId}/question/${idx}`, data);
+    return res.data;
+  },
+
+  async validateQuestion(jobId, idx) {
+    const res = await apiClient.post(`/imports/jobs/${jobId}/validate/${idx}`);
+    return res.data;
+  },
+
+  async publishQuestions(jobId, questionIndices, status = 'published') {
+    const res = await apiClient.post(`/imports/jobs/${jobId}/publish`, {
+      question_indices: questionIndices,
+      status
     });
     return res.data;
   }
