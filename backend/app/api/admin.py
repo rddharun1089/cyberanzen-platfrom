@@ -1173,10 +1173,26 @@ def admin_create_dsa(req: DSACreateRequest, db: Session = Depends(get_db), admin
     return {"success": True, "id": q.id, "question_id": q.id, "slug": q.slug, "title": q.title}
 
 @router.get("/dsa")
-def admin_list_dsa(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
-    questions = db.query(DSAQuestion).order_by(DSAQuestion.id.asc()).all()
-    return [
-        {
+def admin_list_dsa(event_id: Optional[int] = None, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    query = db.query(DSAQuestion)
+    if event_id:
+        assigned_qids = [a[0] for a in db.query(EventDSAQuestion.question_id).filter(EventDSAQuestion.event_id == event_id).all()]
+        query = query.filter((DSAQuestion.event_id == event_id) | (DSAQuestion.id.in_(assigned_qids)))
+    questions = query.order_by(DSAQuestion.id.asc()).all()
+
+    result = []
+    for q in questions:
+        ev_assocs = db.query(EventDSAQuestion).filter(EventDSAQuestion.question_id == q.id).all()
+        assigned_events = []
+        for ea in ev_assocs:
+            if ea.event:
+                assigned_events.append({"id": ea.event.id, "title": ea.event.title, "slug": ea.event.slug})
+        if q.event_id and not any(e["id"] == q.event_id for e in assigned_events):
+            direct_ev = db.query(Event).filter(Event.id == q.event_id).first()
+            if direct_ev:
+                assigned_events.append({"id": direct_ev.id, "title": direct_ev.title, "slug": direct_ev.slug})
+
+        result.append({
             "id": q.id,
             "slug": q.slug,
             "title": q.title,
@@ -1186,10 +1202,23 @@ def admin_list_dsa(db: Session = Depends(get_db), admin: User = Depends(get_curr
             "status": q.status,
             "allow_copy_paste": q.allow_copy_paste,
             "judge_enabled": q.judge_enabled,
-            "test_count": len(q.test_cases)
-        }
-        for q in questions
-    ]
+            "test_count": len(q.test_cases),
+            "assigned_events": assigned_events,
+            "statement": q.statement,
+            "input_spec": q.input_spec,
+            "output_spec": q.output_spec,
+            "constraints": q.constraints,
+            "time_limit_ms": q.time_limit_ms,
+            "memory_limit_mb": q.memory_limit_mb,
+            "starter_py": q.starter_py,
+            "starter_cpp": q.starter_cpp,
+            "starter_c": q.starter_c,
+            "sample_tests": [
+                {"input": tc.input_data, "output": tc.expected_output}
+                for tc in q.test_cases if tc.test_type == "public_sample"
+            ]
+        })
+    return result
 
 @router.get("/dsa/{id}")
 def admin_get_dsa_detail(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
@@ -1347,12 +1376,29 @@ def admin_create_mcq(req: MCQCreateRequest, db: Session = Depends(get_db), admin
     return {"success": True, "id": m.id, "title": m.title}
 
 @router.get("/mcqs")
-def admin_list_mcqs(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
-    mcqs = db.query(MCQQuestion).order_by(MCQQuestion.id.asc()).all()
-    return [
-        {
+def admin_list_mcqs(event_id: Optional[int] = None, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    query = db.query(MCQQuestion)
+    if event_id:
+        assigned_mids = [a[0] for a in db.query(EventMCQQuestion.mcq_id).filter(EventMCQQuestion.event_id == event_id).all()]
+        query = query.filter((MCQQuestion.event_id == event_id) | (MCQQuestion.id.in_(assigned_mids)))
+    mcqs = query.order_by(MCQQuestion.id.asc()).all()
+
+    result = []
+    for m in mcqs:
+        ev_assocs = db.query(EventMCQQuestion).filter(EventMCQQuestion.mcq_id == m.id).all()
+        assigned_events = []
+        for ea in ev_assocs:
+            if ea.event:
+                assigned_events.append({"id": ea.event.id, "title": ea.event.title, "slug": ea.event.slug})
+        if m.event_id and not any(e["id"] == m.event_id for e in assigned_events):
+            direct_ev = db.query(Event).filter(Event.id == m.event_id).first()
+            if direct_ev:
+                assigned_events.append({"id": direct_ev.id, "title": direct_ev.title, "slug": direct_ev.slug})
+
+        result.append({
             "id": m.id,
             "title": m.title,
+            "prompt": m.prompt,
             "question_type": m.question_type,
             "category": m.category,
             "difficulty": m.difficulty,
@@ -1360,10 +1406,10 @@ def admin_list_mcqs(db: Session = Depends(get_db), admin: User = Depends(get_cur
             "points_negative": m.points_negative,
             "status": m.status,
             "options": json.loads(m.options) if m.options else [],
-            "explanation": m.explanation
-        }
-        for m in mcqs
-    ]
+            "explanation": m.explanation,
+            "assigned_events": assigned_events
+        })
+    return result
 
 @router.delete("/mcqs/{id}")
 def admin_delete_mcq(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
@@ -1426,13 +1472,30 @@ def admin_create_ctf(req: CTFCreateRequest, db: Session = Depends(get_db), admin
     return {"success": True, "id": c.id, "slug": c.slug, "title": c.title}
 
 @router.get("/ctf")
-def admin_list_ctf(db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
-    challenges = db.query(CTFChallenge).order_by(CTFChallenge.id.asc()).all()
-    return [
-        {
+def admin_list_ctf(event_id: Optional[int] = None, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
+    query = db.query(CTFChallenge)
+    if event_id:
+        assigned_cids = [a[0] for a in db.query(EventCTFChallenge.challenge_id).filter(EventCTFChallenge.event_id == event_id).all()]
+        query = query.filter((CTFChallenge.event_id == event_id) | (CTFChallenge.id.in_(assigned_cids)))
+    challenges = query.order_by(CTFChallenge.id.asc()).all()
+
+    result = []
+    for c in challenges:
+        ev_assocs = db.query(EventCTFChallenge).filter(EventCTFChallenge.challenge_id == c.id).all()
+        assigned_events = []
+        for ea in ev_assocs:
+            if ea.event:
+                assigned_events.append({"id": ea.event.id, "title": ea.event.title, "slug": ea.event.slug})
+        if c.event_id and not any(e["id"] == c.event_id for e in assigned_events):
+            direct_ev = db.query(Event).filter(Event.id == c.event_id).first()
+            if direct_ev:
+                assigned_events.append({"id": direct_ev.id, "title": direct_ev.title, "slug": direct_ev.slug})
+
+        result.append({
             "id": c.id,
             "slug": c.slug,
             "title": c.title,
+            "description": c.description,
             "category": c.category,
             "difficulty": c.difficulty,
             "points": c.points,
@@ -1440,10 +1503,10 @@ def admin_list_ctf(db: Session = Depends(get_db), admin: User = Depends(get_curr
             "static_flag": c.static_flag,
             "has_docker_lab": c.has_docker_lab,
             "docker_image": c.docker_image,
-            "status": c.status
-        }
-        for c in challenges
-    ]
+            "status": c.status,
+            "assigned_events": assigned_events
+        })
+    return result
 
 @router.delete("/ctf/{id}")
 def admin_delete_ctf(id: int, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
@@ -1821,7 +1884,7 @@ def admin_rejudge_submission(
 
 @router.get("/teams")
 def admin_list_teams(
-    event_id: Optional[str] = None,
+    event_id: Optional[int] = None,
     limit: int = 100,
     db: Session = Depends(get_db),
     admin: User = Depends(get_current_admin)
@@ -1841,6 +1904,8 @@ def admin_list_teams(
             "leader_id": t.owner_id,
             "leader_username": leader.username if leader else "Unknown",
             "event_id": t.event_id,
+            "event_title": t.event.title if t.event else None,
+            "points": t.points,
             "max_members": t.max_members,
             "member_count": len(t.memberships),
             "members": [
@@ -1903,4 +1968,142 @@ def admin_update_setting(
     db.add(audit)
     db.commit()
     return {"success": True, "setting_key": setting_key, "value": payload}
+
+@router.get("/registrations")
+def admin_list_registrations(
+    event_id: Optional[int] = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    query = db.query(EventRegistration)
+    if event_id:
+        query = query.filter(EventRegistration.event_id == event_id)
+    regs = query.order_by(EventRegistration.registered_at.desc()).limit(limit).all()
+
+    result = []
+    for r in regs:
+        u = r.user
+        ev = r.event
+        team = None
+        if r.team_id:
+            team = db.query(Team).filter(Team.id == r.team_id).first()
+        result.append({
+            "id": r.id,
+            "event_id": r.event_id,
+            "event_title": ev.title if ev else "Unknown Event",
+            "event_type": ev.event_type if ev else "unknown",
+            "user_id": r.user_id,
+            "username": u.username if u else "Unknown",
+            "email": u.email if u else "Unknown",
+            "mode": getattr(r, 'selected_mode', 'individual'),
+            "team_id": r.team_id,
+            "team_name": team.name if team else None,
+            "registered_at": r.registered_at
+        })
+    return result
+
+@router.delete("/registrations/{reg_id}")
+def admin_delete_registration(
+    reg_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    reg = db.query(EventRegistration).filter(EventRegistration.id == reg_id).first()
+    if not reg:
+        raise HTTPException(status_code=404, detail="Registration record not found.")
+    db.delete(reg)
+    db.commit()
+    return {"success": True, "deleted_id": reg_id}
+
+@router.delete("/teams/{team_id}")
+def admin_delete_team(
+    team_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team squad not found.")
+    db.query(TeamMembership).filter(TeamMembership.team_id == team.id).delete()
+    db.delete(team)
+    db.commit()
+    return {"success": True, "deleted_team_id": team_id}
+
+@router.get("/events/{event_id}/leaderboard")
+def admin_get_event_leaderboard(
+    event_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event competition not found.")
+
+    is_team = event.participation_mode in ["team", "any"]
+    standings = []
+    
+    # Fetch team standings
+    teams = db.query(Team).filter(Team.event_id == event.id, Team.is_active == True).order_by(
+        Team.points.desc(), Team.updated_at.asc()
+    ).all()
+    
+    for idx, t in enumerate(teams):
+        leader = db.query(User).filter(User.id == t.owner_id).first()
+        standings.append({
+            "rank": idx + 1,
+            "entity_type": "team",
+            "id": t.id,
+            "name": t.name,
+            "leader_username": leader.username if leader else "Unknown",
+            "member_count": len(t.memberships),
+            "points": t.points,
+            "solved_count": len(t.solves) if hasattr(t, 'solves') else 0,
+            "updated_at": t.updated_at
+        })
+
+    # Fetch individual registrants if not exclusively team or if individual standings exist
+    regs = db.query(EventRegistration).filter(EventRegistration.event_id == event.id).all()
+    user_ids = [r.user_id for r in regs]
+    users = db.query(User).filter(User.id.in_(user_ids)).order_by(User.points.desc()).all()
+    
+    indiv_standings = [
+        {
+            "rank": idx + 1,
+            "entity_type": "individual",
+            "id": u.id,
+            "name": u.username,
+            "email": u.email,
+            "points": u.points,
+            "solved_count": len(u.solves) if hasattr(u, 'solves') else 0
+        }
+        for idx, u in enumerate(users)
+    ]
+
+    return {
+        "event_id": event.id,
+        "event_title": event.title,
+        "mode": event.participation_mode,
+        "is_frozen": bool(event.leaderboard_frozen),
+        "team_standings": standings,
+        "individual_standings": indiv_standings,
+        "standings": standings if event.participation_mode == "team" else indiv_standings
+    }
+
+@router.post("/events/{event_id}/freeze")
+def admin_toggle_freeze_leaderboard(
+    event_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event competition not found.")
+    event.leaderboard_frozen = not bool(event.leaderboard_frozen)
+    db.commit()
+    return {
+        "success": True,
+        "event_id": event.id,
+        "is_frozen": event.leaderboard_frozen
+    }
 

@@ -447,8 +447,8 @@ export const adminService = {
     const res = await apiClient.post('/admin/dsa', data);
     return res.data;
   },
-  async listDSA() {
-    const res = await apiClient.get('/admin/dsa');
+  async listDSA(params = {}) {
+    const res = await apiClient.get('/admin/dsa', { params });
     return res.data;
   },
   async getDSA(id) {
@@ -477,8 +477,8 @@ export const adminService = {
     const res = await apiClient.post('/admin/mcqs', data);
     return res.data;
   },
-  async listMCQs() {
-    const res = await apiClient.get('/admin/mcqs');
+  async listMCQs(params = {}) {
+    const res = await apiClient.get('/admin/mcqs', { params });
     return res.data;
   },
   async deleteMCQ(id) {
@@ -491,8 +491,8 @@ export const adminService = {
     const res = await apiClient.post('/admin/ctf', data);
     return res.data;
   },
-  async listCTF() {
-    const res = await apiClient.get('/admin/ctf');
+  async listCTF(params = {}) {
+    const res = await apiClient.get('/admin/ctf', { params });
     return res.data;
   },
   async deleteCTF(id) {
@@ -566,6 +566,30 @@ export const adminService = {
   // Teams & Squads
   async listTeams(params = {}) {
     const res = await apiClient.get('/admin/teams', { params });
+    return res.data;
+  },
+  async deleteTeam(teamId) {
+    const res = await apiClient.delete(`/admin/teams/${teamId}`);
+    return res.data;
+  },
+
+  // Event Registrations
+  async listRegistrations(params = {}) {
+    const res = await apiClient.get('/admin/registrations', { params });
+    return res.data;
+  },
+  async deleteRegistration(regId) {
+    const res = await apiClient.delete(`/admin/registrations/${regId}`);
+    return res.data;
+  },
+
+  // Event Leaderboard & Freeze
+  async getEventLeaderboard(eventId) {
+    const res = await apiClient.get(`/admin/events/${eventId}/leaderboard`);
+    return res.data;
+  },
+  async toggleFreezeLeaderboard(eventId) {
+    const res = await apiClient.post(`/admin/events/${eventId}/freeze`);
     return res.data;
   },
 
