@@ -2271,7 +2271,199 @@ export default function EventWorkspace({ user }) {
       )}
 
       {/* =========================================================================
-          TAB 7: RULES & PROTOCOL
+          TAB 7: MY PROGRESS & SCORECARD
+          ========================================================================= */}
+      {activeTab === 'progress' && (() => {
+        const dsaSolved = questions.filter(q => q.status === 'solved');
+        const ctfSolved = challenges.filter(c => c.status === 'solved');
+        const mcqSolved = mcqs.filter(m => m.status === 'solved');
+
+        const totalItems = questions.length + challenges.length + mcqs.length;
+        const totalSolved = dsaSolved.length + ctfSolved.length + mcqSolved.length;
+        const completionPct = totalItems > 0 ? Math.round((totalSolved / totalItems) * 100) : 0;
+
+        const maxPoints = (
+          questions.reduce((acc, q) => acc + (q.points || 0), 0) +
+          challenges.reduce((acc, c) => acc + (c.points || 0), 0) +
+          mcqs.reduce((acc, m) => acc + (m.points_positive || 0), 0)
+        );
+
+        const earnedPoints = (
+          dsaSolved.reduce((acc, q) => acc + (q.points || 0), 0) +
+          ctfSolved.reduce((acc, c) => acc + (c.points || 0), 0) +
+          mcqSolved.reduce((acc, m) => acc + (m.points_positive || 0), 0)
+        );
+
+        const pointsPct = maxPoints > 0 ? Math.round((earnedPoints / maxPoints) * 100) : 0;
+        const acceptedSubs = userSubmissions.filter(s => s.verdict === 'ACCEPTED').length;
+        const accuracyPct = userSubmissions.length > 0 ? Math.round((acceptedSubs / userSubmissions.length) * 100) : 0;
+
+        return (
+          <div className="space-y-6 font-mono text-xs max-w-5xl mx-auto">
+            {/* Top Scorecard Metrics */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-[#A9BCD6] uppercase tracking-wider block mb-1">Total Score Earned</span>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-2xl font-black text-[#00CFFF]">{earnedPoints}</span>
+                    <span className="text-xs text-[#A9BCD6]">/ {maxPoints} PTS</span>
+                  </div>
+                </div>
+                <div className="w-full bg-[#061329] h-2 rounded-full overflow-hidden mt-3 border border-[#18385E]">
+                  <div className="bg-gradient-to-r from-[#087FFF] to-[#00CFFF] h-full transition-all duration-500" style={{ width: `${pointsPct}%` }} />
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-[#A9BCD6] uppercase tracking-wider block mb-1">Completion Rate</span>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-2xl font-black text-[#20C997]">{completionPct}%</span>
+                    <span className="text-xs text-[#A9BCD6]">({totalSolved}/{totalItems} Solved)</span>
+                  </div>
+                </div>
+                <div className="w-full bg-[#061329] h-2 rounded-full overflow-hidden mt-3 border border-[#18385E]">
+                  <div className="bg-[#20C997] h-full transition-all duration-500" style={{ width: `${completionPct}%` }} />
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-[#A9BCD6] uppercase tracking-wider block mb-1">Submission Accuracy</span>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-2xl font-black text-[#F5B942]">{accuracyPct}%</span>
+                    <span className="text-xs text-[#A9BCD6]">({acceptedSubs}/{userSubmissions.length} OK)</span>
+                  </div>
+                </div>
+                <div className="w-full bg-[#061329] h-2 rounded-full overflow-hidden mt-3 border border-[#18385E]">
+                  <div className="bg-[#F5B942] h-full transition-all duration-500" style={{ width: `${accuracyPct}%` }} />
+                </div>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col justify-between">
+                <div>
+                  <span className="text-[10px] text-[#A9BCD6] uppercase tracking-wider block mb-1">Operative Standing</span>
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-lg font-bold text-white truncate">{currentUser?.username || 'Candidate'}</span>
+                  </div>
+                </div>
+                <span className="text-[10px] text-[#00CFFF] uppercase tracking-wider mt-2">
+                  Mode: {event?.participation_mode || 'Individual'}
+                </span>
+              </div>
+            </div>
+
+            {/* Challenge Breakdown Matrix */}
+            <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+              <div className="flex justify-between items-center border-b border-[#18385E] pb-3">
+                <h3 className="text-sm font-bold text-white flex items-center space-x-2">
+                  <BarChart2 className="w-4 h-4 text-[#00CFFF]" />
+                  <span>CHALLENGE SOLVE PROGRESSION MATRIX</span>
+                </h3>
+                <span className="text-[#A9BCD6] text-[11px]">
+                  {totalSolved} of {totalItems} completed
+                </span>
+              </div>
+
+              {/* DSA Questions List */}
+              {questions.length > 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block">
+                    Data Structures &amp; Algorithms ({dsaSolved.length}/{questions.length} Solved)
+                  </span>
+                  <div className="divide-y divide-[#18385E]/50 rounded-xl border border-[#18385E] overflow-hidden bg-[#061329]">
+                    {questions.map((q, idx) => {
+                      const isSolved = q.status === 'solved';
+                      return (
+                        <div key={q.id} className="p-3.5 flex items-center justify-between hover:bg-[#102746]/30 transition-colors">
+                          <div className="flex items-center space-x-3">
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
+                              isSolved ? 'bg-emerald-950 text-[#20C997] border border-emerald-800' : 'bg-[#08172B] text-slate-400 border border-[#18385E]'
+                            }`}>
+                              {isSolved ? '✓' : idx + 1}
+                            </span>
+                            <div>
+                              <span className="text-white font-medium block">{q.title}</span>
+                              <span className="text-[10px] text-[#A9BCD6]">{q.category} • {q.difficulty} • {q.points} PTS</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-3">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                              isSolved ? 'bg-emerald-950/60 text-[#20C997] border border-emerald-800/60' : 'bg-slate-900 text-slate-400 border border-[#18385E]'
+                            }`}>
+                              {isSolved ? 'SOLVED' : 'PENDING'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                selectDSAQuestion(q);
+                                setActiveTab('problems');
+                              }}
+                              className="px-3 py-1 rounded-lg bg-[#08172B] hover:bg-[#102746] text-[#00CFFF] border border-[#18385E] text-[10px] font-bold transition-colors"
+                            >
+                              {isSolved ? 'Review' : 'Solve'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* CTF Challenges List */}
+              {challenges.length > 0 && (
+                <div className="space-y-2 pt-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-red-400 block">
+                    CTF Flags &amp; Targets ({ctfSolved.length}/{challenges.length} Captured)
+                  </span>
+                  <div className="divide-y divide-[#18385E]/50 rounded-xl border border-[#18385E] overflow-hidden bg-[#061329]">
+                    {challenges.map(c => {
+                      const isSolved = c.status === 'solved';
+                      return (
+                        <div key={c.id} className="p-3.5 flex items-center justify-between hover:bg-[#102746]/30 transition-colors">
+                          <div className="flex items-center space-x-3">
+                            <span className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs font-bold ${
+                              isSolved ? 'bg-emerald-950 text-[#20C997] border border-emerald-800' : 'bg-[#08172B] text-slate-400 border border-[#18385E]'
+                            }`}>
+                              {isSolved ? '✓' : '⚑'}
+                            </span>
+                            <div>
+                              <span className="text-white font-medium block">{c.title}</span>
+                              <span className="text-[10px] text-[#A9BCD6]">{c.category} • {c.difficulty} • {c.points} PTS</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-3">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                              isSolved ? 'bg-emerald-950/60 text-[#20C997] border border-emerald-800/60' : 'bg-slate-900 text-slate-400 border border-[#18385E]'
+                            }`}>
+                              {isSolved ? 'CAPTURED' : 'PENDING'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setSelectedChallenge(c);
+                                setActiveTab('challenges');
+                              }}
+                              className="px-3 py-1 rounded-lg bg-[#08172B] hover:bg-[#102746] text-[#00CFFF] border border-[#18385E] text-[10px] font-bold transition-colors"
+                            >
+                              {isSolved ? 'Inspect' : 'Capture'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* =========================================================================
+          TAB 8: RULES & PROTOCOL
           ========================================================================= */}
       {activeTab === 'rules' && (
         <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-6 font-mono text-xs max-w-4xl">
