@@ -6,6 +6,7 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, status, File, UploadFile
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from app.core.config import settings
 from app.db.session import get_db
 from app.db.models import (
@@ -13,7 +14,7 @@ from app.db.models import (
     DynamicTemplate, DockerLabInstance, AuditLog, SecurityIncident, Team,
     TeamMembership, TeamMemberRole, TeamSolvedCase, Submission, Solve, ChallengeStatus, FlagType, LabStatus,
     Event, EventStatus, EventType, ParticipationMode, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
-    EventRegistration, QuestionImportJob, DynamicFlag, MCQAttempt
+    EventRegistration, QuestionImportJob, DynamicFlag, MCQAttempt, CompetitionTemplate
 )
 from app.api.deps import get_current_admin, get_current_super_admin, get_current_event_admin
 from app.judge.worker import evaluate_submission
@@ -151,12 +152,83 @@ class EventCreateRequest(BaseModel):
     show_solve_times: Optional[bool] = True
     show_solve_counts: Optional[bool] = True
     anonymize_participants: Optional[bool] = False
+    # Participant Question Experience & Navigation Settings
+    question_navigation_policy: Optional[str] = "free"  # free | sequential | unlock
+    question_order_mode: Optional[str] = "fixed"  # fixed | random_participant | random_team
+    show_progress: Optional[bool] = True
+    mark_solved_immediately: Optional[bool] = True
+    revisit_solved_questions: Optional[bool] = True
+    result_publication_time: Optional[datetime] = None
+    competition_template_id: Optional[int] = None
     # Initial question assignment
     question_ids: Optional[List[int]] = []
 
-class EventAssignQuestionsRequest(BaseModel):
+class CompetitionTemplateCreateRequest(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    slug: Optional[str] = None
+    competition_type: Optional[str] = None
+    category: Optional[str] = None
+    subtitle: Optional[str] = None
+    description: str
+    icon: Optional[str] = "code"
+    supported_question_types: Optional[List[str]] = ["dsa"]
+    workspace_layout: Optional[str] = "split_code"
+    participation_modes: Optional[List[str]] = ["individual", "team", "mixed"]
+    scoring_configuration: Optional[Dict[str, Any]] = {"policy": "standard", "dynamic": False}
+    question_navigation_policy: Optional[str] = "free"
+    default_question_nav: Optional[str] = None
+    question_order_mode: Optional[str] = "fixed"
+    supported_attachments: Optional[List[str]] = ["source_code", "test_cases"]
+    enabled_features: Optional[List[str]] = ["code_editor", "test_cases", "judge_verdicts", "leaderboards"]
+    features: Optional[List[str]] = None
+    default_config: Optional[Dict[str, Any]] = {}
+    default_scoring_policy: Optional[str] = None
+
+class CompetitionTemplateUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    supported_question_types: Optional[List[str]] = None
+    workspace_layout: Optional[str] = None
+    participation_modes: Optional[List[str]] = None
+    scoring_configuration: Optional[Dict[str, Any]] = None
+    question_navigation_policy: Optional[str] = None
+    question_order_mode: Optional[str] = None
+    supported_attachments: Optional[List[str]] = None
+    enabled_features: Optional[List[str]] = None
+    default_config: Optional[Dict[str, Any]] = None
+
+class ReorderItem(BaseModel):
+    domain: str
+    question_id: int
+    order_index: int
+
+class EventReorderQuestionsRequest(BaseModel):
+    items: Optional[List[ReorderItem]] = None
+    domain: Optional[str] = "dsa"
+    question_id: Optional[int] = None
+    direction: Optional[str] = None
+
+class CopyQuestionsRequest(BaseModel):
+    source_event_id: Optional[int] = None
     question_ids: List[int]
+    domain: str = "dsa"
+    points_override: Optional[int] = None
+
+class QuestionExperienceUpdateRequest(BaseModel):
+    question_navigation_policy: Optional[str] = "free"
+    question_order_mode: Optional[str] = "fixed"
+    show_progress: Optional[bool] = True
+    mark_solved_immediately: Optional[bool] = True
+    revisit_solved_questions: Optional[bool] = True
+
+class EventAssignQuestionsRequest(BaseModel):
+    question_ids: Optional[List[int]] = None
+    question_id: Optional[int] = None
     points_overrides: Optional[Dict[str, int]] = {}
+    order_index: Optional[int] = None
 
 class EventStatusUpdateRequest(BaseModel):
     status: str
@@ -261,6 +333,13 @@ def admin_create_event(
         clipboard_policy=req.clipboard_policy or "restricted",
         scoring_policy=req.scoring_policy or "standard",
         allowed_languages=json.dumps(req.allowed_languages or ["python3", "cpp", "c"]),
+        question_navigation_policy=req.question_navigation_policy or "free",
+        question_order_mode=req.question_order_mode or "fixed",
+        show_progress=req.show_progress if req.show_progress is not None else True,
+        mark_solved_immediately=req.mark_solved_immediately if req.mark_solved_immediately is not None else True,
+        revisit_solved_questions=req.revisit_solved_questions if req.revisit_solved_questions is not None else True,
+        result_publication_time=req.result_publication_time,
+        competition_template_id=req.competition_template_id,
         created_by_id=admin.id
     )
     db.add(new_event)
@@ -387,12 +466,20 @@ def admin_get_event(
         "clipboard_policy": event.clipboard_policy,
         "scoring_policy": event.scoring_policy,
         "allowed_languages": json.loads(event.allowed_languages) if event.allowed_languages else ["python3", "cpp", "c"],
+        "question_navigation_policy": event.question_navigation_policy or "free",
+        "question_order_mode": event.question_order_mode or "fixed",
+        "show_progress": event.show_progress,
+        "mark_solved_immediately": event.mark_solved_immediately,
+        "revisit_solved_questions": event.revisit_solved_questions,
+        "result_publication_time": event.result_publication_time,
+        "competition_template_id": event.competition_template_id,
         "assigned_questions": assigned_questions,
         "registration_count": len(event.registrations) if event.registrations else 0,
         "team_count": len(event.teams) if event.teams else 0
     }
 
 @router.post("/events/{event_id}/assign-questions")
+@router.post("/events/{event_id}/questions")
 def admin_assign_event_questions(
     event_id: int,
     req: EventAssignQuestionsRequest,
@@ -403,31 +490,61 @@ def admin_assign_event_questions(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
-    # Remove prior assignments and assign to appropriate domain(s)
     ev_type = (event.event_type or "").lower()
     has_dsa = "dsa" in ev_type or ev_type in ("combined", "all")
     has_ctf = "ctf" in ev_type or ev_type in ("combined", "all")
     has_mcq = "mcq" in ev_type or ev_type in ("combined", "all")
 
+    # If single question attachment
+    if req.question_id is not None and not req.question_ids:
+        qid = req.question_id
+        if has_dsa and db.query(DSAQuestion).filter(DSAQuestion.id == qid).first():
+            existing = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id, EventDSAQuestion.question_id == qid).first()
+            if not existing:
+                max_order = db.query(func.max(EventDSAQuestion.order_index)).filter(EventDSAQuestion.event_id == event.id).scalar()
+                next_order = req.order_index if req.order_index is not None else ((max_order + 1) if max_order is not None else 0)
+                db.add(EventDSAQuestion(event_id=event.id, question_id=qid, order_index=next_order))
+        elif has_ctf and db.query(CTFChallenge).filter(CTFChallenge.id == qid).first():
+            existing = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id, EventCTFChallenge.challenge_id == qid).first()
+            if not existing:
+                max_order = db.query(func.max(EventCTFChallenge.order_index)).filter(EventCTFChallenge.event_id == event.id).scalar()
+                next_order = req.order_index if req.order_index is not None else ((max_order + 1) if max_order is not None else 0)
+                db.add(EventCTFChallenge(event_id=event.id, challenge_id=qid, order_index=next_order))
+        elif has_mcq and db.query(MCQQuestion).filter(MCQQuestion.id == qid).first():
+            existing = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id, EventMCQQuestion.mcq_id == qid).first()
+            if not existing:
+                max_order = db.query(func.max(EventMCQQuestion.order_index)).filter(EventMCQQuestion.event_id == event.id).scalar()
+                next_order = req.order_index if req.order_index is not None else ((max_order + 1) if max_order is not None else 0)
+                db.add(EventMCQQuestion(event_id=event.id, mcq_id=qid, order_index=next_order))
+        db.commit()
+        return {"success": True, "message": f"Successfully attached question {qid} to event.", "event_id": event.id}
+
+    # Otherwise bulk replace assignments
+    q_ids = list(req.question_ids or [])
+    if req.question_id is not None and req.question_id not in q_ids:
+        q_ids.append(req.question_id)
+
+    overrides = req.points_overrides or {}
+
     if has_dsa:
         db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).delete()
-        for idx, qid in enumerate(req.question_ids):
+        for idx, qid in enumerate(q_ids):
             if db.query(DSAQuestion).filter(DSAQuestion.id == qid).first():
-                override = req.points_overrides.get(str(qid))
+                override = overrides.get(str(qid))
                 db.add(EventDSAQuestion(event_id=event.id, question_id=qid, points_override=override, order_index=idx))
 
     if has_ctf:
         db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).delete()
-        for idx, cid in enumerate(req.question_ids):
+        for idx, cid in enumerate(q_ids):
             if db.query(CTFChallenge).filter(CTFChallenge.id == cid).first():
-                override = req.points_overrides.get(str(cid))
+                override = overrides.get(str(cid))
                 db.add(EventCTFChallenge(event_id=event.id, challenge_id=cid, points_override=override, order_index=idx))
 
     if has_mcq:
         db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).delete()
-        for idx, mid in enumerate(req.question_ids):
+        for idx, mid in enumerate(q_ids):
             if db.query(MCQQuestion).filter(MCQQuestion.id == mid).first():
-                override = req.points_overrides.get(str(mid))
+                override = overrides.get(str(mid))
                 db.add(EventMCQQuestion(event_id=event.id, mcq_id=mid, points_override=override, order_index=idx))
 
     db.add(AuditLog(
@@ -436,11 +553,11 @@ def admin_assign_event_questions(
         action="ASSIGN_EVENT_QUESTIONS",
         entity_type="EVENT",
         entity_id=str(event.id),
-        details=json.dumps({"question_ids": req.question_ids, "event_type": event.event_type})
+        details=json.dumps({"question_ids": q_ids, "event_type": event.event_type})
     ))
     db.commit()
 
-    return {"success": True, "message": f"Successfully assigned {len(req.question_ids)} questions to event.", "event_id": event.id}
+    return {"success": True, "message": f"Successfully assigned {len(q_ids)} questions to event.", "event_id": event.id}
 
 @router.post("/events/{event_id}/status")
 def admin_update_event_status(
@@ -504,6 +621,417 @@ def admin_delete_event(
     db.commit()
 
     return {"success": True, "message": f"Event '{event_title}' permanently deleted."}
+
+# ==============================================================================
+# COMPETITION TEMPLATES (DEVELOPMENT STUDIO)
+# ==============================================================================
+
+def serialize_template(t: CompetitionTemplate) -> dict:
+    return {
+        "id": t.id,
+        "slug": t.slug,
+        "name": t.name,
+        "title": t.name,
+        "competition_type": t.competition_type,
+        "description": t.description,
+        "icon": t.icon,
+        "supported_question_types": json.loads(t.supported_question_types) if t.supported_question_types else [],
+        "workspace_layout": t.workspace_layout,
+        "participation_modes": json.loads(t.participation_modes) if t.participation_modes else [],
+        "scoring_configuration": json.loads(t.scoring_configuration) if t.scoring_configuration else {},
+        "question_navigation_policy": t.question_navigation_policy,
+        "question_order_mode": t.question_order_mode,
+        "supported_attachments": json.loads(t.supported_attachments) if t.supported_attachments else [],
+        "enabled_features": json.loads(t.enabled_features) if t.enabled_features else [],
+        "features": json.loads(t.enabled_features) if t.enabled_features else [],
+        "default_config": json.loads(t.default_config) if t.default_config else {},
+        "is_builtin": t.is_builtin,
+        "created_at": t.created_at,
+        "updated_at": t.updated_at
+    }
+
+@router.get("/competition-templates")
+def admin_list_competition_templates(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    templates = db.query(CompetitionTemplate).order_by(CompetitionTemplate.is_builtin.desc(), CompetitionTemplate.id.asc()).all()
+    return [serialize_template(t) for t in templates]
+
+@router.post("/competition-templates")
+def admin_create_competition_template(
+    req: CompetitionTemplateCreateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    t_name = req.name or req.title or "Custom Competition Template"
+    slug = req.slug or t_name.lower().replace(" ", "-").replace("/", "-")
+    slug = "".join(c for c in slug if c.isalnum() or c in "-_")
+    existing = db.query(CompetitionTemplate).filter((CompetitionTemplate.slug == slug) | (CompetitionTemplate.name == t_name)).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Competition template with this name or slug already exists.")
+
+    comp_type = req.competition_type or (req.category.lower() if req.category else "dsa")
+    features = req.enabled_features or req.features or ["code_editor", "test_cases"]
+    nav_policy = req.question_navigation_policy or req.default_question_nav or "free"
+    scoring = req.scoring_configuration or ({"policy": req.default_scoring_policy} if req.default_scoring_policy else {"policy": "standard", "dynamic": False})
+
+    template = CompetitionTemplate(
+        name=t_name,
+        slug=slug,
+        competition_type=comp_type,
+        description=req.description,
+        icon=req.icon or "code",
+        supported_question_types=json.dumps(req.supported_question_types or []),
+        workspace_layout=req.workspace_layout or "split_code",
+        participation_modes=json.dumps(req.participation_modes or []),
+        scoring_configuration=json.dumps(scoring),
+        question_navigation_policy=nav_policy,
+        question_order_mode=req.question_order_mode or "fixed",
+        supported_attachments=json.dumps(req.supported_attachments or []),
+        enabled_features=json.dumps(features),
+        default_config=json.dumps(req.default_config or {}),
+        is_builtin=False
+    )
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return serialize_template(template)
+
+@router.get("/competition-templates/{template_id}")
+def admin_get_competition_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    t = db.query(CompetitionTemplate).filter(CompetitionTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Competition template not found.")
+    return serialize_template(t)
+
+@router.put("/competition-templates/{template_id}")
+def admin_update_competition_template(
+    template_id: int,
+    req: CompetitionTemplateUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    t = db.query(CompetitionTemplate).filter(CompetitionTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Competition template not found.")
+
+    if req.name is not None or req.title is not None: t.name = req.name or req.title
+    if req.description is not None: t.description = req.description
+    if req.icon is not None: t.icon = req.icon
+    if req.supported_question_types is not None: t.supported_question_types = json.dumps(req.supported_question_types)
+    if req.workspace_layout is not None: t.workspace_layout = req.workspace_layout
+    if req.participation_modes is not None: t.participation_modes = json.dumps(req.participation_modes)
+    if req.scoring_configuration is not None: t.scoring_configuration = json.dumps(req.scoring_configuration)
+    if req.question_navigation_policy is not None: t.question_navigation_policy = req.question_navigation_policy
+    if req.question_order_mode is not None: t.question_order_mode = req.question_order_mode
+    if req.supported_attachments is not None: t.supported_attachments = json.dumps(req.supported_attachments)
+    if req.enabled_features is not None: t.enabled_features = json.dumps(req.enabled_features)
+    if req.default_config is not None: t.default_config = json.dumps(req.default_config)
+
+    db.commit()
+    db.refresh(t)
+    return serialize_template(t)
+
+@router.delete("/competition-templates/{template_id}")
+def admin_delete_competition_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_super_admin)
+):
+    t = db.query(CompetitionTemplate).filter(CompetitionTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Competition template not found.")
+    if t.is_builtin:
+        raise HTTPException(status_code=400, detail="Built-in system templates cannot be deleted.")
+
+    db.delete(t)
+    db.commit()
+    return {"success": True, "status": "deleted", "message": "Competition template deleted."}
+
+# ==============================================================================
+# EVENT QUESTION BREAKDOWN, REORDERING & MANAGEMENT
+# ==============================================================================
+
+@router.get("/events/{event_id}/question-breakdown")
+def admin_get_event_question_breakdown(
+    event_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    dsa_assigned = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).order_by(EventDSAQuestion.order_index.asc()).all()
+    ctf_assigned = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).order_by(EventCTFChallenge.order_index.asc()).all()
+    mcq_assigned = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).order_by(EventMCQQuestion.order_index.asc()).all()
+
+    items = []
+    published_count = 0
+    draft_count = 0
+    total_pts = 0
+
+    for a in dsa_assigned:
+        q = a.question
+        if q:
+            status = q.status
+            if status == "published": published_count += 1
+            else: draft_count += 1
+            pts = a.points_override if a.points_override is not None else q.points
+            total_pts += (pts or 0)
+            items.append({
+                "assignment_id": a.id,
+                "question_id": q.id,
+                "domain": "dsa",
+                "title": q.title,
+                "difficulty": q.difficulty,
+                "category": q.category,
+                "points": pts,
+                "points_override": a.points_override,
+                "order_index": a.order_index,
+                "status": status,
+                "slug": q.slug
+            })
+
+    for a in ctf_assigned:
+        c = a.challenge
+        if c:
+            status = c.status
+            if status == "active" or status == "published": published_count += 1
+            else: draft_count += 1
+            pts = a.points_override if a.points_override is not None else c.points
+            total_pts += (pts or 0)
+            items.append({
+                "assignment_id": a.id,
+                "question_id": c.id,
+                "domain": "ctf",
+                "title": c.title,
+                "difficulty": c.difficulty,
+                "category": c.category,
+                "points": pts,
+                "points_override": a.points_override,
+                "order_index": a.order_index,
+                "status": status,
+                "slug": c.slug
+            })
+
+    for a in mcq_assigned:
+        m = a.mcq
+        if m:
+            status = m.status
+            if status == "published" or status == "active": published_count += 1
+            else: draft_count += 1
+            pts = a.points_override if a.points_override is not None else m.points_positive
+            total_pts += (pts or 0)
+            items.append({
+                "assignment_id": a.id,
+                "question_id": m.id,
+                "domain": "mcq",
+                "title": m.title,
+                "difficulty": m.difficulty,
+                "category": m.category,
+                "points": pts,
+                "points_override": a.points_override,
+                "order_index": a.order_index,
+                "status": status,
+                "slug": f"mcq-{m.id}"
+            })
+
+    items.sort(key=lambda x: x["order_index"])
+
+    return {
+        "event_id": event.id,
+        "event_title": event.title,
+        "total_questions": len(items),
+        "published_questions": published_count,
+        "draft_questions": draft_count,
+        "invalid_questions": 0,
+        "breakdown": {
+            "dsa": len(dsa_assigned),
+            "ctf": len(ctf_assigned),
+            "mcq": len(mcq_assigned)
+        },
+        "question_types": {
+            "dsa": len(dsa_assigned),
+            "ctf": len(ctf_assigned),
+            "mcq": len(mcq_assigned)
+        },
+        "total_points": total_pts,
+        "navigation_policy": event.question_navigation_policy,
+        "order_mode": event.question_order_mode,
+        "items": items,
+        "questions": items
+    }
+
+@router.post("/events/{event_id}/questions/reorder")
+def admin_reorder_event_questions(
+    event_id: int,
+    req: EventReorderQuestionsRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    if req.question_id is not None and req.direction in ("up", "down"):
+        dom = (req.domain or "dsa").lower()
+        if dom == "dsa":
+            assocs = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).order_by(EventDSAQuestion.order_index.asc()).all()
+            q_attr = 'question_id'
+        elif dom == "ctf":
+            assocs = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).order_by(EventCTFChallenge.order_index.asc()).all()
+            q_attr = 'challenge_id'
+        else:
+            assocs = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).order_by(EventMCQQuestion.order_index.asc()).all()
+            q_attr = 'mcq_id'
+
+        idx = next((i for i, a in enumerate(assocs) if getattr(a, q_attr, None) == req.question_id), -1)
+        if idx != -1:
+            target_idx = idx - 1 if req.direction == "up" else idx + 1
+            if 0 <= target_idx < len(assocs):
+                assocs[idx].order_index, assocs[target_idx].order_index = assocs[target_idx].order_index, assocs[idx].order_index
+                db.commit()
+                return {"success": True, "status": "reordered", "message": f"Question moved {req.direction}."}
+
+    if req.items:
+        for item in req.items:
+            dom = item.domain.lower()
+            if dom == "dsa":
+                assoc = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id, EventDSAQuestion.question_id == item.question_id).first()
+                if assoc: assoc.order_index = item.order_index
+            elif dom == "ctf":
+                assoc = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id, EventCTFChallenge.challenge_id == item.question_id).first()
+                if assoc: assoc.order_index = item.order_index
+            elif dom == "mcq":
+                assoc = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id, EventMCQQuestion.mcq_id == item.question_id).first()
+                if assoc: assoc.order_index = item.order_index
+
+        db.commit()
+        return {"success": True, "status": "reordered", "message": "Questions reordered successfully."}
+
+    return {"success": True, "status": "reordered", "message": "No reorder action required."}
+
+@router.post("/events/{event_id}/copy-questions")
+def admin_copy_questions_to_event(
+    event_id: int,
+    req: CopyQuestionsRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    dom = req.domain.lower()
+    added_count = 0
+
+    if dom == "dsa":
+        max_order = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).count()
+        for qid in req.question_ids:
+            if not db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id, EventDSAQuestion.question_id == qid).first():
+                if db.query(DSAQuestion).filter(DSAQuestion.id == qid).first():
+                    db.add(EventDSAQuestion(
+                        event_id=event.id,
+                        question_id=qid,
+                        points_override=req.points_override,
+                        order_index=max_order + added_count
+                    ))
+                    added_count += 1
+    elif dom == "ctf":
+        max_order = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id).count()
+        for cid in req.question_ids:
+            if not db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id, EventCTFChallenge.challenge_id == cid).first():
+                if db.query(CTFChallenge).filter(CTFChallenge.id == cid).first():
+                    db.add(EventCTFChallenge(
+                        event_id=event.id,
+                        challenge_id=cid,
+                        points_override=req.points_override,
+                        order_index=max_order + added_count
+                    ))
+                    added_count += 1
+    elif dom == "mcq":
+        max_order = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id).count()
+        for mid in req.question_ids:
+            if not db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id, EventMCQQuestion.mcq_id == mid).first():
+                if db.query(MCQQuestion).filter(MCQQuestion.id == mid).first():
+                    db.add(EventMCQQuestion(
+                        event_id=event.id,
+                        mcq_id=mid,
+                        points_override=req.points_override,
+                        order_index=max_order + added_count
+                    ))
+                    added_count += 1
+
+    db.commit()
+    return {"success": True, "message": f"Successfully attached {added_count} questions to '{event.title}'.", "added_count": added_count}
+
+@router.delete("/events/{event_id}/questions/{domain}/{question_id}")
+def admin_remove_question_from_event(
+    event_id: int,
+    domain: str,
+    question_id: int,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    dom = domain.lower()
+    deleted = False
+    if dom == "dsa":
+        assoc = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id, EventDSAQuestion.question_id == question_id).first()
+        if assoc:
+            db.delete(assoc)
+            deleted = True
+    elif dom == "ctf":
+        assoc = db.query(EventCTFChallenge).filter(EventCTFChallenge.event_id == event.id, EventCTFChallenge.challenge_id == question_id).first()
+        if assoc:
+            db.delete(assoc)
+            deleted = True
+    elif dom == "mcq":
+        assoc = db.query(EventMCQQuestion).filter(EventMCQQuestion.event_id == event.id, EventMCQQuestion.mcq_id == question_id).first()
+        if assoc:
+            db.delete(assoc)
+            deleted = True
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Question association not found in this event.")
+
+    db.commit()
+    return {"success": True, "message": f"Question detached from '{event.title}' without deleting shared template."}
+
+@router.put("/events/{event_id}/question-experience")
+def admin_update_event_question_experience(
+    event_id: int,
+    req: QuestionExperienceUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    if req.question_navigation_policy: event.question_navigation_policy = req.question_navigation_policy
+    if req.question_order_mode: event.question_order_mode = req.question_order_mode
+    if req.show_progress is not None: event.show_progress = req.show_progress
+    if req.mark_solved_immediately is not None: event.mark_solved_immediately = req.mark_solved_immediately
+    if req.revisit_solved_questions is not None: event.revisit_solved_questions = req.revisit_solved_questions
+
+    db.commit()
+    return {
+        "success": True,
+        "message": "Question experience policies updated successfully.",
+        "question_navigation_policy": event.question_navigation_policy,
+        "question_order_mode": event.question_order_mode,
+        "show_progress": event.show_progress
+    }
 
 @router.post("/events/{event_id}/banner")
 async def admin_upload_event_banner(
@@ -703,6 +1231,7 @@ def admin_get_dsa_detail(id: int, db: Session = Depends(get_db), admin: User = D
     }
 
 @router.post("/dsa/{id}/test-cases")
+@router.post("/dsa/{id}/testcases")
 def admin_add_dsa_testcase(id: int, req: DSATestCaseRequest, db: Session = Depends(get_db), admin: User = Depends(get_current_admin)):
     q = db.query(DSAQuestion).filter(DSAQuestion.id == id).first()
     if not q:

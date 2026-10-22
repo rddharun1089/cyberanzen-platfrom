@@ -5,9 +5,10 @@ import {
   Shield, Terminal, Trophy, Users, HelpCircle, Code2, Cpu, 
   ArrowRight, CheckCircle2, AlertOctagon, Clock, Flame, Play, 
   RefreshCw, FileText, BarChart2, Check, Lock, Key, AlertTriangle,
-  Flag, Settings, Crown, ChevronRight, Award, Sparkles, CheckSquare
+  Flag, Settings, Crown, ChevronRight, Award, Sparkles, CheckSquare,
+  Smartphone, RotateCcw, Send, ShieldAlert, Calendar
 } from 'lucide-react';
-import { eventService, labService, challengeService, questionService, mcqService } from '../services/api';
+import { eventService, labService, challengeService, questionService, dsaService, authService, mcqService } from '../services/api';
 
 export default function EventWorkspace({ user }) {
   const { eventId, id, tab } = useParams();
@@ -24,12 +25,17 @@ export default function EventWorkspace({ user }) {
   const [leaderboard, setLeaderboard] = useState(null);
   const [userSubmissions, setUserSubmissions] = useState([]);
 
-  // DSA interactive state
+  // DSA interactive state (Existing Console Integration)
   const [selectedQuestion, setSelectedQuestion] = useState(null);
-  const [code, setCode] = useState('');
   const [language, setLanguage] = useState('python3');
-  const [judgeRunning, setJudgeRunning] = useState(false);
-  const [judgeVerdict, setJudgeVerdict] = useState(null);
+  const [codeDrafts, setCodeDrafts] = useState({});
+  const [executionResults, setExecutionResults] = useState({});
+  const [dsaSubTab, setDsaSubTab] = useState('statement'); // 'statement' | 'results' | 'history'
+  const [useTouchEditor, setUseTouchEditor] = useState(false);
+  const [isRunningSample, setIsRunningSample] = useState(false);
+  const [isSubmittingDSA, setIsSubmittingDSA] = useState(false);
+  const [clipboardWarning, setClipboardWarning] = useState('');
+  const [timeRemaining, setTimeRemaining] = useState('');
 
   // CTF interactive state
   const [selectedChallenge, setSelectedChallenge] = useState(null);
@@ -44,6 +50,98 @@ export default function EventWorkspace({ user }) {
   const [selectedOptions, setSelectedOptions] = useState([]);
   const [mcqSubmitting, setMcqSubmitting] = useState(false);
   const [mcqResult, setMcqResult] = useState(null);
+
+  const currentUser = user || authService.getCurrentUser();
+  const isAdmin = Boolean(currentUser && (
+    ['super_admin', 'event_admin', 'challenge_author', 'admin'].includes(currentUser.role?.toLowerCase())
+  ));
+  const isCopyPasteAllowed = Boolean(
+    selectedQuestion?.allow_copy_paste || 
+    (config?.clipboard_policy === 'allow') || 
+    isAdmin
+  );
+
+  // Live countdown timer
+  useEffect(() => {
+    if (!event?.end_time) return;
+    const updateTimer = () => {
+      const end = new Date(event.end_time).getTime();
+      const now = Date.now();
+      const diff = end - now;
+      if (diff <= 0) {
+        setTimeRemaining('Concluded');
+        return;
+      }
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const secs = Math.floor((diff % (1000 * 60)) / 1000);
+      setTimeRemaining(`${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [event?.end_time]);
+
+  // Anti-cheat keyboard and clipboard listener
+  useEffect(() => {
+    if (activeTab !== 'problems' || isCopyPasteAllowed) return;
+
+    const triggerWarning = () => {
+      setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted by event policy.');
+      setTimeout(() => setClipboardWarning(''), 4500);
+    };
+
+    const handleKeyDownCapture = (e) => {
+      const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+      const key = e.key ? e.key.toLowerCase() : '';
+
+      if (
+        (isCtrlOrCmd && ['v', 'c', 'x'].includes(key)) ||
+        (isCtrlOrCmd && e.shiftKey && ['c', 'v'].includes(key)) ||
+        (e.shiftKey && e.key === 'Insert') ||
+        (isCtrlOrCmd && e.key === 'Insert')
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        triggerWarning();
+      }
+    };
+
+    const handleClipboardEvent = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      triggerWarning();
+    };
+
+    window.addEventListener('keydown', handleKeyDownCapture, true);
+    window.addEventListener('paste', handleClipboardEvent, true);
+    window.addEventListener('copy', handleClipboardEvent, true);
+    window.addEventListener('cut', handleClipboardEvent, true);
+    window.addEventListener('drop', handleClipboardEvent, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDownCapture, true);
+      window.removeEventListener('paste', handleClipboardEvent, true);
+      window.removeEventListener('copy', handleClipboardEvent, true);
+      window.removeEventListener('cut', handleClipboardEvent, true);
+      window.removeEventListener('drop', handleClipboardEvent, true);
+    };
+  }, [activeTab, isCopyPasteAllowed]);
+
+  const handleEditorMount = (editor, monaco) => {
+    if (!isCopyPasteAllowed) {
+      const showWarning = () => {
+        setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted.');
+        setTimeout(() => setClipboardWarning(''), 4500);
+      };
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, showWarning);
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, showWarning);
+      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, showWarning);
+    }
+  };
 
   useEffect(() => {
     loadEventData();
@@ -69,7 +167,8 @@ export default function EventWorkspace({ user }) {
         const qData = await eventService.getEventQuestions(targetEventId).catch(() => []);
         setQuestions(qData || []);
         if (qData && qData.length > 0) {
-          selectDSAQuestion(qData[0]);
+          const firstAvailable = qData.find(q => !q.is_locked) || qData[0];
+          setSelectedQuestion(firstAvailable);
         }
       }
       if (hasCtf) {
@@ -114,28 +213,101 @@ export default function EventWorkspace({ user }) {
     }
   };
 
-  // DSA Helpers
-  const selectDSAQuestion = (q) => {
-    setSelectedQuestion(q);
-    setJudgeVerdict(null);
-    if (language === 'python3') setCode(q.starter_py || '# Write solution here\nimport sys\n\ndef solve():\n    pass\n\nif __name__ == "__main__":\n    solve()\n');
-    else if (language === 'cpp') setCode(q.starter_cpp || '#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}\n');
-    else setCode(q.starter_c || '#include <stdio.h>\n\nint main() {\n    return 0;\n}\n');
+  // =========================================================================
+  // DSA HELPERS & RUN/SUBMIT SANDBOX EXECUTION (PRESERVING EXISTING CONSOLE)
+  // =========================================================================
+  const getCurrentCode = () => {
+    if (!selectedQuestion) return '';
+    const key = `${selectedQuestion.id}_${language}`;
+    if (codeDrafts[key] !== undefined) {
+      return codeDrafts[key];
+    }
+    if (selectedQuestion.starter_code?.[language]) {
+      return selectedQuestion.starter_code[language];
+    }
+    if (language === 'python3') return selectedQuestion.starter_py || '# Write solution here\nimport sys\n\ndef solve():\n    pass\n\nif __name__ == "__main__":\n    solve()\n';
+    if (language === 'cpp') return selectedQuestion.starter_cpp || '#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}\n';
+    return selectedQuestion.starter_c || '#include <stdio.h>\n\nint main() {\n    return 0;\n}\n';
   };
 
-  const handleRunJudge = async () => {
+  const handleCodeChange = (newCode) => {
     if (!selectedQuestion) return;
-    setJudgeRunning(true);
-    setJudgeVerdict(null);
+    const key = `${selectedQuestion.id}_${language}`;
+    setCodeDrafts(prev => ({ ...prev, [key]: newCode }));
+  };
+
+  const selectDSAQuestion = (q) => {
+    if (q.is_locked) {
+      alert(q.lock_reason || 'This question is locked based on event progression policy.');
+      return;
+    }
+    setSelectedQuestion(q);
+  };
+
+  const handleResetCode = () => {
+    if (!selectedQuestion) return;
+    if (!window.confirm('Reset code to original starter template? Any unsaved edits will be lost.')) return;
+    const key = `${selectedQuestion.id}_${language}`;
+    let starter = selectedQuestion.starter_code?.[language];
+    if (!starter) {
+      if (language === 'python3') starter = selectedQuestion.starter_py || '# Write solution here\nimport sys\n\ndef solve():\n    pass\n\nif __name__ == "__main__":\n    solve()\n';
+      else if (language === 'cpp') starter = selectedQuestion.starter_cpp || '#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}\n';
+      else starter = selectedQuestion.starter_c || '#include <stdio.h>\n\nint main() {\n    return 0;\n}\n';
+    }
+    setCodeDrafts(prev => ({ ...prev, [key]: starter }));
+  };
+
+  const handleRunSample = async () => {
+    if (!selectedQuestion) return;
+    setIsRunningSample(true);
+    setDsaSubTab('results');
+    const codeToRun = getCurrentCode();
     try {
-      const res = await questionService.submitCode(selectedQuestion.id, code, language, targetEventId);
-      setJudgeVerdict(res);
-      const subData = await eventService.getEventSubmissions(targetEventId).catch(() => []);
-      setUserSubmissions(subData || []);
+      const res = await dsaService.runSample(selectedQuestion.id, language, codeToRun);
+      setExecutionResults(prev => ({ ...prev, [selectedQuestion.id]: res }));
     } catch (err) {
-      setJudgeVerdict({ verdict: 'SUBMISSION_ERROR', log: err.response?.data?.detail || 'Failed to execute code.' });
+      setExecutionResults(prev => ({
+        ...prev,
+        [selectedQuestion.id]: {
+          verdict: 'INTERNAL_ERROR',
+          compile_log: err.response?.data?.detail || 'Failed to execute sample code in judge sandbox.'
+        }
+      }));
     } finally {
-      setJudgeRunning(false);
+      setIsRunningSample(false);
+    }
+  };
+
+  const handleSubmitDSA = async () => {
+    if (!selectedQuestion) return;
+    setIsSubmittingDSA(true);
+    setDsaSubTab('results');
+    const codeToSubmit = getCurrentCode();
+    try {
+      const res = await questionService.submitCode(selectedQuestion.id, codeToSubmit, language, targetEventId);
+      setExecutionResults(prev => ({ ...prev, [selectedQuestion.id]: res }));
+
+      // Refresh questions and user submissions
+      const [updatedQ, updatedSubs] = await Promise.all([
+        eventService.getEventQuestions(targetEventId).catch(() => []),
+        eventService.getEventSubmissions(targetEventId).catch(() => [])
+      ]);
+      if (updatedQ && updatedQ.length > 0) {
+        setQuestions(updatedQ);
+        const refreshedSelected = updatedQ.find(x => x.id === selectedQuestion.id);
+        if (refreshedSelected) setSelectedQuestion(refreshedSelected);
+      }
+      if (updatedSubs) setUserSubmissions(updatedSubs);
+    } catch (err) {
+      setExecutionResults(prev => ({
+        ...prev,
+        [selectedQuestion.id]: {
+          verdict: 'SUBMISSION_ERROR',
+          compile_log: err.response?.data?.detail || 'Failed to evaluate submission in judge sandbox.'
+        }
+      }));
+    } finally {
+      setIsSubmittingDSA(false);
     }
   };
 
@@ -750,131 +922,497 @@ export default function EventWorkspace({ user }) {
       )}
 
       {/* =========================================================================
-          TAB 3: DSA PROBLEMS WORKSPACE (WITH MONACO EDITOR)
+          TAB 3: DSA PROBLEMS WORKSPACE (WITH EXISTING MONACO CONSOLE)
           ========================================================================= */}
       {activeTab === 'problems' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Question List Sidebar */}
-          <div className="lg:col-span-4 p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-2 max-h-[750px] overflow-y-auto font-mono text-xs">
-            <h3 className="text-xs text-[#00CFFF] font-bold uppercase tracking-wider mb-3">Event Problem Set</h3>
-            {questions.length === 0 ? (
-              <div className="p-4 text-center text-[#A9BCD6]">No challenges assigned to this event yet.</div>
-            ) : (
-              questions.map(q => {
-                const isCurrent = selectedQuestion && selectedQuestion.id === q.id;
-                return (
-                  <div
-                    key={q.id}
-                    onClick={() => selectDSAQuestion(q)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                      isCurrent
-                        ? 'bg-[#102746] border-[#00CFFF] shadow-[0_0_15px_rgba(0,207,255,0.2)]'
-                        : 'bg-[#061329] border-[#18385E] hover:border-[#087FFF]'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-white text-xs">{q.title}</span>
-                      <span className="text-[#00CFFF] text-xs font-bold">{q.points} pts</span>
-                    </div>
-                    <div className="text-[10px] text-[#A9BCD6] mt-1 flex items-center space-x-2">
-                      <span>{q.difficulty}</span>
-                      <span>•</span>
-                      <span>{q.category}</span>
+        <div className="space-y-4">
+          {/* Top Bar: CyberAnzen | Event Name | Timer | Progress | Participant */}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+            {/* CyberAnzen Logo + Event Title */}
+            <div className="flex items-center space-x-3">
+              <div className="w-9 h-9 rounded-xl overflow-hidden bg-[#061329] border border-[#18385E] flex items-center justify-center p-1.5 shadow-sm">
+                <img 
+                  src="/favicon(1).png" 
+                  alt="CyberAnzen" 
+                  className="w-full h-full object-contain" 
+                  onError={(e) => { e.target.style.display = 'none'; }} 
+                />
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-white text-sm">{event.title}</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#087FFF]/20 text-[#00CFFF] border border-[#087FFF]/40 uppercase">
+                    DSA Console
+                  </span>
+                </div>
+                <span className="text-[10px] text-[#A9BCD6]">CyberAnzen Sandbox Judge Engine</span>
+              </div>
+            </div>
+
+            {/* Timer & Solved Progress */}
+            <div className="flex flex-wrap items-center gap-3 sm:gap-6">
+              {/* Timer */}
+              <div className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E]">
+                <Clock className="w-3.5 h-3.5 text-[#00CFFF]" />
+                <div>
+                  <span className="text-[9px] text-[#A9BCD6] block uppercase tracking-wider">Time Remaining</span>
+                  <span className="font-bold text-white">{timeRemaining || 'Active Session'}</span>
+                </div>
+              </div>
+
+              {/* Progress */}
+              <div className="flex items-center space-x-3 px-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E]">
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#20C997]" />
+                <div>
+                  <span className="text-[9px] text-[#A9BCD6] block uppercase tracking-wider">Progress</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-white">
+                      Solved {questions.filter(q => q.status === 'solved').length} / {questions.length}
+                    </span>
+                    <div className="w-16 h-1.5 bg-[#08172B] rounded-full overflow-hidden border border-[#18385E]">
+                      <div 
+                        className="h-full bg-gradient-to-r from-[#00CFFF] to-[#20C997] transition-all duration-500"
+                        style={{ 
+                          width: `${questions.length > 0 ? (questions.filter(q => q.status === 'solved').length / questions.length) * 100 : 0}%` 
+                        }}
+                      />
                     </div>
                   </div>
-                );
-              })
-            )}
+                </div>
+              </div>
+
+              {/* Participant badge */}
+              <div className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E]">
+                <div className="w-6 h-6 rounded-full bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center text-[#00CFFF] font-bold text-[10px]">
+                  {(currentUser?.username || 'U')[0].toUpperCase()}
+                </div>
+                <div>
+                  <span className="text-white font-bold block text-xs">{currentUser?.username || 'Candidate'}</span>
+                  <span className="text-[9px] text-[#A9BCD6] uppercase">{currentUser?.role || 'Participant'}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Interactive Monaco Workspace */}
-          {selectedQuestion ? (
-            <div className="lg:col-span-8 flex flex-col space-y-4">
-              {/* Problem Statement Card */}
-              <div className="p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-3 font-mono text-xs">
-                <div className="flex justify-between items-center border-b border-[#18385E] pb-2">
-                  <h3 className="font-bold text-white text-sm">{selectedQuestion.title}</h3>
-                  <span className="text-[#00CFFF] font-bold">{selectedQuestion.points} points</span>
-                </div>
-                <div className="text-slate-300 leading-relaxed whitespace-pre-line font-sans">
-                  {selectedQuestion.statement}
-                </div>
-                <div className="grid grid-cols-2 gap-3 text-[11px] pt-2 border-t border-[#18385E]/60">
-                  <div>
-                    <span className="text-[#A9BCD6] block mb-0.5">Input Specification:</span>
-                    <span className="text-slate-200">{selectedQuestion.input_spec}</span>
-                  </div>
-                  <div>
-                    <span className="text-[#A9BCD6] block mb-0.5">Output Specification:</span>
-                    <span className="text-slate-200">{selectedQuestion.output_spec}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Monaco IDE */}
-              <div className="rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl overflow-hidden flex flex-col">
-                <div className="p-3 bg-[#061329] border-b border-[#18385E] flex items-center justify-between text-xs font-mono">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-[#A9BCD6]">Runtime:</span>
-                    <select
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value)}
-                      className="bg-[#102746] border border-[#18385E] rounded px-2 py-1 text-white text-xs"
-                    >
-                      <option value="python3">Python 3.14</option>
-                      <option value="cpp">C++ 17 (G++)</option>
-                      <option value="c">C 11 (GCC)</option>
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={handleRunJudge}
-                    disabled={judgeRunning}
-                    className="flex items-center space-x-1.5 px-4 py-1.5 rounded-lg text-xs font-mono font-bold text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-md transition-all"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>{judgeRunning ? 'Judging...' : 'Submit to Sandbox'}</span>
-                  </button>
-                </div>
-
-                <div className="h-80 w-full">
-                  <Editor
-                    height="100%"
-                    language={language === 'python3' ? 'python' : 'cpp'}
-                    theme="vs-dark"
-                    value={code}
-                    onChange={(val) => setCode(val || '')}
-                    options={{
-                      fontSize: 12,
-                      minimap: { enabled: false },
-                      scrollBeyondLastLine: false,
-                      tabSize: 4
-                    }}
-                  />
-                </div>
-
-                {judgeVerdict && (
-                  <div className={`p-4 border-t font-mono text-xs ${
-                    judgeVerdict.verdict === 'ACCEPTED'
-                      ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400'
-                      : 'bg-red-950/60 border-red-800 text-red-400'
-                  }`}>
-                    <div className="font-bold flex items-center space-x-2">
-                      <span>Verdict: {judgeVerdict.verdict}</span>
-                      {judgeVerdict.execution_time_ms && <span>({judgeVerdict.execution_time_ms} ms)</span>}
-                    </div>
-                    {judgeVerdict.compile_log && (
-                      <pre className="mt-2 text-[10px] whitespace-pre-wrap opacity-90">{judgeVerdict.compile_log}</pre>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="lg:col-span-8 p-12 text-center text-[#A9BCD6] font-mono rounded-2xl bg-[#0B1D38] border border-[#18385E]">
-              Select a DSA problem to begin coding and sandbox execution.
+          {/* Anti-cheat banner warning if triggered */}
+          {clipboardWarning && (
+            <div className="flex items-center space-x-2 p-3 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-300 text-xs font-mono animate-pulse shadow-lg">
+              <ShieldAlert className="w-4 h-4 flex-shrink-0" />
+              <span>{clipboardWarning}</span>
             </div>
           )}
+
+          {/* Main Coding Layout: Left Question Sidebar + Right Console Area */}
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
+            
+            {/* Left Question Sidebar */}
+            <div className="w-full lg:w-80 flex-shrink-0 p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-3 font-mono text-xs max-h-[820px] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-[#18385E] pb-2.5">
+                <div className="flex items-center space-x-2">
+                  <Code2 className="w-4 h-4 text-[#00CFFF]" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">Problem Matrix</span>
+                </div>
+                <span className="text-[10px] text-[#A9BCD6]">
+                  {questions.reduce((sum, q) => sum + (q.points || 0), 0)} pts
+                </span>
+              </div>
+
+              {questions.length === 0 ? (
+                <div className="p-8 text-center text-[#A9BCD6]">
+                  No coding challenges assigned to this event tournament yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {questions.map((q, idx) => {
+                    const isCurrent = selectedQuestion && selectedQuestion.id === q.id;
+                    const isSolved = q.status === 'solved';
+                    const isLocked = q.is_locked;
+
+                    return (
+                      <div
+                        key={q.id}
+                        onClick={() => selectDSAQuestion(q)}
+                        className={`p-3 rounded-xl border transition-all cursor-pointer ${
+                          isCurrent
+                            ? 'bg-[#102746] border-[#00CFFF] shadow-[0_0_15px_rgba(0,207,255,0.25)] ring-1 ring-[#00CFFF]'
+                            : isLocked
+                            ? 'bg-[#061329]/60 border-[#18385E]/50 opacity-60 cursor-not-allowed'
+                            : 'bg-[#061329] border-[#18385E] hover:border-[#087FFF]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center space-x-2">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              isCurrent ? 'bg-[#00CFFF] text-slate-950' : 'bg-[#08172B] text-[#A9BCD6] border border-[#18385E]'
+                            }`}>
+                              {q.display_number || `Q${idx + 1}`}
+                            </span>
+                            <span className={`font-bold text-xs truncate max-w-[140px] ${
+                              isCurrent ? 'text-white font-extrabold' : 'text-slate-200'
+                            }`}>
+                              {q.title}
+                            </span>
+                          </div>
+
+                          {/* Status Badge */}
+                          {isSolved ? (
+                            <span className="flex items-center space-x-1 text-[10px] text-[#20C997] font-bold bg-[#20C997]/10 px-2 py-0.5 rounded-full border border-[#20C997]/30">
+                              <Check className="w-3 h-3" />
+                              <span>Solved</span>
+                            </span>
+                          ) : isLocked ? (
+                            <span className="flex items-center space-x-1 text-[10px] text-amber-400 font-bold bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-800/40" title={q.lock_reason}>
+                              <Lock className="w-3 h-3" />
+                              <span>Locked</span>
+                            </span>
+                          ) : isCurrent ? (
+                            <span className="text-[10px] text-[#00CFFF] font-bold bg-[#00CFFF]/10 px-2 py-0.5 rounded-full border border-[#00CFFF]/30">
+                              Current
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-[#A9BCD6] font-medium bg-slate-900 px-2 py-0.5 rounded-full border border-[#18385E]">
+                              Pending
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center justify-between text-[10px] text-[#A9BCD6] mt-2 pt-1.5 border-t border-[#18385E]/40 font-mono">
+                          <span className="text-[#00CFFF] font-bold">{q.points} PTS</span>
+                          <span className={`capitalize ${
+                            q.difficulty?.toLowerCase() === 'easy' || q.difficulty?.toLowerCase() === 'beginner' ? 'text-emerald-400' :
+                            q.difficulty?.toLowerCase() === 'hard' || q.difficulty?.toLowerCase() === 'advanced' ? 'text-rose-400' : 'text-amber-400'
+                          }`}>{q.difficulty}</span>
+                          <span className="text-slate-400 truncate max-w-[80px]">{q.category}</span>
+                        </div>
+
+                        {isLocked && q.lock_reason && (
+                          <div className="mt-1.5 text-[9px] text-amber-300 font-sans italic bg-amber-950/30 p-1 rounded border border-amber-900/40">
+                            {q.lock_reason}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Right: Existing Code Console & Problem Dossier Split Area */}
+            {selectedQuestion ? (
+              <div className="flex-1 w-full flex flex-col space-y-4">
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                  
+                  {/* Left Column: Dossier / Execution Output / Submissions (xl:col-span-6) */}
+                  <div className="xl:col-span-6 p-5 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col space-y-4 font-mono text-xs max-h-[820px] overflow-y-auto">
+                    {/* Sub-tab Navigation */}
+                    <div className="flex items-center justify-between border-b border-[#18385E] pb-3">
+                      <div className="flex rounded-xl bg-[#061329] p-1 border border-[#18385E]">
+                        <button
+                          onClick={() => setDsaSubTab('statement')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            dsaSubTab === 'statement'
+                              ? 'bg-[#102746] text-[#00CFFF] shadow-sm'
+                              : 'text-[#A9BCD6] hover:text-white'
+                          }`}
+                        >
+                          Problem Dossier
+                        </button>
+                        <button
+                          onClick={() => setDsaSubTab('results')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                            dsaSubTab === 'results'
+                              ? 'bg-[#102746] text-[#00CFFF] shadow-sm'
+                              : 'text-[#A9BCD6] hover:text-white'
+                          }`}
+                        >
+                          <span>Output Diagnostics</span>
+                          {executionResults[selectedQuestion.id] && (
+                            <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                              executionResults[selectedQuestion.id].verdict === 'ACCEPTED'
+                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                : 'bg-rose-950 text-rose-400 border border-rose-800'
+                            }`}>
+                              {executionResults[selectedQuestion.id].verdict}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => setDsaSubTab('history')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                            dsaSubTab === 'history'
+                              ? 'bg-[#102746] text-[#00CFFF] shadow-sm'
+                              : 'text-[#A9BCD6] hover:text-white'
+                          }`}
+                        >
+                          Submissions
+                        </button>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[#00CFFF] font-bold text-xs">{selectedQuestion.points} pts</span>
+                      </div>
+                    </div>
+
+                    {/* Sub-tab 1: Problem Dossier */}
+                    {dsaSubTab === 'statement' && (
+                      <div className="space-y-4">
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <h3 className="font-bold text-white text-base font-mono">{selectedQuestion.title}</h3>
+                            <span className="text-[10px] px-2 py-0.5 rounded bg-[#08172B] text-[#A9BCD6] border border-[#18385E]">
+                              {selectedQuestion.category}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-3 text-[11px] text-[#A9BCD6]">
+                            <span>Difficulty: <strong className="text-white">{selectedQuestion.difficulty}</strong></span>
+                            <span>•</span>
+                            <span>Time: <strong className="text-white">{selectedQuestion.time_limit_ms || 2000} ms</strong></span>
+                            <span>•</span>
+                            <span>Mem: <strong className="text-white">{selectedQuestion.memory_limit_mb || 256} MB</strong></span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block mb-1">Specification &amp; Description</span>
+                          <div className="text-slate-200 text-xs leading-relaxed whitespace-pre-wrap font-sans p-3.5 rounded-xl bg-[#061329] border border-[#18385E]">
+                            {selectedQuestion.statement}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block mb-1">Input Specification</span>
+                          <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] text-slate-300 font-mono text-xs whitespace-pre-wrap">
+                            {selectedQuestion.input_spec}
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block mb-1">Output Specification</span>
+                          <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] text-slate-300 font-mono text-xs whitespace-pre-wrap">
+                            {selectedQuestion.output_spec}
+                          </div>
+                        </div>
+
+                        {selectedQuestion.constraints && (
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block mb-1">Constraints</span>
+                            <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] text-slate-300 font-mono text-xs whitespace-pre-wrap">
+                              {selectedQuestion.constraints}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Public Samples */}
+                        {selectedQuestion.sample_tests && selectedQuestion.sample_tests.length > 0 && (
+                          <div className="space-y-3 pt-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-[#00CFFF] block">Public Test Samples</span>
+                            {selectedQuestion.sample_tests.map((s, sIdx) => (
+                              <div key={sIdx} className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] space-y-2">
+                                <span className="text-[10px] font-mono text-[#A9BCD6] font-bold block">Sample Case #{sIdx + 1}</span>
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <span className="text-[9px] text-[#A9BCD6] block mb-1 uppercase">Standard Input</span>
+                                    <pre className="p-2.5 rounded-lg bg-[#08172B] text-slate-200 text-[11px] overflow-x-auto border border-[#18385E]/60">{s.input}</pre>
+                                  </div>
+                                  <div>
+                                    <span className="text-[9px] text-[#A9BCD6] block mb-1 uppercase">Expected Output</span>
+                                    <pre className="p-2.5 rounded-lg bg-[#08172B] text-emerald-400 text-[11px] overflow-x-auto border border-[#18385E]/60">{s.output}</pre>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Sub-tab 2: Execution Results */}
+                    {dsaSubTab === 'results' && (
+                      <div className="space-y-4">
+                        {!executionResults[selectedQuestion.id] ? (
+                          <div className="py-16 text-center text-[#A9BCD6]">
+                            Click "Run Samples" or "Submit Code" to inspect the sandboxed execution results.
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {/* Verdict Box */}
+                            <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between">
+                              <div>
+                                <span className="text-[10px] text-[#A9BCD6] uppercase block">Evaluation Verdict</span>
+                                <span className={`text-base font-bold font-mono ${
+                                  executionResults[selectedQuestion.id].verdict === 'ACCEPTED' ? 'text-[#20C997]' : 'text-rose-400'
+                                }`}>
+                                  {executionResults[selectedQuestion.id].verdict}
+                                </span>
+                              </div>
+                              {executionResults[selectedQuestion.id].execution_time_ms !== undefined && (
+                                <div className="text-right">
+                                  <span className="text-[10px] text-[#A9BCD6] uppercase block">Execution Time</span>
+                                  <span className="text-xs font-mono text-white">{executionResults[selectedQuestion.id].execution_time_ms} ms</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Compiler / Diagnostics Log */}
+                            {executionResults[selectedQuestion.id].compile_log && (
+                              <div>
+                                <span className="text-[10px] text-[#A9BCD6] uppercase block mb-1">Diagnostic Log</span>
+                                <pre className="p-3 rounded-xl bg-rose-950/20 border border-rose-900/40 text-xs text-rose-300 overflow-x-auto font-mono whitespace-pre-wrap">
+                                  {executionResults[selectedQuestion.id].compile_log}
+                                </pre>
+                              </div>
+                            )}
+
+                            {/* Test Matrix */}
+                            {executionResults[selectedQuestion.id].test_results && executionResults[selectedQuestion.id].test_results.length > 0 && (
+                              <div className="space-y-2">
+                                <span className="text-[10px] text-[#A9BCD6] uppercase block">Sandbox Test Case Matrix</span>
+                                {executionResults[selectedQuestion.id].test_results.map((tr, idx) => (
+                                  <div key={idx} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between">
+                                    <span className="text-slate-300">Test #{idx + 1} ({tr.type})</span>
+                                    <span className={`font-bold ${
+                                      tr.verdict === 'ACCEPTED' ? 'text-[#20C997]' : 'text-rose-400'
+                                    }`}>
+                                      {tr.verdict}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Sub-tab 3: History */}
+                    {dsaSubTab === 'history' && (
+                      <div className="space-y-3">
+                        {userSubmissions.filter(s => s.question_id === selectedQuestion.id).length === 0 ? (
+                          <div className="py-12 text-center text-[#A9BCD6]">
+                            No submissions recorded for this question in this tournament yet.
+                          </div>
+                        ) : (
+                          userSubmissions
+                            .filter(s => s.question_id === selectedQuestion.id)
+                            .map(sub => (
+                              <div key={sub.id} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between">
+                                <div>
+                                  <span className="font-bold text-white text-xs">Submission #{sub.id}</span>
+                                  <span className="text-[10px] text-[#A9BCD6] block uppercase">{sub.language} • {new Date(sub.created_at).toLocaleTimeString()}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    sub.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-[#20C997] border border-emerald-800' : 'bg-red-950 text-red-400 border border-red-800'
+                                  }`}>
+                                    {sub.verdict}
+                                  </span>
+                                </div>
+                              </div>
+                            ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Column: Existing Monaco Editor Console (xl:col-span-6) */}
+                  <div className="xl:col-span-6 p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl flex flex-col space-y-3">
+                    {/* Editor Toolbar */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#18385E] pb-3 font-mono text-xs">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[#A9BCD6]">Language:</span>
+                        <select
+                          value={language}
+                          onChange={(e) => setLanguage(e.target.value)}
+                          className="px-2.5 py-1.5 bg-[#061329] border border-[#18385E] rounded-xl text-white font-mono text-xs focus:border-[#00CFFF] focus:outline-none"
+                        >
+                          <option value="python3">Python 3.14</option>
+                          <option value="cpp">C++ (g++ 17)</option>
+                          <option value="c">C (gcc 11)</option>
+                        </select>
+
+                        <button
+                          onClick={() => setUseTouchEditor(!useTouchEditor)}
+                          title="Toggle Mobile Touch Editor"
+                          className={`p-1.5 rounded-xl border text-xs transition-colors ${
+                            useTouchEditor ? 'bg-[#00CFFF]/20 text-[#00CFFF] border-[#00CFFF]/60' : 'text-[#A9BCD6] border-[#18385E] hover:bg-[#102746]'
+                          }`}
+                        >
+                          <Smartphone className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          onClick={handleResetCode}
+                          title="Reset code to original starter template"
+                          className="p-1.5 rounded-xl border text-xs text-[#A9BCD6] border-[#18385E] hover:bg-[#102746] hover:text-white"
+                        >
+                          <RotateCcw className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={handleRunSample}
+                          disabled={isRunningSample || isSubmittingDSA}
+                          className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-mono font-medium text-slate-200 bg-[#061329] hover:bg-[#102746] border border-[#18385E] transition-all disabled:opacity-50"
+                        >
+                          <Play className="w-3.5 h-3.5 text-[#00CFFF] fill-current" />
+                          <span>{isRunningSample ? 'Testing...' : 'Run Samples'}</span>
+                        </button>
+
+                        <button
+                          onClick={handleSubmitDSA}
+                          disabled={isSubmittingDSA || isRunningSample}
+                          className="flex items-center space-x-1.5 px-4 py-1.5 rounded-xl text-xs font-mono font-bold text-slate-950 bg-gradient-to-r from-[#00CFFF] to-teal-300 hover:from-cyan-300 hover:to-teal-200 shadow-[0_0_15px_rgba(0,207,255,0.4)] transition-all disabled:opacity-50"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          <span>{isSubmittingDSA ? 'Evaluating...' : 'Submit Code'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Monaco Editor Container */}
+                    <div className="rounded-xl overflow-hidden border border-[#18385E] bg-[#061329] h-[580px] relative">
+                      {useTouchEditor ? (
+                        <textarea
+                          value={getCurrentCode()}
+                          onChange={(e) => handleCodeChange(e.target.value)}
+                          className="w-full h-full p-4 bg-[#061329] text-[#00CFFF] font-mono text-xs leading-relaxed resize-none focus:outline-none"
+                          placeholder="// Write your solution here..."
+                          spellCheck="false"
+                        />
+                      ) : (
+                        <Editor
+                          height="100%"
+                          language={language === 'python3' ? 'python' : 'cpp'}
+                          theme="vs-dark"
+                          value={getCurrentCode()}
+                          onChange={(val) => handleCodeChange(val || '')}
+                          onMount={handleEditorMount}
+                          options={{
+                            fontSize: 13,
+                            fontFamily: 'JetBrains Mono, monospace',
+                            minimap: { enabled: false },
+                            scrollBeyondLastLine: false,
+                            automaticLayout: true,
+                            tabSize: 4,
+                            lineNumbers: 'on',
+                            cursorBlinking: 'smooth',
+                            contextmenu: isCopyPasteAllowed
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 p-16 text-center text-[#A9BCD6] font-mono rounded-2xl bg-[#0B1D38] border border-[#18385E]">
+                Select a problem from the matrix sidebar to begin coding and sandbox execution.
+              </div>
+            )}
+
+          </div>
         </div>
       )}
 

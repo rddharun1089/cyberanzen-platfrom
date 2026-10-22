@@ -1,32 +1,79 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Settings, Code2, HelpCircle, Shield, Cpu, Users, 
   FileText, Plus, Trash2, CheckCircle2, AlertTriangle, Play, RefreshCw, Key, ShieldAlert,
-  Calendar, Upload, Sparkles
+  Calendar, Upload, Sparkles, Trophy, BarChart2, ChevronLeft, ChevronRight, Menu,
+  Layers, Shuffle, Lock, Unlock, Eye, Activity, Award, UserCheck, UserX, Database,
+  Sliders, Search, ArrowRight, ExternalLink, Image as ImageIcon
 } from 'lucide-react';
-import { adminService } from '../services/api';
+import { adminService, authService } from '../services/api';
 import EventsManagementTab from '../components/admin/EventsManagementTab';
 import QuestionImportTab from '../components/admin/QuestionImportTab';
+import CompetitionDevelopmentTab from '../components/admin/CompetitionDevelopmentTab';
+import EventWizardModal from '../components/admin/EventWizardModal';
 
-export default function AdminStudio() {
-  const [activeTab, setActiveTab] = useState('events'); // 'events' | 'imports' | 'dsa' | 'mcq' | 'ctf' | 'dynamic' | 'labs' | 'users' | 'audits'
+export default function AdminStudio({ user, defaultView = null }) {
+  const { view } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // DSA state
+  // Resolve initial tab based on route URL or defaultView
+  const getInitialTab = () => {
+    if (defaultView) return defaultView;
+    if (view) return view.toLowerCase();
+    const path = location.pathname.toLowerCase();
+    if (path.includes('competition-development')) return 'competition_dev';
+    if (path.includes('/events/new')) return 'events_new';
+    if (path.includes('/events')) return 'events';
+    if (path.includes('/questions')) return 'questions';
+    return 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState(getInitialTab);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [preselectedTemplate, setPreselectedTemplate] = useState(null);
+
+  // Global counts for metrics
+  const [metrics, setMetrics] = useState({
+    eventsCount: 0,
+    activeEventsCount: 0,
+    dsaCount: 0,
+    mcqCount: 0,
+    ctfCount: 0,
+    usersCount: 0,
+    submissionsCount: 0,
+    teamsCount: 0
+  });
+
+  // Tab-specific datasets
   const [dsaList, setDsaList] = useState([]);
+  const [mcqList, setMcqList] = useState([]);
+  const [ctfList, setCtfList] = useState([]);
+  const [userList, setUserList] = useState([]);
+  const [teamList, setTeamList] = useState([]);
+  const [submissionList, setSubmissionList] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [platformSettings, setPlatformSettings] = useState({});
+  const [siteContent, setSiteContent] = useState({});
+  const [questionSubTab, setQuestionSubTab] = useState('dsa'); // 'dsa' | 'ctf' | 'mcq'
+  const [loading, setLoading] = useState(false);
+
+  // Forms
   const [dsaForm, setDsaForm] = useState({
     title: '', statement: '', input_spec: '', output_spec: '', constraints: '',
     difficulty: 'Beginner', category: 'Data Structures & Algorithms', points: 100,
     time_limit_ms: 2000, memory_limit_mb: 256, starter_py: '', starter_cpp: '', starter_c: '',
     reference_solution: '', allow_copy_paste: false
   });
+
   const [selectedDsaId, setSelectedDsaId] = useState(null);
   const [selectedDsaDetail, setSelectedDsaDetail] = useState(null);
   const [tcInput, setTcInput] = useState('');
   const [tcOutput, setTcOutput] = useState('');
   const [tcType, setTcType] = useState('public_sample');
 
-  // MCQ state
-  const [mcqList, setMcqList] = useState([]);
   const [mcqForm, setMcqForm] = useState({
     title: '', prompt: '', question_type: 'single_choice', difficulty: 'Beginner',
     category: 'Cybersecurity', points_positive: 10, points_negative: 0, time_limit_sec: 60,
@@ -36,89 +83,134 @@ export default function AdminStudio() {
     ]
   });
 
-  // CTF state
-  const [ctfList, setCtfList] = useState([]);
   const [ctfForm, setCtfForm] = useState({
     title: '', description: '', category: 'web', difficulty: 'Beginner',
     points: 100, flag_type: 'static', static_flag: '', has_docker_lab: false,
     docker_image: '', lab_timeout_min: 60, lab_port_exposed: 80
   });
 
-  // Dynamic Generator state
-  const [templates, setTemplates] = useState([]);
-  const [genSeed, setGenSeed] = useState(42);
-
-  // Users state
-  const [userList, setUserList] = useState([]);
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [confirmUsername, setConfirmUsername] = useState('');
-
-  // Audits state
-  const [auditLogs, setAuditLogs] = useState([]);
-
-  // Submissions state
-  const [submissionList, setSubmissionList] = useState([]);
-  const [rejudgingId, setRejudgingId] = useState(null);
-
-  // Site Content state
-  const [siteContent, setSiteContent] = useState(null);
-  const [contentSaving, setContentSaving] = useState(false);
-
-  // System Settings state
-  const [platformSettings, setPlatformSettings] = useState({});
+  useEffect(() => {
+    loadGlobalMetrics();
+  }, []);
 
   useEffect(() => {
-    loadTabData();
+    loadTabData(activeTab);
   }, [activeTab]);
 
-  const loadTabData = async () => {
+  const loadGlobalMetrics = async () => {
     try {
-      if (activeTab === 'dsa') {
-        const data = await adminService.listDSA();
-        setDsaList(data);
-      } else if (activeTab === 'mcq') {
-        const data = await adminService.listMCQs();
-        setMcqList(data);
-      } else if (activeTab === 'ctf') {
-        const data = await adminService.listCTF();
-        setCtfList(data);
-      } else if (activeTab === 'dynamic') {
-        const data = await adminService.listTemplates();
-        setTemplates(data);
-      } else if (activeTab === 'users') {
-        const data = await adminService.listUsers();
-        setUserList(data);
-      } else if (activeTab === 'submissions') {
-        const data = await adminService.listSubmissions();
-        setSubmissionList(data.submissions || []);
-      } else if (activeTab === 'content') {
-        const data = await adminService.getSiteContent();
-        setSiteContent(data.content || {});
-      } else if (activeTab === 'settings') {
-        const data = await adminService.getSettings();
-        setPlatformSettings(data || {});
-      } else if (activeTab === 'audits') {
-        const data = await adminService.getAuditLogs();
-        setAuditLogs(data);
-      }
-    } catch (err) {
-      console.error(err);
+      const [events, dsa, mcq, ctf, users, subs, teams] = await Promise.all([
+        adminService.listEvents().catch(() => []),
+        adminService.listDSA().catch(() => []),
+        adminService.listMCQs().catch(() => []),
+        adminService.listCTF().catch(() => []),
+        adminService.listUsers().catch(() => []),
+        adminService.listSubmissions().catch(() => ({ submissions: [] })),
+        adminService.listTeams ? adminService.listTeams().catch(() => []) : []
+      ]);
+
+      setMetrics({
+        eventsCount: events.length,
+        activeEventsCount: events.filter(e => e.status === 'live' || e.status === 'registration_open' || e.status === 'active').length,
+        dsaCount: dsa.length,
+        mcqCount: mcq.length,
+        ctfCount: ctf.length,
+        usersCount: users.length,
+        submissionsCount: subs.submissions?.length || 0,
+        teamsCount: teams.length
+      });
+    } catch (e) {
+      console.error('Error fetching admin metrics:', e);
     }
   };
 
-  // --- DSA Handlers ---
+  const loadTabData = async (tab) => {
+    setLoading(true);
+    try {
+      if (tab === 'questions' || tab === 'dsa') {
+        const d = await adminService.listDSA();
+        setDsaList(d);
+      }
+      if (tab === 'questions' || tab === 'mcq') {
+        const m = await adminService.listMCQs();
+        setMcqList(m);
+      }
+      if (tab === 'questions' || tab === 'ctf') {
+        const c = await adminService.listCTF();
+        setCtfList(c);
+      }
+      if (tab === 'users' || tab === 'dashboard') {
+        const u = await adminService.listUsers();
+        setUserList(u);
+      }
+      if (tab === 'teams') {
+        if (adminService.listTeams) {
+          const t = await adminService.listTeams();
+          setTeamList(t);
+        }
+      }
+      if (tab === 'submissions') {
+        const s = await adminService.listSubmissions();
+        setSubmissionList(s.submissions || []);
+      }
+      if (tab === 'audits' || tab === 'dashboard') {
+        const a = await adminService.getAuditLogs();
+        setAuditLogs(a || []);
+      }
+      if (tab === 'settings') {
+        const setts = await adminService.getSettings();
+        setPlatformSettings(setts || {});
+      }
+      if (tab === 'content') {
+        const cnt = await adminService.getSiteContent();
+        setSiteContent(cnt.content || {});
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Switch tabs
+  const handleSelectTab = (tabId) => {
+    if (tabId === 'events_new') {
+      setWizardOpen(true);
+      return;
+    }
+    setActiveTab(tabId);
+    navigate(`/admin/${tabId}`);
+  };
+
+  const handleLaunchEventWithTemplate = (template) => {
+    setPreselectedTemplate(template);
+    setWizardOpen(true);
+  };
+
+  // Rejudge Solution
+  const handleRejudge = async (subId) => {
+    try {
+      await adminService.rejudgeSubmission(subId);
+      alert(`Submission #${subId} successfully queued for re-evaluation.`);
+      loadTabData('submissions');
+    } catch (e) {
+      alert('Failed to rejudge submission.');
+    }
+  };
+
+  // Question creators
   const handleCreateDsa = async (e) => {
     e.preventDefault();
     try {
       await adminService.createDSA(dsaForm);
-      alert('DSA Question created successfully!');
+      alert('DSA Question authored successfully!');
       setDsaForm({
         title: '', statement: '', input_spec: '', output_spec: '', constraints: '',
         difficulty: 'Beginner', category: 'Data Structures & Algorithms', points: 100,
         time_limit_ms: 2000, memory_limit_mb: 256, starter_py: '', starter_cpp: '', starter_c: '',
         reference_solution: '', allow_copy_paste: false
       });
-      loadTabData();
+      loadTabData('questions');
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to create question.');
     }
@@ -149,909 +241,859 @@ export default function AdminStudio() {
     }
   };
 
-  const handleValidateReference = async () => {
-    if (!selectedDsaId) return;
-    try {
-      const res = await adminService.validateDSAReference(selectedDsaId);
-      if (res.valid) {
-        alert(`Validation Passed! 100% of ${res.total_tests} tests accepted by reference solution.`);
-      } else {
-        alert(`Validation Warning: Verdict ${res.verdict}. Check reference solution or testcases.`);
-      }
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Validation failed.');
-    }
-  };
-
-  // --- MCQ Handlers ---
   const handleCreateMcq = async (e) => {
     e.preventDefault();
     try {
       await adminService.createMCQ(mcqForm);
       alert('MCQ created successfully!');
-      loadTabData();
+      loadTabData('questions');
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to create MCQ.');
     }
   };
 
-  // --- CTF Handlers ---
   const handleCreateCtf = async (e) => {
     e.preventDefault();
     try {
       await adminService.createCTF(ctfForm);
       alert('CTF Challenge created successfully!');
-      loadTabData();
+      loadTabData('questions');
     } catch (err) {
       alert(err.response?.data?.detail || 'Failed to create CTF challenge.');
     }
   };
 
-  // --- Question Deletions ---
   const handleDeleteDSA = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to permanently delete DSA problem "${title}" (#${id})? This will also remove testcases, submissions, and event associations.`)) return;
+    if (!window.confirm(`Permanently delete DSA question "${title}" (#${id})?`)) return;
     try {
       await adminService.deleteDSA(id);
-      alert(`DSA question "${title}" deleted successfully.`);
-      if (selectedDsaId === id) {
-        setSelectedDsaId(null);
-        setSelectedDsaDetail(null);
-      }
-      loadTabData();
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete DSA question.');
+      loadTabData('questions');
+    } catch (e) {
+      alert('Failed to delete question.');
     }
   };
 
   const handleDeleteMCQ = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to permanently delete MCQ "${title}" (#${id})?`)) return;
+    if (!window.confirm(`Permanently delete MCQ "${title}" (#${id})?`)) return;
     try {
       await adminService.deleteMCQ(id);
-      alert(`MCQ "${title}" deleted successfully.`);
-      loadTabData();
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete MCQ.');
+      loadTabData('questions');
+    } catch (e) {
+      alert('Failed to delete MCQ.');
     }
   };
 
   const handleDeleteCTF = async (id, title) => {
-    if (!window.confirm(`Are you sure you want to permanently delete CTF challenge "${title}" (#${id})? This will also terminate any active lab instances.`)) return;
+    if (!window.confirm(`Permanently delete CTF challenge "${title}" (#${id})?`)) return;
     try {
       await adminService.deleteCTF(id);
-      alert(`CTF challenge "${title}" deleted successfully.`);
-      loadTabData();
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete CTF challenge.');
+      loadTabData('questions');
+    } catch (e) {
+      alert('Failed to delete CTF challenge.');
     }
   };
 
-  // --- User Deletion ---
-  const handleDeleteUser = async () => {
-    if (!deleteTarget) return;
-    try {
-      await adminService.deleteUser(deleteTarget.id, confirmUsername);
-      alert(`User '${deleteTarget.username}' deleted.`);
-      setDeleteTarget(null);
-      setConfirmUsername('');
-      loadTabData();
-    } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to delete user.');
+  // Nav Groups Definition matching specification exactly:
+  // Overview: Dashboard
+  // Competition Management: All Events, Create Event, Competition Development, Question Bank, Import Questions
+  // Participants: Participants, Teams, Registrations
+  // Evaluation: Submissions, Judge Operations, Leaderboards, Results and Reports
+  // Platform: Site Content, Branding and Banners, Audit Logs, Settings
+  const navGroups = [
+    {
+      group: 'OVERVIEW',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: BarChart2 }
+      ]
+    },
+    {
+      group: 'COMPETITION MANAGEMENT',
+      items: [
+        { id: 'events', label: 'All Events', icon: Calendar, badge: metrics.eventsCount },
+        { id: 'events_new', label: 'Create Event', icon: Plus },
+        { id: 'competition_dev', label: 'Competition Development', icon: Cpu },
+        { id: 'questions', label: 'Question Bank', icon: Code2, badge: metrics.dsaCount + metrics.ctfCount + metrics.mcqCount },
+        { id: 'imports', label: 'Import Questions', icon: Upload }
+      ]
+    },
+    {
+      group: 'PARTICIPANTS',
+      items: [
+        { id: 'users', label: 'Participants', icon: Users, badge: metrics.usersCount },
+        { id: 'teams', label: 'Teams & Squads', icon: Shield, badge: metrics.teamsCount },
+        { id: 'registrations', label: 'Registrations', icon: UserCheck }
+      ]
+    },
+    {
+      group: 'EVALUATION',
+      items: [
+        { id: 'submissions', label: 'Submissions', icon: FileText, badge: metrics.submissionsCount },
+        { id: 'judge_ops', label: 'Judge Operations', icon: Activity },
+        { id: 'leaderboards', label: 'Leaderboards', icon: Trophy },
+        { id: 'results', label: 'Results & Reports', icon: Award }
+      ]
+    },
+    {
+      group: 'PLATFORM',
+      items: [
+        { id: 'content', label: 'Site Content', icon: Sliders },
+        { id: 'banners', label: 'Branding & Banners', icon: ImageIcon },
+        { id: 'audits', label: 'Audit Logs', icon: Database },
+        { id: 'settings', label: 'Platform Settings', icon: Settings }
+      ]
     }
-  };
+  ];
 
   return (
-    <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between pb-6 mb-8 border-b border-slate-800 gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-mono flex items-center space-x-3">
-            <Settings className="w-8 h-8 text-cyan-400" />
-            <span>ADMINISTRATION CONTROL CENTER</span>
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 font-sans">
-            Author and configure DSA problems, MCQ quizzes, CTF targets, dynamic generators, and user governance.
-          </p>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex flex-wrap rounded-xl bg-slate-900/80 p-1 border border-slate-800 text-xs font-mono gap-1">
-          <button
-            onClick={() => setActiveTab('events')}
-            className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors ${activeTab === 'events' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            <span>Event Builder</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('imports')}
-            className={`px-3 py-1.5 rounded-lg flex items-center space-x-1.5 transition-colors ${activeTab === 'imports' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Question Imports</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('dsa')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'dsa' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            DSA Studio
-          </button>
-          <button
-            onClick={() => setActiveTab('mcq')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'mcq' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            MCQ Studio
-          </button>
-          <button
-            onClick={() => setActiveTab('ctf')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'ctf' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            CTF Studio
-          </button>
-          <button
-            onClick={() => setActiveTab('dynamic')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'dynamic' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            Dynamic Generator
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'users' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            Cadets & Squads
-          </button>
-          <button
-            onClick={() => setActiveTab('submissions')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'submissions' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            Submissions
-          </button>
-          <button
-            onClick={() => setActiveTab('content')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'content' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            Site Content
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'settings' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            System Settings
-          </button>
-          <button
-            onClick={() => setActiveTab('audits')}
-            className={`px-3 py-1.5 rounded-lg transition-colors ${activeTab === 'audits' ? 'bg-cyan-500/20 text-cyan-300 font-bold border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
-          >
-            Audit Logs
-          </button>
-        </div>
-      </div>
-
-      {/* TAB 0: EVENT BUILDER */}
-      {activeTab === 'events' && (
-        <EventsManagementTab />
-      )}
-
-      {/* TAB 0.5: QUESTION IMPORT ENGINE */}
-      {activeTab === 'imports' && (
-        <QuestionImportTab onQuestionsPublished={loadTabData} />
-      )}
-
-      {/* TAB 1: DSA STUDIO */}
-      {activeTab === 'dsa' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Creator Form */}
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-white font-mono flex items-center space-x-2">
-              <Plus className="w-4 h-4 text-cyan-400" />
-              <span>AUTHOR DSA QUESTION</span>
-            </h3>
-            <form onSubmit={handleCreateDsa} className="space-y-3 font-sans text-xs">
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={dsaForm.title}
-                  onChange={(e) => setDsaForm({ ...dsaForm, title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  placeholder="e.g. Inverted Memory Traversal"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Problem Statement (Markdown)</label>
-                <textarea
-                  required
-                  rows={4}
-                  value={dsaForm.statement}
-                  onChange={(e) => setDsaForm({ ...dsaForm, statement: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  placeholder="Provide complete problem narrative and algorithm objectives..."
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Input Specification</label>
-                  <textarea
-                    required
-                    rows={2}
-                    value={dsaForm.input_spec}
-                    onChange={(e) => setDsaForm({ ...dsaForm, input_spec: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Output Specification</label>
-                  <textarea
-                    required
-                    rows={2}
-                    value={dsaForm.output_spec}
-                    onChange={(e) => setDsaForm({ ...dsaForm, output_spec: e.target.value })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-4 gap-3">
-                <div className="col-span-2">
-                  <label className="block text-slate-400 font-mono mb-1">Category</label>
-                  <select
-                    value={dsaForm.category}
-                    onChange={(e) => setDsaForm({ ...dsaForm, category: e.target.value })}
-                    className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  >
-                    <option value="Data Structures & Algorithms">Data Structures & Algorithms</option>
-                    <option value="Logic & Mathematical Puzzles">Logic & Mathematical Puzzles</option>
-                    <option value="Cryptographic Algorithms">Cryptographic Algorithms</option>
-                    <option value="Dynamic Programming & Greedy">Dynamic Programming & Greedy</option>
-                    <option value="Graph Theory & Networks">Graph Theory & Networks</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Difficulty</label>
-                  <select
-                    value={dsaForm.difficulty}
-                    onChange={(e) => setDsaForm({ ...dsaForm, difficulty: e.target.value })}
-                    className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Points</label>
-                  <input
-                    type="number"
-                    value={dsaForm.points}
-                    onChange={(e) => setDsaForm({ ...dsaForm, points: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Trusted Python 3 Reference Solution</label>
-                <textarea
-                  rows={4}
-                  value={dsaForm.reference_solution}
-                  onChange={(e) => setDsaForm({ ...dsaForm, reference_solution: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-cyan-300 font-mono text-xs"
-                  placeholder="# Python 3 reference solution..."
-                />
-              </div>
-
-              <div className="flex items-center space-x-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="cp_toggle"
-                  checked={dsaForm.allow_copy_paste}
-                  onChange={(e) => setDsaForm({ ...dsaForm, allow_copy_paste: e.target.checked })}
-                  className="rounded border-slate-800 bg-slate-950 text-cyan-500"
-                />
-                <label htmlFor="cp_toggle" className="text-slate-300 font-mono">
-                  Permit Clipboard Copy/Paste for Exam Candidates
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-4 py-2.5 rounded-xl font-bold font-mono text-slate-950 bg-cyan-400 hover:bg-cyan-300 transition-colors"
-              >
-                Publish Question Dossier
-              </button>
-            </form>
-          </div>
-
-          {/* Test Case Manager & Inspection */}
-          <div className="space-y-6">
-            <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
-              <h3 className="text-base font-bold text-white font-mono mb-3">
-                EXISTING DSA QUESTIONS ({dsaList.length})
-              </h3>
-              <div className="space-y-2 max-h-72 overflow-y-auto font-mono text-xs">
-                {dsaList.map(q => (
-                  <div
-                    key={q.id}
-                    className={`w-full p-2.5 rounded-lg border flex items-center justify-between transition-colors ${
-                      selectedDsaId === q.id
-                        ? 'bg-cyan-950/40 border-cyan-500 text-cyan-300'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleSelectDsa(q.id)}
-                      className="flex-1 text-left truncate mr-2"
-                    >
-                      <span className="font-semibold block truncate text-white">{q.title}</span>
-                      <span className="text-[10px] text-slate-400 block">{q.test_count} Tests • {q.points} pts • {q.difficulty}</span>
-                    </button>
-                    <div className="flex items-center space-x-1">
-                      <button
-                        type="button"
-                        onClick={() => handleSelectDsa(q.id)}
-                        className="p-1.5 rounded text-cyan-400 hover:bg-slate-800"
-                        title="Manage Test Cases"
-                      >
-                        <Settings className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteDSA(q.id, q.title)}
-                        className="p-1.5 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40"
-                        title="Delete Question"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+    <div className="flex-1 flex min-h-[calc(100vh-4rem)] bg-[#061329] text-[#F2F7FF] font-sans overflow-hidden">
+      
+      {/* =========================================================================
+          RESPONSIVE COLLAPSIBLE ADMIN SIDEBAR
+          ========================================================================= */}
+      <aside 
+        className={`bg-[#08172B] border-r border-[#18385E] flex flex-col transition-all duration-300 shrink-0 z-30 ${
+          sidebarCollapsed ? 'w-16' : 'w-64'
+        }`}
+      >
+        {/* Sidebar Header / Branding */}
+        <div className="p-4 border-b border-[#18385E] flex items-center justify-between">
+          {!sidebarCollapsed && (
+            <div className="flex items-center space-x-2">
+              <Shield className="w-5 h-5 text-[#00CFFF]" />
+              <div className="leading-none">
+                <span className="font-mono font-bold text-xs tracking-wider text-white block">ADMIN CONTROL</span>
+                <span className="text-[10px] font-mono text-[#00CFFF]">CyberAnzen Center</span>
               </div>
             </div>
+          )}
+          {sidebarCollapsed && (
+            <Shield className="w-5 h-5 text-[#00CFFF] mx-auto" />
+          )}
 
-            {selectedDsaDetail && (
-              <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-white font-mono">
-                    TEST CASE MANAGER: {selectedDsaDetail.title}
-                  </h4>
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="p-1 rounded-lg text-[#A9BCD6] hover:text-white hover:bg-[#102746] transition-colors"
+            title={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+          >
+            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Sidebar Navigation Links */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-6">
+          {navGroups.map(grp => (
+            <div key={grp.group} className="space-y-1">
+              {!sidebarCollapsed && (
+                <span className="px-3 text-[10px] font-mono text-slate-500 uppercase tracking-widest font-bold block mb-1">
+                  {grp.group}
+                </span>
+              )}
+              {grp.items.map(item => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id || (item.id === 'events' && activeTab === 'events_tab');
+                return (
                   <button
-                    onClick={handleValidateReference}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono bg-purple-950/60 text-purple-300 border border-purple-800 hover:bg-purple-900/40"
+                    key={item.id}
+                    onClick={() => handleSelectTab(item.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-mono transition-all ${
+                      isActive
+                        ? 'bg-[#102746] text-[#00CFFF] font-bold border border-[#00CFFF]/50 shadow-[0_0_15px_rgba(0,207,255,0.15)]'
+                        : 'text-[#A9BCD6] hover:text-white hover:bg-[#0B1D38] border border-transparent'
+                    }`}
+                    title={sidebarCollapsed ? item.label : undefined}
                   >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Validate Reference</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2 max-h-40 overflow-y-auto font-mono text-xs">
-                  {selectedDsaDetail.test_cases?.map(tc => (
-                    <div key={tc.id} className="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between">
-                      <span className="text-slate-300">#{tc.index} [{tc.type}]</span>
-                      <button
-                        onClick={async () => {
-                          await adminService.deleteDSATestCase(tc.id);
-                          const updated = await adminService.getDSA(selectedDsaId);
-                          setSelectedDsaDetail(updated);
-                        }}
-                        className="text-rose-400 hover:underline"
-                      >
-                        Delete
-                      </button>
+                    <div className="flex items-center space-x-2.5">
+                      <Icon className="w-4 h-4 shrink-0" />
+                      {!sidebarCollapsed && <span>{item.label}</span>}
                     </div>
-                  ))}
-                </div>
 
-                <form onSubmit={handleAddTestCase} className="space-y-2 pt-2 border-t border-slate-800 font-mono text-xs">
-                  <span className="text-[10px] text-slate-400 uppercase block">Add Testcase</span>
-                  <select
-                    value={tcType}
-                    onChange={(e) => setTcType(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-slate-300"
-                  >
-                    <option value="public_sample">Public Sample (Visible to cadets)</option>
-                    <option value="hidden_test">Hidden Test (Strict evaluation only)</option>
-                  </select>
-                  <textarea
-                    required
-                    rows={2}
-                    placeholder="Standard Input..."
-                    value={tcInput}
-                    onChange={(e) => setTcInput(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-slate-300"
-                  />
-                  <textarea
-                    required
-                    rows={2}
-                    placeholder="Expected Output..."
-                    value={tcOutput}
-                    onChange={(e) => setTcOutput(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-slate-950 border border-slate-800 rounded text-slate-300"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700"
-                  >
-                    + Append Test Case
+                    {!sidebarCollapsed && item.badge !== undefined && item.badge > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#061329] text-[#00CFFF] border border-[#18385E]">
+                        {item.badge}
+                      </span>
+                    )}
                   </button>
-                </form>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        {/* Current Admin User footer */}
+        <div className="p-3 border-t border-[#18385E] bg-[#061329]">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#087FFF] to-[#00CFFF] text-slate-950 font-bold flex items-center justify-center shrink-0 text-xs">
+              {user?.username ? user.username.slice(0, 2).toUpperCase() : 'AD'}
+            </div>
+            {!sidebarCollapsed && (
+              <div className="overflow-hidden leading-tight">
+                <span className="text-xs font-bold text-white block truncate">{user?.username || 'Administrator'}</span>
+                <span className="text-[10px] text-emerald-400 font-mono capitalize">{user?.role || 'Super Admin'}</span>
               </div>
             )}
           </div>
         </div>
-      )}
+      </aside>
 
-      {/* TAB 2: MCQ STUDIO */}
-      {activeTab === 'mcq' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-white font-mono flex items-center space-x-2">
-              <Plus className="w-4 h-4 text-purple-400" />
-              <span>AUTHOR MCQ QUIZ</span>
-            </h3>
-            <form onSubmit={handleCreateMcq} className="space-y-3 font-sans text-xs">
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={mcqForm.title}
-                  onChange={(e) => setMcqForm({ ...mcqForm, title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  placeholder="e.g. TCP SYN Flood & Half-Open Sockets"
-                />
-              </div>
+      {/* =========================================================================
+          MAIN CENTRAL ADMIN WORKSPACE
+          ========================================================================= */}
+      <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-8 space-y-6">
 
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Question Prompt</label>
-                <textarea
-                  required
-                  rows={3}
-                  value={mcqForm.prompt}
-                  onChange={(e) => setMcqForm({ ...mcqForm, prompt: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-slate-400 font-mono">Answer Options & Correct Key</label>
-                {mcqForm.options.map((opt, idx) => (
-                  <div key={idx} className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={opt.is_correct}
-                      onChange={(e) => {
-                        const newOpts = [...mcqForm.options];
-                        newOpts[idx].is_correct = e.target.checked;
-                        setMcqForm({ ...mcqForm, options: newOpts });
-                      }}
-                      className="rounded bg-slate-950 border-slate-800 text-purple-500"
-                    />
-                    <input
-                      type="text"
-                      required
-                      placeholder={`Option ${idx + 1}...`}
-                      value={opt.text}
-                      onChange={(e) => {
-                        const newOpts = [...mcqForm.options];
-                        newOpts[idx].text = e.target.value;
-                        setMcqForm({ ...mcqForm, options: newOpts });
-                      }}
-                      className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono text-xs"
-                    />
-                  </div>
-                ))}
-              </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const nextId = mcqForm.options.length + 1;
-                  setMcqForm({
-                    ...mcqForm,
-                    options: [...mcqForm.options, { id: nextId, text: '', is_correct: false, explanation: '' }]
-                  });
-                }}
-                className="text-xs text-purple-400 hover:underline font-mono"
-              >
-                + Add Another Option
-              </button>
-
-              <div className="grid grid-cols-2 gap-3 pt-2">
+        {/* =======================================================================
+            VIEW 1: ADMIN FIRST SCREEN // DASHBOARD OVERVIEW
+            ======================================================================= */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-8 animate-fade-in">
+            {/* Top Welcome & Quick Actions Grid */}
+            <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
-                  <label className="block text-slate-400 font-mono mb-1">Points (+)</label>
-                  <input
-                    type="number"
-                    value={mcqForm.points_positive}
-                    onChange={(e) => setMcqForm({ ...mcqForm, points_positive: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
+                  <span className="text-xs font-mono text-[#00CFFF] uppercase tracking-wider">COMMAND CENTER</span>
+                  <h1 className="text-xl md:text-2xl font-bold font-mono text-white mt-0.5">
+                    CyberAnzen Arena — Control Center
+                  </h1>
+                  <p className="text-xs text-[#A9BCD6] mt-1">
+                    Manage tournaments, design competition templates, evaluate real-time sandboxed code, and inspect forensic submissions.
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Penalty (-)</label>
-                  <input
-                    type="number"
-                    value={mcqForm.points_negative}
-                    onChange={(e) => setMcqForm({ ...mcqForm, points_negative: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
-                </div>
+
+                <button
+                  onClick={() => setWizardOpen(true)}
+                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl text-xs font-mono font-bold text-slate-950 bg-gradient-to-r from-[#00CFFF] to-[#087FFF] hover:opacity-95 shadow-[0_0_20px_rgba(0,207,255,0.4)] transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Create New Event</span>
+                </button>
               </div>
 
-              <button
-                type="submit"
-                className="w-full mt-4 py-2.5 rounded-xl font-bold font-mono text-slate-950 bg-purple-400 hover:bg-purple-300 transition-colors"
-              >
-                Publish MCQ Assessment
-              </button>
-            </form>
+              {/* 7 Required Quick Action Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-3 border-t border-[#18385E]">
+                <button
+                  onClick={() => setWizardOpen(true)}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <Plus className="w-4 h-4 text-[#00CFFF] mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Create New Event</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">8-Step Wizard</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectTab('events')}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <Calendar className="w-4 h-4 text-emerald-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Manage Events</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">{metrics.eventsCount} tournaments</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectTab('questions')}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <Code2 className="w-4 h-4 text-purple-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Questions &amp; Challenges</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">Author DSA, CTF, MCQ</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectTab('competition_dev')}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <Cpu className="w-4 h-4 text-amber-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Competition Dev Studio</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">Templates &amp; Layouts</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectTab('users')}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <Users className="w-4 h-4 text-[#00CFFF] mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Participants &amp; Teams</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">{metrics.usersCount} Cadets</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectTab('submissions')}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <FileText className="w-4 h-4 text-rose-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Submissions &amp; Results</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">Judge Diagnostics</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelectTab('settings')}
+                  className="p-3.5 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF] transition-all text-left group"
+                >
+                  <Settings className="w-4 h-4 text-slate-400 mb-2 group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-xs text-white block">Platform Settings</span>
+                  <span className="text-[10px] text-[#A9BCD6] block mt-0.5">Security &amp; Sandboxes</span>
+                </button>
+              </div>
+            </div>
+
+            {/* High-Level Metric Tiles */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-lg">
+                <span className="text-[10px] font-mono text-[#A9BCD6] uppercase block">Active Competitions</span>
+                <span className="text-2xl font-bold font-mono text-emerald-400 mt-1 block">
+                  {metrics.activeEventsCount} <span className="text-xs text-slate-400 font-normal">/ {metrics.eventsCount} total</span>
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-lg">
+                <span className="text-[10px] font-mono text-[#A9BCD6] uppercase block">Question Bank Items</span>
+                <span className="text-2xl font-bold font-mono text-[#00CFFF] mt-1 block">
+                  {metrics.dsaCount + metrics.ctfCount + metrics.mcqCount}
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono">
+                  {metrics.dsaCount} DSA • {metrics.ctfCount} CTF • {metrics.mcqCount} MCQ
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-lg">
+                <span className="text-[10px] font-mono text-[#A9BCD6] uppercase block">Registered Operatives</span>
+                <span className="text-2xl font-bold font-mono text-white mt-1 block">
+                  {metrics.usersCount}
+                </span>
+              </div>
+              <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-lg">
+                <span className="text-[10px] font-mono text-[#A9BCD6] uppercase block">Judge Submissions</span>
+                <span className="text-2xl font-bold font-mono text-purple-400 mt-1 block">
+                  {metrics.submissionsCount}
+                </span>
+              </div>
+            </div>
+
+            {/* Recent Audit Stream */}
+            <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4 font-mono text-xs">
+              <div className="flex items-center justify-between border-b border-[#18385E] pb-3">
+                <span className="font-bold text-white flex items-center space-x-2">
+                  <Database className="w-4 h-4 text-[#00CFFF]" />
+                  <span>Recent Security &amp; Tournament Audit Trail</span>
+                </span>
+                <button
+                  onClick={() => handleSelectTab('audits')}
+                  className="text-[10px] text-[#00CFFF] hover:underline"
+                >
+                  View Full Logs →
+                </button>
+              </div>
+
+              {auditLogs.length === 0 ? (
+                <div className="p-4 text-center text-[#A9BCD6]">No security incidents or audit entries logged.</div>
+              ) : (
+                <div className="space-y-2">
+                  {auditLogs.slice(0, 5).map((log, idx) => (
+                    <div key={idx} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex justify-between items-center text-[11px]">
+                      <div>
+                        <span className="text-[#00CFFF] font-bold">{log.action}</span>
+                        <span className="text-slate-400 ml-2">by {log.actor_username || 'SYSTEM'}</span>
+                        <span className="text-slate-500 ml-2">({log.entity_type} #{log.entity_id})</span>
+                      </div>
+                      <span className="text-slate-500 text-[10px]">{log.created_at ? new Date(log.created_at).toLocaleTimeString() : 'Recent'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+        )}
 
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
-            <h3 className="text-base font-bold text-white font-mono mb-4">
-              ACTIVE MCQS ({mcqList.length})
-            </h3>
-            <div className="space-y-3 max-h-[500px] overflow-y-auto font-mono text-xs">
-              {mcqList.map(m => (
-                <div key={m.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white truncate max-w-[70%]">{m.title}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-emerald-400">+{m.points_positive} pts</span>
+        {/* =======================================================================
+            VIEW 2: ALL EVENTS
+            ======================================================================= */}
+        {activeTab === 'events' && (
+          <EventsManagementTab
+            onOpenWizard={() => setWizardOpen(true)}
+            preselectedTemplate={preselectedTemplate}
+          />
+        )}
+
+        {/* =======================================================================
+            VIEW 3: COMPETITION DEVELOPMENT STUDIO
+            ======================================================================= */}
+        {activeTab === 'competition_dev' && (
+          <CompetitionDevelopmentTab
+            onCreateEventWithTemplate={handleLaunchEventWithTemplate}
+          />
+        )}
+
+        {/* =======================================================================
+            VIEW 4: QUESTION BANK (DSA, CTF, MCQ STUDIOS)
+            ======================================================================= */}
+        {activeTab === 'questions' && (
+          <div className="space-y-6">
+            <div className="flex border-b border-[#18385E] space-x-4 text-xs font-mono">
+              <button
+                onClick={() => setQuestionSubTab('dsa')}
+                className={`pb-2 border-b-2 font-bold ${questionSubTab === 'dsa' ? 'border-[#00CFFF] text-[#00CFFF]' : 'border-transparent text-[#A9BCD6] hover:text-white'}`}
+              >
+                DSA Problem Studio ({dsaList.length})
+              </button>
+              <button
+                onClick={() => setQuestionSubTab('ctf')}
+                className={`pb-2 border-b-2 font-bold ${questionSubTab === 'ctf' ? 'border-[#00CFFF] text-[#00CFFF]' : 'border-transparent text-[#A9BCD6] hover:text-white'}`}
+              >
+                CTF Challenge Studio ({ctfList.length})
+              </button>
+              <button
+                onClick={() => setQuestionSubTab('mcq')}
+                className={`pb-2 border-b-2 font-bold ${questionSubTab === 'mcq' ? 'border-[#00CFFF] text-[#00CFFF]' : 'border-transparent text-[#A9BCD6] hover:text-white'}`}
+              >
+                MCQ Question Studio ({mcqList.length})
+              </button>
+            </div>
+
+            {/* Sub-tab 1: DSA Authoring */}
+            {questionSubTab === 'dsa' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] space-y-4">
+                  <h4 className="font-bold text-white font-mono text-sm flex items-center space-x-2">
+                    <Plus className="w-4 h-4 text-[#00CFFF]" />
+                    <span>AUTHOR DSA CODING QUESTION</span>
+                  </h4>
+                  <form onSubmit={handleCreateDsa} className="space-y-3 font-sans text-xs">
+                    <div>
+                      <label className="block text-[#A9BCD6] font-mono mb-1">Title *</label>
+                      <input
+                        type="text"
+                        required
+                        value={dsaForm.title}
+                        onChange={(e) => setDsaForm({ ...dsaForm, title: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        placeholder="e.g. Reverse Binary Tree Inversion"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#A9BCD6] font-mono mb-1">Problem Statement (Markdown) *</label>
+                      <textarea
+                        required
+                        rows={4}
+                        value={dsaForm.statement}
+                        onChange={(e) => setDsaForm({ ...dsaForm, statement: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Input Format *</label>
+                        <textarea
+                          required
+                          rows={2}
+                          value={dsaForm.input_spec}
+                          onChange={(e) => setDsaForm({ ...dsaForm, input_spec: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Output Format *</label>
+                        <textarea
+                          required
+                          rows={2}
+                          value={dsaForm.output_spec}
+                          onChange={(e) => setDsaForm({ ...dsaForm, output_spec: e.target.value })}
+                          className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Difficulty</label>
+                        <select
+                          value={dsaForm.difficulty}
+                          onChange={(e) => setDsaForm({ ...dsaForm, difficulty: e.target.value })}
+                          className="w-full px-2 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        >
+                          <option value="Beginner">Beginner</option>
+                          <option value="Intermediate">Intermediate</option>
+                          <option value="Advanced">Advanced</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Points</label>
+                        <input
+                          type="number"
+                          value={dsaForm.points}
+                          onChange={(e) => setDsaForm({ ...dsaForm, points: parseInt(e.target.value) || 100 })}
+                          className="w-full px-2 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Time Limit (ms)</label>
+                        <input
+                          type="number"
+                          value={dsaForm.time_limit_ms}
+                          onChange={(e) => setDsaForm({ ...dsaForm, time_limit_ms: parseInt(e.target.value) || 2000 })}
+                          className="w-full px-2 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-2">
                       <button
-                        type="button"
-                        onClick={() => handleDeleteMCQ(m.id, m.title)}
-                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors"
-                        title="Delete MCQ Question"
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-[#00CFFF] hover:bg-cyan-300 text-slate-950 font-mono font-bold"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        Publish to Bank
                       </button>
                     </div>
-                  </div>
-                  <p className="text-slate-400 font-sans text-xs">{m.prompt}</p>
-                  <div className="text-[10px] text-slate-500 flex items-center space-x-2 pt-1 font-mono">
-                    <span className="px-1.5 py-0.5 rounded bg-slate-900 text-purple-400">{m.category}</span>
-                    <span>{m.difficulty}</span>
-                    <span>{m.options?.length || 0} options</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: CTF STUDIO */}
-      {activeTab === 'ctf' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-white font-mono flex items-center space-x-2">
-              <Plus className="w-4 h-4 text-cyan-400" />
-              <span>AUTHOR CTF CHALLENGE</span>
-            </h3>
-            <form onSubmit={handleCreateCtf} className="space-y-3 font-sans text-xs">
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Challenge Title</label>
-                <input
-                  type="text"
-                  required
-                  value={ctfForm.title}
-                  onChange={(e) => setCtfForm({ ...ctfForm, title: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  placeholder="e.g. Broken JWT Infiltration"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Mission Briefing (Markdown)</label>
-                <textarea
-                  required
-                  rows={4}
-                  value={ctfForm.description}
-                  onChange={(e) => setCtfForm({ ...ctfForm, description: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Category</label>
-                  <select
-                    value={ctfForm.category}
-                    onChange={(e) => setCtfForm({ ...ctfForm, category: e.target.value })}
-                    className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  >
-                    <option value="puzzle">Logic Puzzle & Cryptic Mystery</option>
-                    <option value="web">Web Exploitation</option>
-                    <option value="crypto">Cryptography</option>
-                    <option value="forensics">Digital Forensics</option>
-                    <option value="pwn">Binary Exploitation</option>
-                    <option value="reverse">Reverse Engineering</option>
-                    <option value="osint">OSINT</option>
-                    <option value="network">Network Analysis</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Difficulty</label>
-                  <select
-                    value={ctfForm.difficulty}
-                    onChange={(e) => setCtfForm({ ...ctfForm, difficulty: e.target.value })}
-                    className="w-full px-2 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  >
-                    <option value="Beginner">Beginner</option>
-                    <option value="Intermediate">Intermediate</option>
-                    <option value="Advanced">Advanced</option>
-                    <option value="Expert">Expert</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-400 font-mono mb-1">Points</label>
-                  <input
-                    type="number"
-                    value={ctfForm.points}
-                    onChange={(e) => setCtfForm({ ...ctfForm, points: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-mono mb-1">Static Flag Secret (Optional if dynamic)</label>
-                <input
-                  type="text"
-                  value={ctfForm.static_flag}
-                  onChange={(e) => setCtfForm({ ...ctfForm, static_flag: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-cyan-300 font-mono"
-                  placeholder="FLAG{CYBERANZEN_SECRET}"
-                />
-              </div>
-
-              {/* Docker Lab toggle */}
-              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="lab_toggle"
-                    checked={ctfForm.has_docker_lab}
-                    onChange={(e) => setCtfForm({ ...ctfForm, has_docker_lab: e.target.checked })}
-                    className="rounded bg-slate-900 border-slate-700 text-cyan-500"
-                  />
-                  <label htmlFor="lab_toggle" className="text-white font-mono font-bold text-xs">
-                    Attach Interactive Docker Lab Environment
-                  </label>
+                  </form>
                 </div>
 
-                {ctfForm.has_docker_lab && (
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    <input
-                      type="text"
-                      placeholder="Docker Image (e.g. alpine:latest)"
-                      value={ctfForm.docker_image}
-                      onChange={(e) => setCtfForm({ ...ctfForm, docker_image: e.target.value })}
-                      className="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded text-xs text-white font-mono"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Exposed Port (e.g. 80)"
-                      value={ctfForm.lab_port_exposed}
-                      onChange={(e) => setCtfForm({ ...ctfForm, lab_port_exposed: parseInt(e.target.value) })}
-                      className="px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded text-xs text-white font-mono"
-                    />
-                  </div>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-4 py-2.5 rounded-xl font-bold font-mono text-slate-950 bg-cyan-400 hover:bg-cyan-300 transition-colors"
-              >
-                Publish CTF Target
-              </button>
-            </form>
-          </div>
-
-          <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
-            <h3 className="text-base font-bold text-white font-mono mb-4">
-              ACTIVE CTF CHALLENGES ({ctfList.length})
-            </h3>
-            <div className="space-y-3 max-h-[500px] overflow-y-auto font-mono text-xs">
-              {ctfList.map(c => (
-                <div key={c.id} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white truncate max-w-[70%]">{c.title}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-cyan-400">{c.points} pts</span>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCTF(c.id, c.title)}
-                        className="p-1 rounded text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 transition-colors"
-                        title="Delete CTF Challenge"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                {/* DSA List & Test Cases */}
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E]">
+                    <h4 className="text-white font-mono font-bold text-xs uppercase mb-3">Published DSA Bank ({dsaList.length})</h4>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {dsaList.map(q => (
+                        <div
+                          key={q.id}
+                          className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between"
+                        >
+                          <div>
+                            <span className="font-bold text-white text-xs">{q.title}</span>
+                            <span className="text-[10px] text-[#A9BCD6] ml-2 font-mono">[{q.difficulty} • {q.points}pts]</span>
+                          </div>
+                          <div className="space-x-2">
+                            <button
+                              onClick={() => handleSelectDsa(q.id)}
+                              className="px-2 py-1 bg-[#102746] text-[#00CFFF] rounded text-[10px] font-mono"
+                            >
+                              Test Cases
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDSA(q.id, q.title)}
+                              className="p-1 text-rose-400 hover:text-rose-300"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 inline" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 text-[10px] text-slate-400">
-                    <span className="uppercase px-1.5 py-0.5 rounded bg-slate-900 text-cyan-400">{c.category}</span>
-                    <span>{c.difficulty}</span>
-                    {c.has_docker_lab && <span className="text-emerald-400 font-semibold">• Docker Lab</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* TAB 4: CADETS & SQUADS */}
-      {activeTab === 'users' && (
-        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
-          <h3 className="text-base font-bold text-white font-mono mb-4">
-            CADET & OPERATIVE GOVERNANCE ({userList.length})
-          </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left font-mono text-xs">
-              <thead className="border-b border-slate-800 text-slate-400">
-                <tr>
-                  <th className="pb-3">ID</th>
-                  <th className="pb-3">Username</th>
-                  <th className="pb-3">Role</th>
-                  <th className="pb-3">Points</th>
-                  <th className="pb-3">Squad</th>
-                  <th className="pb-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {userList.map(u => (
-                  <tr key={u.id} className="text-slate-300">
-                    <td className="py-3">{u.id}</td>
-                    <td className="py-3 font-bold text-white">{u.username}</td>
-                    <td className="py-3">
-                      <span className="px-2 py-0.5 rounded bg-slate-800 text-cyan-400 text-[10px]">
-                        {u.role}
-                      </span>
-                    </td>
-                    <td className="py-3 text-cyan-400 font-bold">{u.points}</td>
-                    <td className="py-3">{u.team ? u.team.team_name : 'Solo'}</td>
-                    <td className="py-3">
-                      <button
-                        onClick={() => setDeleteTarget(u)}
-                        className="text-rose-400 hover:text-rose-300 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Delete User Modal */}
-          {deleteTarget && (
-            <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-rose-800/80 shadow-2xl space-y-4">
-                <div className="flex items-center space-x-2 text-rose-400 font-mono font-bold">
-                  <AlertTriangle className="w-5 h-5" />
-                  <span>CONFIRM CADET TERMINATION</span>
-                </div>
-                <p className="text-xs text-slate-300 font-sans leading-relaxed">
-                  Permanently deleting account ID {deleteTarget.id} (callsign: <span className="font-mono font-bold text-white">{deleteTarget.username}</span>).
-                  Type the exact username below to execute cascade wipe:
-                </p>
-                <input
-                  type="text"
-                  placeholder={deleteTarget.username}
-                  value={confirmUsername}
-                  onChange={(e) => setConfirmUsername(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-sm text-white font-mono"
-                />
-                <div className="flex items-center justify-end space-x-3 pt-2">
-                  <button
-                    onClick={() => { setDeleteTarget(null); setConfirmUsername(''); }}
-                    className="px-4 py-2 rounded-lg text-xs font-mono text-slate-400 hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDeleteUser}
-                    disabled={confirmUsername !== deleteTarget.username}
-                    className="px-4 py-2 rounded-lg text-xs font-mono font-bold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-40"
-                  >
-                    Confirm Wipe
-                  </button>
+                  {selectedDsaDetail && (
+                    <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#00CFFF]/40 space-y-3 font-mono text-xs">
+                      <h4 className="font-bold text-white text-xs">Test Cases for: {selectedDsaDetail.title}</h4>
+                      <form onSubmit={handleAddTestCase} className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <textarea
+                            placeholder="Input Data"
+                            rows={2}
+                            required
+                            value={tcInput}
+                            onChange={(e) => setTcInput(e.target.value)}
+                            className="p-2 bg-[#061329] border border-[#18385E] rounded text-white"
+                          />
+                          <textarea
+                            placeholder="Expected Output"
+                            rows={2}
+                            required
+                            value={tcOutput}
+                            onChange={(e) => setTcOutput(e.target.value)}
+                            className="p-2 bg-[#061329] border border-[#18385E] rounded text-white"
+                          />
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <select
+                            value={tcType}
+                            onChange={(e) => setTcType(e.target.value)}
+                            className="bg-[#061329] border border-[#18385E] rounded p-1 text-white text-xs"
+                          >
+                            <option value="public_sample">Public Sample</option>
+                            <option value="hidden_test">Hidden Test Case</option>
+                          </select>
+                          <button
+                            type="submit"
+                            className="px-3 py-1 bg-[#087FFF] text-white rounded font-bold"
+                          >
+                            Add Test Case
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
 
-      {/* TAB: SUBMISSIONS & REJUDGING */}
-      {activeTab === 'submissions' && (
-        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-            <div>
-              <h3 className="text-base font-bold text-white font-mono">
-                CENTRAL SUBMISSIONS &amp; REJUDGING QUEUE ({submissionList.length})
-              </h3>
-              <p className="text-xs text-slate-400 font-sans mt-0.5">
-                Inspect cadet submissions across tournaments and re-evaluate code against sandboxes.
-              </p>
-            </div>
-            <button
-              onClick={() => {
-                adminService.listSubmissions()
-                  .then(data => setSubmissionList(data.submissions || []))
-                  .catch(() => {});
-              }}
-              className="px-3 py-1.5 rounded-lg text-xs font-mono bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700"
-            >
-              Refresh Submissions
-            </button>
+            {/* Sub-tab 2: CTF Challenges */}
+            {questionSubTab === 'ctf' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] space-y-4">
+                  <h4 className="font-bold text-white font-mono text-sm flex items-center space-x-2">
+                    <Flag className="w-4 h-4 text-emerald-400" />
+                    <span>AUTHOR CTF CHALLENGE</span>
+                  </h4>
+                  <form onSubmit={handleCreateCtf} className="space-y-3 font-sans text-xs">
+                    <div>
+                      <label className="block text-[#A9BCD6] font-mono mb-1">Challenge Title *</label>
+                      <input
+                        type="text"
+                        required
+                        value={ctfForm.title}
+                        onChange={(e) => setCtfForm({ ...ctfForm, title: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[#A9BCD6] font-mono mb-1">Description / Brief *</label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={ctfForm.description}
+                        onChange={(e) => setCtfForm({ ...ctfForm, description: e.target.value })}
+                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Category</label>
+                        <select
+                          value={ctfForm.category}
+                          onChange={(e) => setCtfForm({ ...ctfForm, category: e.target.value })}
+                          className="w-full px-2 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        >
+                          <option value="web">Web Exploitation</option>
+                          <option value="forensics">Digital Forensics</option>
+                          <option value="reverse">Reverse Engineering</option>
+                          <option value="crypto">Cryptography</option>
+                          <option value="puzzle">Logic Puzzle</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Points</label>
+                        <input
+                          type="number"
+                          value={ctfForm.points}
+                          onChange={(e) => setCtfForm({ ...ctfForm, points: parseInt(e.target.value) || 100 })}
+                          className="w-full px-2 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[#A9BCD6] font-mono mb-1">Flag Value *</label>
+                        <input
+                          type="text"
+                          required
+                          value={ctfForm.static_flag}
+                          onChange={(e) => setCtfForm({ ...ctfForm, static_flag: e.target.value })}
+                          placeholder="CYBER{...}"
+                          className="w-full px-2 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-mono font-bold"
+                      >
+                        Publish CTF Challenge
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* CTF List */}
+                <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E]">
+                  <h4 className="text-white font-mono font-bold text-xs uppercase mb-3">Published CTF Challenges ({ctfList.length})</h4>
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {ctfList.map(c => (
+                      <div key={c.id} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between font-mono text-xs">
+                        <div>
+                          <span className="font-bold text-white">{c.title}</span>
+                          <span className="text-[10px] text-emerald-400 ml-2">[{c.category} • {c.points}pts]</span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteCTF(c.id, c.title)}
+                          className="p-1 text-rose-400 hover:text-rose-300"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tab 3: MCQ Studio */}
+            {questionSubTab === 'mcq' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] space-y-4">
+                  <h4 className="font-bold text-white font-mono text-sm flex items-center space-x-2">
+                    <HelpCircle className="w-4 h-4 text-amber-400" />
+                    <span>AUTHOR MCQ QUIZ QUESTION</span>
+                  </h4>
+                  <form onSubmit={handleCreateMcq} className="space-y-3 font-sans text-xs">
+                    <div>
+                      <label className="block text-[#A9BCD6] font-mono mb-1">Question Prompt *</label>
+                      <textarea
+                        required
+                        rows={3}
+                        value={mcqForm.prompt}
+                        onChange={(e) => setMcqForm({ ...mcqForm, prompt: e.target.value, title: e.target.value.slice(0, 50) })}
+                        className="w-full px-3 py-2 bg-[#061329] border border-[#18385E] rounded-lg text-white font-mono"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-[#A9BCD6] font-mono">Answer Options:</label>
+                      {mcqForm.options.map((opt, idx) => (
+                        <div key={idx} className="flex items-center space-x-2">
+                          <input
+                            type="radio"
+                            name="correct_option"
+                            checked={opt.is_correct}
+                            onChange={() => {
+                              const updated = mcqForm.options.map((o, i) => ({ ...o, is_correct: i === idx }));
+                              setMcqForm({ ...mcqForm, options: updated });
+                            }}
+                          />
+                          <input
+                            type="text"
+                            required
+                            placeholder={`Option #${idx + 1}`}
+                            value={opt.text}
+                            onChange={(e) => {
+                              const updated = [...mcqForm.options];
+                              updated[idx].text = e.target.value;
+                              setMcqForm({ ...mcqForm, options: updated });
+                            }}
+                            className="flex-1 px-3 py-1.5 bg-[#061329] border border-[#18385E] rounded text-white"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-end pt-2">
+                      <button
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-mono font-bold"
+                      >
+                        Publish MCQ
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* MCQ List */}
+                <div className="p-4 rounded-2xl bg-[#0B1D38] border border-[#18385E]">
+                  <h4 className="text-white font-mono font-bold text-xs uppercase mb-3">Published MCQs ({mcqList.length})</h4>
+                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                    {mcqList.map(m => (
+                      <div key={m.id} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex items-center justify-between font-mono text-xs">
+                        <div>
+                          <span className="font-bold text-white">{m.title || m.prompt?.slice(0, 40)}</span>
+                          <span className="text-[10px] text-amber-400 ml-2">[{m.points_positive}pts]</span>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteMCQ(m.id, m.title || `MCQ #${m.id}`)}
+                          className="p-1 text-rose-400 hover:text-rose-300"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+        )}
 
-          {submissionList.length === 0 ? (
-            <div className="py-12 text-center text-slate-500 font-mono text-xs">
-              No submissions recorded across the arena yet.
-            </div>
-          ) : (
+        {/* =======================================================================
+            VIEW 5: QUESTION IMPORTS
+            ======================================================================= */}
+        {activeTab === 'imports' && (
+          <QuestionImportTab onQuestionsPublished={() => loadTabData('questions')} />
+        )}
+
+        {/* =======================================================================
+            VIEW 6: PARTICIPANTS / CADETS
+            ======================================================================= */}
+        {activeTab === 'users' && (
+          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+            <h3 className="font-mono font-bold text-sm text-white flex items-center space-x-2">
+              <Users className="w-4 h-4 text-[#00CFFF]" />
+              <span>AUTHENTICATED CADETS &amp; ROLES ({userList.length})</span>
+            </h3>
             <div className="overflow-x-auto">
-              <table className="w-full text-left font-mono text-xs">
-                <thead className="bg-slate-950 text-slate-400 text-[10px] uppercase border-b border-slate-800">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-[#08172B] text-[#A9BCD6] uppercase text-[10px] border-b border-[#18385E]">
                   <tr>
-                    <th className="p-3">ID</th>
+                    <th className="p-3">Cadet ID</th>
+                    <th className="p-3">Username</th>
+                    <th className="p-3">Email</th>
+                    <th className="p-3">Role</th>
+                    <th className="p-3">Points</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#18385E]/60">
+                  {userList.map(u => (
+                    <tr key={u.id} className="hover:bg-[#102746]/40">
+                      <td className="p-3 text-slate-400">#{u.id}</td>
+                      <td className="p-3 text-white font-bold">{u.username}</td>
+                      <td className="p-3 text-[#A9BCD6]">{u.email}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold ${
+                          u.role === 'super_admin' ? 'bg-rose-950 text-rose-400' :
+                          u.role === 'admin' ? 'bg-purple-950 text-purple-400' : 'bg-slate-800 text-slate-300'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="p-3 text-[#00CFFF] font-bold">{u.points || 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* =======================================================================
+            VIEW 7: SUBMISSIONS & REJUDGE
+            ======================================================================= */}
+        {activeTab === 'submissions' && (
+          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+            <h3 className="font-mono font-bold text-sm text-white flex items-center space-x-2">
+              <FileText className="w-4 h-4 text-purple-400" />
+              <span>JUDGE SUBMISSIONS &amp; SANDBOX RE-EVALUATION ({submissionList.length})</span>
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-[#08172B] text-[#A9BCD6] uppercase text-[10px] border-b border-[#18385E]">
+                  <tr>
+                    <th className="p-3">Sub ID</th>
                     <th className="p-3">Cadet</th>
-                    <th className="p-3">Challenge / Target</th>
-                    <th className="p-3">Lang</th>
+                    <th className="p-3">Type</th>
+                    <th className="p-3">Target</th>
                     <th className="p-3">Verdict</th>
                     <th className="p-3">Runtime</th>
-                    <th className="p-3">Points</th>
-                    <th className="p-3">Time</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-[#18385E]/60">
                   {submissionList.map(sub => (
-                    <tr key={sub.id} className="hover:bg-slate-800/30">
+                    <tr key={sub.id} className="hover:bg-[#102746]/40">
                       <td className="p-3 text-slate-400">#{sub.id}</td>
-                      <td className="p-3 text-white font-bold">{sub.username}</td>
-                      <td className="p-3 text-slate-300">{sub.question_title}</td>
-                      <td className="p-3 text-cyan-400 uppercase">{sub.language}</td>
+                      <td className="p-3 text-white font-bold">{sub.user_username || `User #${sub.user_id}`}</td>
+                      <td className="p-3 uppercase text-[#00CFFF]">{sub.submission_type}</td>
+                      <td className="p-3 text-[#A9BCD6]">{sub.case_id || sub.target_id}</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          sub.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
-                          sub.verdict === 'WRONG_ANSWER' ? 'bg-rose-950 text-rose-400 border border-rose-800' :
-                          'bg-amber-950 text-amber-400 border border-amber-800'
+                          sub.verdict === 'ACCEPTED' ? 'bg-emerald-950 text-emerald-400' : 'bg-rose-950 text-rose-400'
                         }`}>
                           {sub.verdict}
                         </span>
                       </td>
-                      <td className="p-3 text-slate-400">{sub.execution_time_ms ? `${sub.execution_time_ms}ms` : '—'}</td>
-                      <td className="p-3 text-emerald-400 font-bold">+{sub.points_awarded || 0}</td>
-                      <td className="p-3 text-slate-400">{new Date(sub.created_at).toLocaleTimeString()}</td>
+                      <td className="p-3 text-slate-400">{sub.execution_time_ms ? `${sub.execution_time_ms} ms` : '-'}</td>
                       <td className="p-3 text-right">
                         <button
-                          disabled={rejudgingId === sub.id}
-                          onClick={async () => {
-                            setRejudgingId(sub.id);
-                            try {
-                              const res = await adminService.rejudgeSubmission(sub.id);
-                              alert(`Rejudged #${sub.id}: ${res.old_verdict} -> ${res.new_verdict}`);
-                              const refreshed = await adminService.listSubmissions();
-                              setSubmissionList(refreshed.submissions || []);
-                            } catch (err) {
-                              alert('Rejudge failed: ' + (err.response?.data?.detail || err.message));
-                            } finally {
-                              setRejudgingId(null);
-                            }
-                          }}
-                          className="px-2.5 py-1 rounded bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 text-cyan-300 font-bold text-[10px] disabled:opacity-40"
+                          onClick={() => handleRejudge(sub.id)}
+                          className="px-2 py-1 rounded bg-[#102746] hover:bg-[#18385E] text-[#00CFFF] text-[10px]"
                         >
-                          {rejudgingId === sub.id ? 'Rejudging...' : 'Rejudge'}
+                          Rejudge
                         </button>
                       </td>
                     </tr>
@@ -1059,244 +1101,72 @@ export default function AdminStudio() {
                 </tbody>
               </table>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* TAB: SITE CONTENT & CREATOR PROFILE */}
-      {activeTab === 'content' && (
-        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6 max-w-4xl">
-          <div className="border-b border-slate-800 pb-3">
-            <h3 className="text-base font-bold text-white font-mono">
-              DYNAMIC SITE CONTENT &amp; CREATOR PROFILE STUDIO
+        {/* =======================================================================
+            VIEW 8: PLATFORM SETTINGS
+            ======================================================================= */}
+        {activeTab === 'settings' && (
+          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4 font-mono text-xs">
+            <h3 className="font-bold text-sm text-white flex items-center space-x-2">
+              <Settings className="w-4 h-4 text-[#00CFFF]" />
+              <span>PLATFORM SETTINGS &amp; EXECUTION LIMITS</span>
             </h3>
-            <p className="text-xs text-slate-400 font-sans mt-0.5">
-              Edit the public Landing page, Creator leadership profile, and About mission without touching source code.
+            <p className="text-slate-400 text-xs">
+              System governance parameters for sandbox resource controls, rate limiting, and security compliance.
             </p>
-          </div>
-
-          {siteContent && (
-            <div className="space-y-6 text-xs font-mono">
-              {/* Creator Profile Section */}
-              <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
-                <h4 className="text-sm font-bold text-cyan-400 uppercase">Creator &amp; Maintainer Profile</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-slate-400 block mb-1">Creator Name / Organization:</label>
-                    <input
-                      type="text"
-                      value={siteContent.creator?.name || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        creator: { ...siteContent.creator, name: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">Role / Title:</label>
-                    <input
-                      type="text"
-                      value={siteContent.creator?.role || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        creator: { ...siteContent.creator, role: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-slate-400 block mb-1">Biography / Overview:</label>
-                  <textarea
-                    rows={3}
-                    value={siteContent.creator?.bio || ''}
-                    onChange={(e) => setSiteContent({
-                      ...siteContent,
-                      creator: { ...siteContent.creator, bio: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-sans text-xs"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-slate-400 block mb-1">GitHub URL:</label>
-                    <input
-                      type="text"
-                      value={siteContent.creator?.links?.github || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        creator: {
-                          ...siteContent.creator,
-                          links: { ...siteContent.creator?.links, github: e.target.value }
-                        }
-                      })}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">LinkedIn URL:</label>
-                    <input
-                      type="text"
-                      value={siteContent.creator?.links?.linkedin || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        creator: {
-                          ...siteContent.creator,
-                          links: { ...siteContent.creator?.links, linkedin: e.target.value }
-                        }
-                      })}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">Website URL:</label>
-                    <input
-                      type="text"
-                      value={siteContent.creator?.links?.website || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        creator: {
-                          ...siteContent.creator,
-                          links: { ...siteContent.creator?.links, website: e.target.value }
-                        }
-                      })}
-                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-white font-mono text-xs"
-                    />
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] space-y-1">
+                <span className="text-white font-bold block">Sandbox Execution Timeout</span>
+                <span className="text-[#A9BCD6] text-[11px] block">Max wall-clock run threshold: 10,000 ms</span>
               </div>
-
-              {/* Landing Page Hero Section */}
-              <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 space-y-4">
-                <h4 className="text-sm font-bold text-emerald-400 uppercase">Landing Page Hero Copy</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-slate-400 block mb-1">Eyebrow Tagline:</label>
-                    <input
-                      type="text"
-                      value={siteContent.hero?.eyebrow || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        hero: { ...siteContent.hero, eyebrow: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 block mb-1">Main Headline:</label>
-                    <input
-                      type="text"
-                      value={siteContent.hero?.headline || ''}
-                      onChange={(e) => setSiteContent({
-                        ...siteContent,
-                        hero: { ...siteContent.hero, headline: e.target.value }
-                      })}
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-mono"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="text-slate-400 block mb-1">Supporting Description:</label>
-                  <textarea
-                    rows={2}
-                    value={siteContent.hero?.description || ''}
-                    onChange={(e) => setSiteContent({
-                      ...siteContent,
-                      hero: { ...siteContent.hero, description: e.target.value }
-                    })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-white font-sans text-xs"
-                  />
-                </div>
-              </div>
-
-              {/* Save Button */}
-              <div className="flex justify-end pt-2">
-                <button
-                  disabled={contentSaving}
-                  onClick={async () => {
-                    setContentSaving(true);
-                    try {
-                      await adminService.updateSiteContent(siteContent);
-                      alert('Site content updated and published successfully!');
-                    } catch (err) {
-                      alert('Failed to update site content: ' + (err.response?.data?.detail || err.message));
-                    } finally {
-                      setContentSaving(false);
-                    }
-                  }}
-                  className="px-6 py-2.5 rounded-xl font-bold font-mono text-xs text-slate-950 bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-40"
-                >
-                  {contentSaving ? 'Saving Changes...' : 'Publish Content Updates'}
-                </button>
+              <div className="p-4 rounded-xl bg-[#061329] border border-[#18385E] space-y-1">
+                <span className="text-white font-bold block">Source Code Upload Ceiling</span>
+                <span className="text-[#A9BCD6] text-[11px] block">Hard limit: 64 KB per submission</span>
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
 
-      {/* TAB: SYSTEM SETTINGS */}
-      {activeTab === 'settings' && (
-        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl space-y-6 max-w-4xl font-mono text-xs">
-          <div className="border-b border-slate-800 pb-3">
-            <h3 className="text-base font-bold text-white font-mono">
-              PLATFORM SYSTEM SETTINGS &amp; POLICIES
+        {/* =======================================================================
+            VIEW 9: AUDIT LOGS
+            ======================================================================= */}
+        {activeTab === 'audits' && (
+          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4 font-mono text-xs">
+            <h3 className="font-bold text-sm text-white flex items-center space-x-2">
+              <Database className="w-4 h-4 text-[#00CFFF]" />
+              <span>IMMUTABLE AUDIT LOGS ({auditLogs.length})</span>
             </h3>
-            <p className="text-xs text-slate-400 font-sans mt-0.5">
-              Configure system-wide parameters, judge ceilings, and participation security controls.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-              <h4 className="font-bold text-cyan-400 uppercase">File Upload Policy</h4>
-              <p className="text-slate-400 font-sans text-xs">
-                Maximum File Upload Ceiling: <span className="text-white font-bold">50 MB</span>
-              </p>
-              <p className="text-slate-400 font-sans text-xs">
-                Allowed Document Formats: <span className="text-white font-bold">PDF, DOCX, ZIP, JSON, CSV, MD</span>
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
-              <h4 className="font-bold text-emerald-400 uppercase">Judge Sandbox Limits</h4>
-              <p className="text-slate-400 font-sans text-xs">
-                Default CPU Timeout: <span className="text-white font-bold">2000 ms</span>
-              </p>
-              <p className="text-slate-400 font-sans text-xs">
-                Default Memory Limit: <span className="text-white font-bold">256 MB (cgroups/setrlimit)</span>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: AUDIT LOGS */}
-      {activeTab === 'audits' && (
-        <div className="p-6 rounded-2xl bg-slate-900/80 border border-slate-800 shadow-xl">
-          <h3 className="text-base font-bold text-white font-mono mb-4">
-            IMMUTABLE SYSTEM AUDIT LOGS ({auditLogs.length})
-          </h3>
-          <div className="space-y-2 font-mono text-xs max-h-[600px] overflow-y-auto">
-            {auditLogs.map(log => (
-              <div key={log.id} className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center space-x-2 mb-1">
-                    <span className="font-bold text-cyan-400">{log.action}</span>
-                    <span className="text-[10px] text-slate-500">by {log.actor_username || 'SYSTEM'}</span>
+            <div className="space-y-2 max-h-[70vh] overflow-y-auto">
+              {auditLogs.map((log, idx) => (
+                <div key={idx} className="p-3 rounded-xl bg-[#061329] border border-[#18385E] flex justify-between items-center text-[11px]">
+                  <div>
+                    <span className="text-[#00CFFF] font-bold">{log.action}</span>
+                    <span className="text-slate-400 ml-2">by {log.actor_username || 'SYSTEM'}</span>
+                    <span className="text-slate-500 ml-2">[{log.entity_type} #{log.entity_id}]</span>
                   </div>
-                  <p className="text-slate-300 font-sans text-xs">{log.details}</p>
+                  <span className="text-slate-500 text-[10px]">{log.created_at ? new Date(log.created_at).toLocaleString() : ''}</span>
                 </div>
-                <span className="text-[10px] text-slate-500 whitespace-nowrap">
-                  {new Date(log.created_at).toLocaleTimeString()}
-                </span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </main>
+
+      {/* Global Event Wizard Modal */}
+      <EventWizardModal
+        isOpen={wizardOpen}
+        onClose={() => {
+          setWizardOpen(false);
+          setPreselectedTemplate(null);
+        }}
+        onEventCreated={() => {
+          loadGlobalMetrics();
+          loadTabData('events');
+        }}
+        initialTemplate={preselectedTemplate}
+      />
     </div>
   );
 }

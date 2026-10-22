@@ -226,6 +226,10 @@ export const dsaService = {
     if (eventId) payload.event_id = eventId;
     const res = await apiClient.post(`/questions/${identifier}/submit`, payload);
     return res.data;
+  },
+
+  async submitCode(identifier, sourceCode, language, eventId = null) {
+    return this.submitSolution(identifier, language, sourceCode, eventId);
   }
 };
 export const questionService = dsaService;
@@ -386,6 +390,55 @@ export const adminService = {
   },
   async deleteEvent(id) {
     const res = await apiClient.delete(`/admin/events/${id}`);
+    return res.data;
+  },
+
+  // Competition Templates (Development Studio)
+  async listCompetitionTemplates() {
+    const res = await apiClient.get('/admin/competition-templates');
+    return res.data;
+  },
+  async createCompetitionTemplate(data) {
+    const res = await apiClient.post('/admin/competition-templates', data);
+    return res.data;
+  },
+  async getCompetitionTemplate(id) {
+    const res = await apiClient.get(`/admin/competition-templates/${id}`);
+    return res.data;
+  },
+  async updateCompetitionTemplate(id, data) {
+    const res = await apiClient.put(`/admin/competition-templates/${id}`, data);
+    return res.data;
+  },
+  async deleteCompetitionTemplate(id) {
+    const res = await apiClient.delete(`/admin/competition-templates/${id}`);
+    return res.data;
+  },
+
+  // Event Question Breakdown & Management
+  async getEventQuestionBreakdown(eventId) {
+    const res = await apiClient.get(`/admin/events/${eventId}/question-breakdown`);
+    return res.data;
+  },
+  async reorderEventQuestions(eventId, items) {
+    const res = await apiClient.post(`/admin/events/${eventId}/questions/reorder`, { items });
+    return res.data;
+  },
+  async copyQuestionsToEvent(eventId, { questionIds, domain = 'dsa', sourceEventId = null, pointsOverride = null }) {
+    const res = await apiClient.post(`/admin/events/${eventId}/copy-questions`, {
+      question_ids: questionIds,
+      domain,
+      source_event_id: sourceEventId,
+      points_override: pointsOverride
+    });
+    return res.data;
+  },
+  async removeQuestionFromEvent(eventId, domain, questionId) {
+    const res = await apiClient.delete(`/admin/events/${eventId}/questions/${domain}/${questionId}`);
+    return res.data;
+  },
+  async updateEventQuestionExperience(eventId, data) {
+    const res = await apiClient.put(`/admin/events/${eventId}/question-experience`, data);
     return res.data;
   },
 

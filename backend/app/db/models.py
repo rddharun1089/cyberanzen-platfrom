@@ -185,6 +185,34 @@ class SessionToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
 # ==============================================================================
+# COMPETITION TEMPLATES (DEVELOPMENT STUDIO)
+# ==============================================================================
+
+class CompetitionTemplate(Base):
+    __tablename__ = "competition_templates"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slug = Column(String(100), unique=True, index=True, nullable=False)
+    name = Column(String(150), nullable=False)
+    competition_type = Column(String(50), nullable=False)  # dsa | ctf | mcq | combined | puzzle
+    description = Column(Text, nullable=False)
+    icon = Column(String(50), default="code", nullable=False)
+    supported_question_types = Column(Text, default='["dsa"]', nullable=False)  # JSON array
+    workspace_layout = Column(String(50), default="split_code", nullable=False)  # split_code | ctf_grid | mcq_quiz | combined
+    participation_modes = Column(Text, default='["individual", "team", "mixed"]', nullable=False)
+    scoring_configuration = Column(Text, default='{"policy": "standard", "dynamic": false}', nullable=False)
+    question_navigation_policy = Column(String(50), default="free", nullable=False)  # free | sequential | unlock
+    question_order_mode = Column(String(50), default="fixed", nullable=False)  # fixed | random_participant | random_team
+    supported_attachments = Column(Text, default='["source_code", "test_cases"]', nullable=False)
+    enabled_features = Column(Text, default='["code_editor", "test_cases", "judge_verdicts", "leaderboards"]', nullable=False)
+    default_config = Column(Text, default='{}', nullable=False)  # JSON object with default event configs
+    is_builtin = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    events = relationship("Event", back_populates="competition_template")
+
+# ==============================================================================
 # EVENTS & COMPETITIONS
 # ==============================================================================
 
@@ -239,10 +267,20 @@ class Event(Base):
     clipboard_policy = Column(String(30), default=ClipboardPolicy.RESTRICTED.value, nullable=False)
     scoring_policy = Column(String(30), default=ScoringPolicy.STANDARD.value, nullable=False)
     allowed_languages = Column(Text, default='["python3", "cpp", "c"]', nullable=False)
+    # Participant Question Experience & Navigation Settings
+    question_navigation_policy = Column(String(50), default="free", nullable=False)  # free | sequential | unlock
+    question_order_mode = Column(String(50), default="fixed", nullable=False)  # fixed | random_participant | random_team
+    show_progress = Column(Boolean, default=True, nullable=False)
+    mark_solved_immediately = Column(Boolean, default=True, nullable=False)
+    revisit_solved_questions = Column(Boolean, default=True, nullable=False)
+    result_publication_time = Column(DateTime, nullable=True)
+    competition_template_id = Column(Integer, ForeignKey("competition_templates.id", ondelete="SET NULL"), nullable=True)
+
     created_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+    competition_template = relationship("CompetitionTemplate", back_populates="events")
     registrations = relationship("EventRegistration", back_populates="event", cascade="all, delete-orphan")
     teams = relationship("Team", back_populates="event", cascade="all, delete-orphan")
     solves = relationship("Solve", back_populates="event", cascade="all, delete-orphan")

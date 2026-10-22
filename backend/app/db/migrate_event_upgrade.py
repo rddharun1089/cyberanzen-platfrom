@@ -50,6 +50,13 @@ def run_migrations():
         ("show_solve_times", "BOOLEAN DEFAULT 1"),
         ("show_solve_counts", "BOOLEAN DEFAULT 1"),
         ("anonymize_participants", "BOOLEAN DEFAULT 0"),
+        ("question_navigation_policy", "VARCHAR(50) DEFAULT 'free'"),
+        ("question_order_mode", "VARCHAR(50) DEFAULT 'fixed'"),
+        ("show_progress", "BOOLEAN DEFAULT 1"),
+        ("mark_solved_immediately", "BOOLEAN DEFAULT 1"),
+        ("revisit_solved_questions", "BOOLEAN DEFAULT 1"),
+        ("result_publication_time", "DATETIME"),
+        ("competition_template_id", "INTEGER"),
     ]
 
     for col_name, col_def in new_event_columns:
@@ -64,6 +71,111 @@ def run_migrations():
     if "selected_mode" not in reg_cols:
         cursor.execute("ALTER TABLE event_registrations ADD COLUMN selected_mode VARCHAR(30) DEFAULT 'individual'")
         print("[MIGRATION] Added column 'event_registrations.selected_mode'")
+
+    # Seed initial competition templates if none exist
+    cursor.execute("SELECT COUNT(*) FROM competition_templates")
+    template_count = cursor.fetchone()[0]
+    if template_count == 0:
+        import json
+        from datetime import datetime, timezone
+        now_iso = datetime.now(timezone.utc).isoformat()
+        builtin_templates = [
+            (
+                "dsa-competitive-programming",
+                "DSA & Competitive Programming",
+                "dsa",
+                "Algorithmic problem solving arena with automated multi-language judge, real-time verdicts, test suite evaluations, and runtime benchmarks.",
+                "code",
+                json.dumps(["dsa"]),
+                "split_code",
+                json.dumps(["individual", "team", "mixed"]),
+                json.dumps({"policy": "standard", "dynamic": False}),
+                "free",
+                "fixed",
+                json.dumps(["source_code", "test_cases"]),
+                json.dumps(["code_editor", "syntax_highlighting", "language_selector", "test_cases", "judge_verdicts", "runtime_metrics", "submissions", "leaderboards"]),
+                json.dumps({"allowed_languages": ["python3", "cpp", "c"], "time_limit_ms": 2000, "memory_limit_mb": 256}),
+                1, now_iso, now_iso
+            ),
+            (
+                "ctf-security-arena",
+                "Cybersecurity CTF Arena",
+                "ctf",
+                "Capture-The-Flag jeopardy challenge arena featuring web exploitation, reverse engineering, cryptography, forensics, dynamic flags, and isolated Docker labs.",
+                "flag",
+                json.dumps(["ctf"]),
+                "ctf_grid",
+                json.dumps(["team", "individual", "mixed"]),
+                json.dumps({"policy": "standard", "dynamic_decay": True}),
+                "free",
+                "fixed",
+                json.dumps(["challenge_files", "flags"]),
+                json.dumps(["flag_submission", "docker_labs", "hint_progression", "attachment_vault", "team_scoring", "leaderboards"]),
+                json.dumps({"flag_format": "CYBER{...}", "lab_timeout_min": 60}),
+                1, now_iso, now_iso
+            ),
+            (
+                "mcq-knowledge-quiz",
+                "MCQ & Knowledge Quiz",
+                "mcq",
+                "Timed multiple-choice knowledge assessments with single/multi-select options, negative marking rules, randomized shuffling, and attempt limits.",
+                "help-circle",
+                json.dumps(["mcq"]),
+                "mcq_quiz",
+                json.dumps(["individual"]),
+                json.dumps({"policy": "standard", "negative_marking": True}),
+                "free",
+                "fixed",
+                json.dumps(["question_options"]),
+                json.dumps(["question_banks", "answer_options", "quiz_timer", "randomization", "attempt_policies", "results_review"]),
+                json.dumps({"time_limit_sec": 60, "allow_revisit": True}),
+                1, now_iso, now_iso
+            ),
+            (
+                "combined-cyber-code",
+                "Combined Cyber & Code Sprint",
+                "combined",
+                "Comprehensive multi-track event uniting CTF security challenges, DSA competitive programming, and MCQ trivia under a unified event leaderboard.",
+                "layers",
+                json.dumps(["dsa", "ctf", "mcq"]),
+                "combined",
+                json.dumps(["team", "individual", "mixed"]),
+                json.dumps({"policy": "standard", "cross_track_weights": True}),
+                "free",
+                "fixed",
+                json.dumps(["source_code", "flags", "question_options"]),
+                json.dumps(["code_editor", "flag_submission", "quiz_engine", "multi_track_tabs", "squad_management", "unified_leaderboard"]),
+                json.dumps({"tracks": ["ctf", "dsa", "mcq"]}),
+                1, now_iso, now_iso
+            ),
+            (
+                "puzzle-quest-challenge",
+                "Algorithmic Puzzle Quest",
+                "puzzle",
+                "Logic puzzles, cipher decryptions, and riddle-based challenges testing lateral thinking, pattern recognition, and rapid problem-solving.",
+                "sparkles",
+                json.dumps(["puzzle", "dsa"]),
+                "split_code",
+                json.dumps(["individual", "team"]),
+                json.dumps({"policy": "standard"}),
+                "free",
+                "fixed",
+                json.dumps(["source_code", "puzzle_hints"]),
+                json.dumps(["puzzle_input", "code_editor", "hints", "leaderboards"]),
+                json.dumps({}),
+                1, now_iso, now_iso
+            )
+        ]
+        cursor.executemany("""
+            INSERT INTO competition_templates (
+                slug, name, competition_type, description, icon,
+                supported_question_types, workspace_layout, participation_modes,
+                scoring_configuration, question_navigation_policy, question_order_mode,
+                supported_attachments, enabled_features, default_config,
+                is_builtin, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, builtin_templates)
+        print(f"[MIGRATION] Seeded {len(builtin_templates)} built-in competition templates.")
 
     conn.commit()
     conn.close()

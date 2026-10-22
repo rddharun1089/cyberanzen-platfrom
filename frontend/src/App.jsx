@@ -129,7 +129,19 @@ export default function App() {
             {/* Admin Control Center */}
             <Route
               path="/admin"
-              element={isAdmin ? <AdminStudio /> : <Navigate to="/login" />}
+              element={isAdmin ? <AdminStudio user={user} /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/admin/competition-development"
+              element={isAdmin ? <AdminStudio user={user} defaultView="competition_dev" /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/admin/events/new"
+              element={isAdmin ? <AdminStudio user={user} defaultView="events_new" /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/admin/:view"
+              element={isAdmin ? <AdminStudio user={user} /> : <Navigate to="/login" />}
             />
 
             {/* Auth Routes */}

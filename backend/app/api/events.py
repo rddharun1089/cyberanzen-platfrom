@@ -4,11 +4,13 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import json
+import hashlib
+import random
 from app.db.session import get_db
 from app.db.models import (
     Event, EventRegistration, Team, Solve, User, EventStatus, ParticipationMode, EventType,
     DSAQuestion, CTFChallenge, MCQQuestion, EventDSAQuestion, EventCTFChallenge, EventMCQQuestion,
-    Submission
+    Submission, DSATestCase
 )
 from app.api.deps import get_current_user, get_optional_current_user
 
@@ -81,6 +83,14 @@ def serialize_event(e: Event, current_user: Optional[User] = None, db: Optional[
         "clipboard_policy": e.clipboard_policy,
         "scoring_policy": e.scoring_policy,
         "allowed_languages": json.loads(e.allowed_languages) if e.allowed_languages else [],
+        # Question navigation & experience settings
+        "question_navigation_policy": e.question_navigation_policy or "free",
+        "question_order_mode": e.question_order_mode or "fixed",
+        "show_progress": e.show_progress,
+        "mark_solved_immediately": e.mark_solved_immediately,
+        "revisit_solved_questions": e.revisit_solved_questions,
+        "result_publication_time": e.result_publication_time,
+        "competition_template_id": e.competition_template_id,
         # Current user status
         "is_registered": is_registered,
         "registration_id": reg_id,
@@ -274,6 +284,11 @@ def get_event_workspace_config(
         "clipboard_policy": event.clipboard_policy,
         "scoring_policy": event.scoring_policy,
         "allowed_languages": json.loads(event.allowed_languages) if event.allowed_languages else ["python3", "cpp", "c"],
+        "question_navigation_policy": event.question_navigation_policy or "free",
+        "question_order_mode": event.question_order_mode or "fixed",
+        "show_progress": event.show_progress,
+        "mark_solved_immediately": event.mark_solved_immediately,
+        "revisit_solved_questions": event.revisit_solved_questions,
         "leaderboard_visible": event.leaderboard_visible,
         "leaderboard_frozen": event.leaderboard_frozen,
         "scores_visible": event.scores_visible_during_event,
@@ -298,44 +313,138 @@ def get_event_dsa_questions(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
-    # Fetch assigned DSA questions via EventDSAQuestion or fallback to event_id match
-    assigned = db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == event.id).order_by(EventDSAQuestion.order_index.asc()).all()
+    # 1. Fetch solved question IDs for current user/team in this event
+    solved_qids = set()
+    if current_user:
+        user_solves = db.query(Solve.challenge_id).filter(
+            Solve.event_id == event.id,
+            Solve.challenge_type == "dsa",
+            Solve.user_id == current_user.id
+        ).all()
+        solved_qids = {int(s[0]) for s in user_solves if str(s[0]).isdigit()}
+
+    # 2. Fetch assigned DSA questions via EventDSAQuestion or fallback
+    assigned = db.query(EventDSAQuestion).filter(
+        EventDSAQuestion.event_id == event.id
+    ).order_by(EventDSAQuestion.order_index.asc()).all()
+
+    raw_questions = []
     if assigned:
-        questions = []
         for a in assigned:
             q = a.question
             if q and q.status == "published":
-                questions.append({
+                samples = db.query(DSATestCase).filter(
+                    DSATestCase.question_id == q.id,
+                    DSATestCase.test_type == "public_sample"
+                ).order_by(DSATestCase.test_index.asc()).all()
+
+                raw_questions.append({
                     "id": q.id,
                     "slug": q.slug,
                     "title": q.title,
+                    "statement": q.statement,
+                    "input_spec": q.input_spec,
+                    "output_spec": q.output_spec,
+                    "constraints": q.constraints,
                     "difficulty": q.difficulty,
                     "category": q.category,
                     "points": a.points_override if a.points_override is not None else q.points,
                     "time_limit_ms": q.time_limit_ms,
                     "memory_limit_mb": q.memory_limit_mb,
                     "supported_languages": json.loads(q.supported_languages) if q.supported_languages else ["python3", "cpp", "c"],
+                    "starter_code": {
+                        "python3": q.starter_py or "# Write Python 3 solution here\n",
+                        "cpp": q.starter_cpp or "// Write C++ solution here\n",
+                        "c": q.starter_c or "/* Write C solution here */\n"
+                    },
+                    "sample_tests": [
+                        {"id": s.id, "input": s.input_data, "output": s.expected_output}
+                        for s in samples
+                    ],
                     "order_index": a.order_index,
-                    "release_time": a.release_time
+                    "allow_copy_paste": q.allow_copy_paste
                 })
-        return questions
+    else:
+        direct_q = db.query(DSAQuestion).filter(DSAQuestion.event_id == event.id, DSAQuestion.status == "published").all()
+        for idx, q in enumerate(direct_q):
+            samples = db.query(DSATestCase).filter(
+                DSATestCase.question_id == q.id,
+                DSATestCase.test_type == "public_sample"
+            ).order_by(DSATestCase.test_index.asc()).all()
+            raw_questions.append({
+                "id": q.id,
+                "slug": q.slug,
+                "title": q.title,
+                "statement": q.statement,
+                "input_spec": q.input_spec,
+                "output_spec": q.output_spec,
+                "constraints": q.constraints,
+                "difficulty": q.difficulty,
+                "category": q.category,
+                "points": q.points,
+                "time_limit_ms": q.time_limit_ms,
+                "memory_limit_mb": q.memory_limit_mb,
+                "supported_languages": json.loads(q.supported_languages) if q.supported_languages else ["python3", "cpp", "c"],
+                "starter_code": {
+                    "python3": q.starter_py or "# Write Python 3 solution here\n",
+                    "cpp": q.starter_cpp or "// Write C++ solution here\n",
+                    "c": q.starter_c or "/* Write C solution here */\n"
+                },
+                "sample_tests": [
+                    {"id": s.id, "input": s.input_data, "output": s.expected_output}
+                    for s in samples
+                ],
+                "order_index": idx,
+                "allow_copy_paste": q.allow_copy_paste
+            })
 
-    # Fallback to direct event_id association
-    direct_q = db.query(DSAQuestion).filter(DSAQuestion.event_id == event.id, DSAQuestion.status == "published").all()
-    return [
-        {
-            "id": q.id,
-            "slug": q.slug,
-            "title": q.title,
-            "difficulty": q.difficulty,
-            "category": q.category,
-            "points": q.points,
-            "time_limit_ms": q.time_limit_ms,
-            "memory_limit_mb": q.memory_limit_mb,
-            "supported_languages": json.loads(q.supported_languages) if q.supported_languages else ["python3", "cpp", "c"]
-        }
-        for q in direct_q
-    ]
+    # 3. Deterministic Stable Randomization per participant or team if configured
+    if event.question_order_mode == "random_participant" and current_user:
+        seed = int(hashlib.sha256(f"ev_{event.id}_user_{current_user.id}".encode()).hexdigest()[:8], 16)
+        rng = random.Random(seed)
+        rng.shuffle(raw_questions)
+    elif event.question_order_mode == "random_team" and current_user and current_user.team_membership:
+        seed = int(hashlib.sha256(f"ev_{event.id}_team_{current_user.team_membership.team_id}".encode()).hexdigest()[:8], 16)
+        rng = random.Random(seed)
+        rng.shuffle(raw_questions)
+
+    # 4. Navigation policy resolution (Free vs Sequential vs Unlock)
+    questions = []
+    nav_policy = event.question_navigation_policy or "free"
+
+    for idx, q in enumerate(raw_questions):
+        q_copy = dict(q)
+        q_copy["display_number"] = f"Q{idx + 1}"
+        is_solved = q["id"] in solved_qids
+
+        if is_solved:
+            q_copy["status"] = "solved"
+            q_copy["is_locked"] = not event.revisit_solved_questions
+            q_copy["lock_reason"] = "Challenge completed (revisiting locked by event rules)" if q_copy["is_locked"] else ""
+        else:
+            if nav_policy == "sequential":
+                if idx == 0:
+                    q_copy["status"] = "current"
+                    q_copy["is_locked"] = False
+                    q_copy["lock_reason"] = ""
+                else:
+                    prev_solved = raw_questions[idx - 1]["id"] in solved_qids
+                    if prev_solved:
+                        q_copy["status"] = "available"
+                        q_copy["is_locked"] = False
+                        q_copy["lock_reason"] = ""
+                    else:
+                        q_copy["status"] = "locked"
+                        q_copy["is_locked"] = True
+                        q_copy["lock_reason"] = f"Locked: Solve Q{idx} ({raw_questions[idx - 1]['title']}) first."
+            else:
+                q_copy["status"] = "available"
+                q_copy["is_locked"] = False
+                q_copy["lock_reason"] = ""
+
+        questions.append(q_copy)
+
+    return questions
 
 @router.get("/{event_id}/challenges")
 def get_event_ctf_challenges(

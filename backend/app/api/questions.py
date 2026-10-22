@@ -7,7 +7,7 @@ import json
 import time
 from collections import defaultdict
 from app.db.session import get_db
-from app.db.models import DSAQuestion, DSATestCase, Submission, User, ChallengeStatus, Verdict
+from app.db.models import DSAQuestion, DSATestCase, Submission, User, ChallengeStatus, Verdict, Event, EventDSAQuestion, Solve, EventStatus
 from app.api.deps import get_current_user
 from app.judge.worker import evaluate_submission
 from app.services.scoring_service import ScoringService
@@ -39,6 +39,7 @@ class RunCodeRequest(BaseModel):
 class SubmitCodeRequest(BaseModel):
     language: str
     source_code: str
+    event_id: Optional[int] = None
 
 def get_question_by_id_or_slug(identifier: str, db: Session) -> DSAQuestion:
     if identifier.isdigit():
@@ -202,6 +203,44 @@ def submit_solution(
         for t in all_tests
     ]
 
+    # Event-specific validation & navigation enforcement if submitted under an event
+    event = None
+    points_to_award = q.points
+    if req.event_id:
+        event = db.query(Event).filter(Event.id == req.event_id).first()
+        if not event:
+            raise HTTPException(status_code=404, detail="Associated event competition not found.")
+        if event.status in (EventStatus.ENDED.value, EventStatus.ARCHIVED.value):
+            raise HTTPException(status_code=400, detail="Event competition has concluded. Submissions are closed.")
+
+        # Check question association and points override
+        ev_assoc = db.query(EventDSAQuestion).filter(
+            EventDSAQuestion.event_id == event.id,
+            EventDSAQuestion.question_id == q.id
+        ).first()
+        if ev_assoc and ev_assoc.points_override is not None:
+            points_to_award = ev_assoc.points_override
+
+        # Check sequential navigation policy
+        if event.question_navigation_policy == "sequential" and ev_assoc:
+            # Check all questions ordered before this one
+            prior_assocs = db.query(EventDSAQuestion).filter(
+                EventDSAQuestion.event_id == event.id,
+                EventDSAQuestion.order_index < ev_assoc.order_index
+            ).all()
+            for pa in prior_assocs:
+                prior_solve = db.query(Solve).filter(
+                    Solve.event_id == event.id,
+                    Solve.challenge_type == "dsa",
+                    Solve.challenge_id == str(pa.question_id),
+                    Solve.user_id == current_user.id
+                ).first()
+                if not prior_solve:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Sequential progression lockdown: solve preceding challenges to unlock this question."
+                    )
+
     eval_res = evaluate_submission(
         language=req.language,
         source_code=req.source_code,
@@ -213,9 +252,10 @@ def submit_solution(
     )
 
     verdict_str = eval_res["verdict"]
-    awarded_points = q.points if verdict_str == Verdict.ACCEPTED.value else 0
+    awarded_points = points_to_award if verdict_str == Verdict.ACCEPTED.value else 0
 
     sub = Submission(
+        event_id=event.id if event else None,
         user_id=current_user.id,
         team_id=current_user.team_membership.team_id if current_user.team_membership else None,
         submission_type="dsa",
@@ -242,8 +282,9 @@ def submit_solution(
             user=current_user,
             challenge_type="dsa",
             challenge_id=str(q.id),
-            base_points=q.points,
-            submission=sub
+            base_points=points_to_award,
+            submission=sub,
+            event=event
         )
 
     return {
