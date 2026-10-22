@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { 
-  Shield, ArrowRight, ExternalLink, Github, Linkedin, 
-  Instagram, Youtube, Facebook, CheckCircle2, Award, BarChart2, Users,
-  Sparkles, Lock, Cpu
+  Shield, ArrowRight, Github, Linkedin, 
+  Instagram, Youtube, Target, BarChart2, Users,
+  ShieldCheck, ChevronRight
 } from 'lucide-react';
 import { contentService } from '../services/api';
+import AnimatedCyberShield from '../components/AnimatedCyberShield';
+import NetworkBackground from '../components/NetworkBackground';
+import CyberAnzenBrand from '../components/CyberAnzenBrand';
 
 export default function Landing({ user }) {
   const [content, setContent] = useState(null);
@@ -20,7 +23,7 @@ export default function Landing({ user }) {
       const data = await contentService.getPublicContent();
       setContent(data);
     } catch (err) {
-      console.warn('Using default content');
+      // Use fallback static content
     } finally {
       setLoading(false);
     }
@@ -32,44 +35,50 @@ export default function Landing({ user }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col bg-[#061329] text-[#F2F7FF] selection:bg-[#00CFFF]/30 selection:text-[#00CFFF] font-sans">
+    <div className="flex-1 flex flex-col bg-[#030A16] text-[#F2F7FF] selection:bg-[#00CFFF]/30 selection:text-[#00CFFF] font-sans relative overflow-x-hidden">
       
-      {/* =========================================================================
-          HERO SECTION (EXACT SCREENSHOT LAYOUT 1)
-          ========================================================================= */}
-      <section id="home" className="relative overflow-hidden pt-12 pb-16 md:pt-16 md:pb-24 border-b border-[#18385E]">
-        {/* Subtle cyber background grid & glow */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#087FFF]/15 via-[#061329] to-[#061329] -z-10 pointer-events-none" />
-        <div className="absolute inset-0 bg-[linear-gradient(to_right,#18385E20_1px,transparent_1px),linear-gradient(to_bottom,#18385E20_1px,transparent_1px)] bg-[size:4rem_4rem] -z-10 pointer-events-none" />
+      {/* Background Animated Cyber Environment */}
+      <NetworkBackground />
 
+      {/* =========================================================================
+          HERO SECTION (EXACT REFERENCE HORROR-CYBERSECURITY HERO)
+          ========================================================================= */}
+      <section id="home" className="relative pt-10 pb-14 md:pt-16 md:pb-20 border-b border-[#18385E]/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-center">
             
-            {/* Left Hero Content */}
-            <div className="lg:col-span-7 space-y-6 text-left">
+            {/* Left Column: Hero Text */}
+            <div className="lg:col-span-7 space-y-5 text-left">
               {/* Eyebrow */}
-              <div className="text-xs font-mono font-semibold tracking-widest text-[#00CFFF] uppercase">
+              <div className="text-xs font-mono font-bold tracking-widest text-[#00CFFF] uppercase select-none">
                 SECURE · LEARN · COMPETE
               </div>
 
-              {/* Bold 4-Line Headline */}
-              <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight font-mono leading-[1.08] select-none">
-                <span className="text-white block">THINK.</span>
-                <span className="text-white block">EXPLORE.</span>
-                <span className="text-[#00CFFF] block drop-shadow-[0_0_25px_rgba(0,207,255,0.4)]">SOLVE.</span>
-                <span className="text-[#00CFFF] block drop-shadow-[0_0_25px_rgba(0,207,255,0.4)]">PROVE.</span>
-              </h1>
+              {/* Horror Distressed Headline */}
+              <div className="space-y-1 select-none">
+                <h1 className="font-horror text-4xl sm:text-6xl md:text-7xl font-bold tracking-wider text-[#F2F7FF] drop-shadow-[0_0_25px_rgba(0,207,255,0.4)] leading-tight">
+                  ENTER THE UNKNOWN.
+                </h1>
+                <h2 className="font-horror text-4xl sm:text-6xl md:text-7xl font-bold tracking-wider text-[#FF2448] drop-shadow-[0_0_30px_rgba(255,36,72,0.65)] leading-tight">
+                  HUNT THE VULNERABILITY.
+                </h2>
+              </div>
 
-              {/* Description Paragraph */}
-              <p className="text-sm sm:text-base text-[#A9BCD6] leading-relaxed max-w-xl font-sans">
-                Build practical cybersecurity skills, solve real-world challenges, and grow together with a community of learners through events hosted by CyberAnzen.
+              {/* Supporting Line */}
+              <p className="text-xs sm:text-sm font-mono text-[#00CFFF] tracking-widest uppercase font-semibold">
+                SKILLS TODAY. A SAFER TOMORROW.
               </p>
 
-              {/* Hero Action Buttons */}
-              <div className="flex flex-wrap items-center gap-4 pt-2">
+              {/* Description Paragraph */}
+              <p className="text-xs sm:text-sm text-[#A9BCD6] leading-relaxed max-w-xl font-sans">
+                Build practical cybersecurity skills, solve real-world challenges, and grow with the CyberAnzen community.
+              </p>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center gap-4 pt-1">
                 <Link
-                  to="/events"
-                  className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl font-bold font-mono text-xs sm:text-sm text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_25px_rgba(0,207,255,0.45)] hover:shadow-[0_0_35px_rgba(0,207,255,0.7)] transition-all duration-200 transform hover:-translate-y-0.5"
+                  to={user ? "/events" : "/login"}
+                  className="inline-flex items-center space-x-2 px-6 py-3 rounded-full font-bold font-mono text-xs sm:text-sm text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_25px_rgba(0,207,255,0.45)] hover:shadow-[0_0_35px_rgba(0,207,255,0.7)] transition-all duration-200 transform hover:-translate-y-0.5"
                 >
                   <span>Explore Events</span>
                   <ArrowRight className="w-4 h-4 ml-0.5" />
@@ -77,27 +86,24 @@ export default function Landing({ user }) {
 
                 <Link
                   to={user ? "/events" : "/register"}
-                  className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl font-medium font-mono text-xs sm:text-sm text-[#F2F7FF] bg-[#0B1D38] hover:bg-[#102746] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200"
+                  className="inline-flex items-center space-x-2 px-6 py-3 rounded-full font-medium font-mono text-xs sm:text-sm text-[#F2F7FF] bg-[#07182B] hover:bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200"
                 >
-                  <span>{user ? "Enter Competitions" : "Get Started"}</span>
+                  <span>Get Started</span>
                 </Link>
+              </div>
+
+              {/* Community Badge Capsule */}
+              <div className="pt-2">
+                <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-[#07182B]/90 border border-[#18385E] text-xs font-mono text-[#A9BCD6] shadow-inner">
+                  <span className="text-[#00CFFF] font-bold">&gt;_</span>
+                  <span>Join a growing community of cybersecurity learners.</span>
+                </div>
               </div>
             </div>
 
-            {/* Right Hero Hologram Shield */}
-            <div className="lg:col-span-5 flex items-center justify-center relative">
-              <div className="relative w-72 sm:w-80 md:w-96 aspect-square flex items-center justify-center">
-                {/* Neon Ambient Aura */}
-                <div className="absolute inset-0 bg-[#00CFFF]/20 rounded-full blur-3xl -z-10 pointer-events-none animate-pulse" />
-                <img 
-                  src="/ui-assets/hero-shield.png" 
-                  alt="CyberAnzen Holographic Shield"
-                  className="w-full h-full object-contain filter drop-shadow-[0_0_35px_rgba(0,207,255,0.6)]"
-                  onError={(e) => {
-                    e.target.src = "/logo.png";
-                  }}
-                />
-              </div>
+            {/* Right Column: Animated Shield & Hooded Hacker */}
+            <div className="lg:col-span-5 flex justify-center items-center pt-4 lg:pt-0">
+              <AnimatedCyberShield className="w-full" />
             </div>
 
           </div>
@@ -105,66 +111,144 @@ export default function Landing({ user }) {
       </section>
 
       {/* =========================================================================
-          3 FEATURE HIGHLIGHT CARDS
+          FOUR FEATURE HIGHLIGHT CARDS (DESKTOP GRID + MOBILE ACCORDION LIST)
           ========================================================================= */}
-      <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-[#18385E]">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <section className="py-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-[#18385E]/50">
+        
+        {/* Desktop 4-Card Grid */}
+        <div className="hidden md:grid md:grid-cols-4 gap-4">
           
           {/* Card 1: Real Challenges */}
-          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/40 transition-all duration-200 group">
-            <div className="w-12 h-12 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-4 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
-              <Shield className="w-6 h-6" />
+          <div className="p-5 rounded-2xl bg-[#07182B] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200 group shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-3 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
+              <Target className="w-5 h-5" />
             </div>
-            <h3 className="text-lg font-bold font-mono text-white mb-2">Real Challenges</h3>
+            <h3 className="text-base font-bold font-rajdhani uppercase tracking-wider text-white mb-1.5 group-hover:text-[#00CFFF] transition-colors">
+              Real Challenges
+            </h3>
             <p className="text-xs text-[#A9BCD6] leading-relaxed">
               Gain hands-on experience with practical and engaging tasks.
             </p>
           </div>
 
           {/* Card 2: Learn & Grow */}
-          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/40 transition-all duration-200 group">
-            <div className="w-12 h-12 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-4 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
-              <BarChart2 className="w-6 h-6" />
+          <div className="p-5 rounded-2xl bg-[#07182B] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200 group shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-3 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
+              <BarChart2 className="w-5 h-5" />
             </div>
-            <h3 className="text-lg font-bold font-mono text-white mb-2">Learn &amp; Grow</h3>
+            <h3 className="text-base font-bold font-rajdhani uppercase tracking-wider text-white mb-1.5 group-hover:text-[#00CFFF] transition-colors">
+              Learn &amp; Grow
+            </h3>
             <p className="text-xs text-[#A9BCD6] leading-relaxed">
               Develop skills, explore new domains, and push your limits.
             </p>
           </div>
 
           {/* Card 3: Strong Community */}
-          <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/40 transition-all duration-200 group">
-            <div className="w-12 h-12 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-4 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
-              <Users className="w-6 h-6" />
+          <div className="p-5 rounded-2xl bg-[#07182B] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200 group shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-3 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
+              <Users className="w-5 h-5" />
             </div>
-            <h3 className="text-lg font-bold font-mono text-white mb-2">Strong Community</h3>
+            <h3 className="text-base font-bold font-rajdhani uppercase tracking-wider text-white mb-1.5 group-hover:text-[#00CFFF] transition-colors">
+              Strong Community
+            </h3>
             <p className="text-xs text-[#A9BCD6] leading-relaxed">
               Be part of a like-minded community and make an impact together.
             </p>
           </div>
 
+          {/* Card 4: Secure Competition */}
+          <div className="p-5 rounded-2xl bg-[#07182B] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all duration-200 group shadow-lg">
+            <div className="w-10 h-10 rounded-xl bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center mb-3 text-[#00CFFF] group-hover:scale-105 transition-transform shadow-[0_0_15px_rgba(0,207,255,0.2)]">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <h3 className="text-base font-bold font-rajdhani uppercase tracking-wider text-white mb-1.5 group-hover:text-[#00CFFF] transition-colors">
+              Secure Competition
+            </h3>
+            <p className="text-xs text-[#A9BCD6] leading-relaxed">
+              Compete in a safe and fair environment with real-world relevance.
+            </p>
+          </div>
+
         </div>
+
+        {/* Mobile Stacked List Matching Exact Phone Mockup */}
+        <div className="md:hidden space-y-2.5">
+          {[
+            {
+              icon: Target,
+              title: 'REAL CHALLENGES',
+              desc: 'Gain hands-on experience with practical and engaging tasks.'
+            },
+            {
+              icon: BarChart2,
+              title: 'LEARN & GROW',
+              desc: 'Develop skills, explore new domains, and push your limits.'
+            },
+            {
+              icon: Users,
+              title: 'STRONG COMMUNITY',
+              desc: 'Be part of a like-minded community and make an impact together.'
+            },
+            {
+              icon: ShieldCheck,
+              title: 'SECURE COMPETITION',
+              desc: 'Compete in a safe and fair environment with real-world relevance.'
+            }
+          ].map((item, idx) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={idx}
+                className="p-3.5 rounded-xl bg-[#07182B] border border-[#18385E] flex items-center justify-between gap-3 shadow-md"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 rounded-lg bg-[#087FFF]/20 border border-[#087FFF]/40 flex items-center justify-center text-[#00CFFF] shrink-0">
+                    <Icon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold font-rajdhani uppercase tracking-wider text-white">
+                      {item.title}
+                    </h4>
+                    <p className="text-[10px] text-[#A9BCD6] leading-tight line-clamp-1">
+                      {item.desc}
+                    </p>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#A9BCD6] shrink-0" />
+              </div>
+            );
+          })}
+        </div>
+
       </section>
 
       {/* =========================================================================
-          ABOUT CYBERANZEN SECTION (WITH MODERN BUILDING IMAGE)
+          ABOUT CYBERANZEN SECTION (HOODED HACKER & MORE THAN A CHALLENGE)
           ========================================================================= */}
-      <section id="about" className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-[#18385E]">
-        <div className="p-6 sm:p-8 rounded-3xl bg-[#0B1D38] border border-[#18385E] shadow-xl relative overflow-hidden">
+      <section id="about" className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-[#18385E]/50">
+        <div className="p-6 sm:p-8 rounded-3xl bg-[#07182B] border border-[#18385E] shadow-2xl relative overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             
             {/* Left Narrative */}
             <div className="md:col-span-7 space-y-4">
-              <h2 className="text-2xl sm:text-3xl font-extrabold text-[#F2F7FF] font-mono">
-                About CyberAnzen
+              <h2 className="select-none flex items-center space-x-2">
+                <span className="font-horror text-3xl sm:text-4xl text-white tracking-wider">
+                  ABOUT
+                </span>
+                <span className="font-orbitron text-2xl sm:text-3xl font-extrabold text-[#00CFFF] tracking-wider">
+                  CYBERANZEN
+                </span>
               </h2>
+
               <p className="text-xs sm:text-sm text-[#A9BCD6] leading-relaxed font-sans">
                 CyberAnzen is a student-driven technical council focused on cybersecurity, learning, and hands-on competitions. We organize events, workshops, and challenges to help students and professionals build real-world skills and contribute to a safer digital future.
               </p>
+
               <div className="pt-2">
                 <button
                   onClick={() => scrollToSection('creator')}
-                  className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-mono font-semibold text-[#00CFFF] bg-[#087FFF]/20 border border-[#087FFF]/40 hover:bg-[#087FFF]/30 transition-colors"
+                  className="inline-flex items-center space-x-2 px-5 py-2.5 rounded-full text-xs font-mono font-semibold text-[#00CFFF] bg-[#030A16] border border-[#00CFFF]/40 hover:bg-[#00CFFF] hover:text-slate-950 transition-all duration-200 shadow-[0_0_15px_rgba(0,207,255,0.2)]"
                 >
                   <span>Learn More</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -172,17 +256,27 @@ export default function Landing({ user }) {
               </div>
             </div>
 
-            {/* Right Building Image */}
+            {/* Right Atmospheric Hacker Card with Script Overlay */}
             <div className="md:col-span-5 flex justify-center md:justify-end">
-              <div className="rounded-2xl overflow-hidden border border-[#18385E] shadow-2xl max-w-sm w-full h-44 sm:h-52 bg-[#061329] relative">
+              <div className="rounded-2xl overflow-hidden border border-[#18385E] shadow-2xl max-w-md w-full h-48 sm:h-56 bg-[#030A16] relative group">
                 <img 
-                  src="/ui-assets/about-building.png" 
-                  alt="CyberAnzen Center" 
-                  className="w-full h-full object-cover"
+                  src="/ui-assets/about-hacker.png" 
+                  alt="CyberAnzen Digital Operations" 
+                  className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-700"
                   onError={(e) => {
-                    e.target.src = "/logo.png";
+                    e.target.src = "/ui-assets/hero-hacker-scene.png";
                   }}
                 />
+
+                {/* Subtle Radial Blue Glow */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#030A16] via-transparent to-transparent pointer-events-none" />
+
+                {/* Script Overlay: More Than A Challenge */}
+                <div className="absolute bottom-4 right-5 text-right pointer-events-none select-none">
+                  <span className="font-handwriting text-2xl sm:text-3xl text-white font-bold tracking-wide drop-shadow-[0_0_15px_rgba(0,207,255,0.9)]">
+                    More Than A Challenge
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -191,10 +285,10 @@ export default function Landing({ user }) {
       </section>
 
       {/* =========================================================================
-          CREATOR SECTION (WITH DHARUN KUMAR S PROFILE & QUOTE)
+          CREATOR SECTION (DHARUN KUMAR S PROFILE & HANDWRITTEN QUOTE)
           ========================================================================= */}
       <section id="creator" className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="p-6 sm:p-8 rounded-3xl bg-[#0B1D38] border border-[#18385E] shadow-xl relative overflow-hidden">
+        <div className="p-6 sm:p-8 rounded-3xl bg-[#07182B] border border-[#18385E] shadow-2xl relative overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
             
             {/* Left Profile Info */}
@@ -231,34 +325,34 @@ export default function Landing({ user }) {
                     href="https://github.com/rddharun1089"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
+                    className="p-2 rounded-lg bg-[#030A16] hover:bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
                     title="GitHub"
                   >
                     <Github className="w-3.5 h-3.5" />
                   </a>
                   <a
-                    href="https://linkedin.com"
+                    href="https://linkedin.com/in/dharun-kumar-s-3a5518288"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
+                    className="p-2 rounded-lg bg-[#030A16] hover:bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
                     title="LinkedIn"
                   >
                     <Linkedin className="w-3.5 h-3.5" />
                   </a>
                   <a
-                    href="https://instagram.com"
+                    href="https://instagram.com/cyberanzen"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
+                    className="p-2 rounded-lg bg-[#030A16] hover:bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
                     title="Instagram"
                   >
                     <Instagram className="w-3.5 h-3.5" />
                   </a>
                   <a
-                    href="https://youtube.com"
+                    href="https://youtube.com/@cyberanzen"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 rounded-lg bg-[#061329] hover:bg-[#102746] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
+                    className="p-2 rounded-lg bg-[#030A16] hover:bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] transition-colors"
                     title="YouTube"
                   >
                     <Youtube className="w-3.5 h-3.5" />
@@ -267,12 +361,13 @@ export default function Landing({ user }) {
               </div>
             </div>
 
-            {/* Right Quote */}
-            <div className="md:col-span-6 md:border-l md:border-[#18385E] md:pl-8 flex flex-col justify-center text-center md:text-left">
-              <blockquote className="text-base sm:text-lg italic font-sans text-white leading-relaxed">
-                “Building a safer digital future through learning and competition.”
+            {/* Right Quote with Handwriting Script */}
+            <div className="md:col-span-6 md:border-l md:border-[#18385E] md:pl-8 flex flex-col justify-center text-center md:text-left relative">
+              <span className="text-4xl text-[#00CFFF] font-serif leading-none select-none">“</span>
+              <blockquote className="font-handwriting text-xl sm:text-2xl text-white leading-relaxed pt-1">
+                Building a safer digital future through learning and competition.
               </blockquote>
-              <span className="text-xs font-mono text-[#00CFFF] mt-2 block">
+              <span className="text-xs font-mono text-[#00CFFF] mt-3 block">
                 — Dharun Kumar S
               </span>
             </div>
@@ -282,53 +377,41 @@ export default function Landing({ user }) {
       </section>
 
       {/* =========================================================================
-          LANDING PAGE FOOTER
+          LANDING PAGE FOOTER (EXACT MATCH REFERENCE COMPOSITION)
           ========================================================================= */}
-      <footer className="mt-auto py-8 border-t border-[#18385E] bg-[#061329]">
+      <footer className="mt-auto py-8 border-t border-[#18385E]/50 bg-[#030A16]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             
-            {/* Left Brand & Copyright */}
-            <div className="flex items-center space-x-3 text-center sm:text-left">
-              <div className="w-8 h-8 rounded-lg bg-[#0B1D38] border border-[#18385E] p-1 flex items-center justify-center">
-                <img src="/logo.png" alt="CyberAnzen" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <span className="font-mono font-bold text-sm text-[#F2F7FF] tracking-wider block">
-                  CYBER<span className="text-[#00CFFF]">ANZEN</span>
-                </span>
-                <span className="text-[10px] text-[#A9BCD6] font-mono tracking-widest block uppercase">
-                  SECURE · LEARN · COMPETE
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono block">
-                  © 2026 CyberAnzen. All rights reserved.
-                </span>
-              </div>
-            </div>
+            {/* Left Brand */}
+            <CyberAnzenBrand to="/" size="sm" />
 
             {/* Middle Nav Links */}
             <div className="flex items-center space-x-6 text-xs font-mono text-[#A9BCD6]">
-              <Link to="/" className="hover:text-[#00CFFF] transition-colors">Home</Link>
+              <Link to="/" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="hover:text-[#00CFFF] transition-colors">Home</Link>
               <button onClick={() => scrollToSection('about')} className="hover:text-[#00CFFF] transition-colors">About</button>
               <button onClick={() => scrollToSection('creator')} className="hover:text-[#00CFFF] transition-colors">Creator</button>
-              <Link to="/events" className="hover:text-[#00CFFF] transition-colors">Events</Link>
+              <Link to={user ? "/events" : "/login"} className="hover:text-[#00CFFF] transition-colors">Events</Link>
             </div>
 
-            {/* Right Socials & Initiative Note */}
+            {/* Right Socials & Copyright */}
             <div className="text-center md:text-right space-y-1.5">
               <div className="flex items-center justify-center md:justify-end space-x-3 text-[#A9BCD6]">
-                <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
-                  <Facebook className="w-4 h-4" />
+                <a href="https://github.com/rddharun1089" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
+                  <Github className="w-4 h-4" />
                 </a>
-                <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
+                <a href="https://linkedin.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
+                  <Linkedin className="w-4 h-4" />
+                </a>
+                <a href="https://instagram.com/cyberanzen" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
                   <Instagram className="w-4 h-4" />
                 </a>
-                <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
+                <a href="https://youtube.com/@cyberanzen" target="_blank" rel="noopener noreferrer" className="hover:text-[#00CFFF] transition-colors">
                   <Youtube className="w-4 h-4" />
                 </a>
               </div>
-              <span className="text-[11px] text-[#A9BCD6] font-sans block">
-                A student initiative for a safer tomorrow.
+              <span className="text-[10px] text-slate-500 font-mono block">
+                © 2025 CyberAnzen. All rights reserved.
               </span>
             </div>
 

@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { 
   Shield, Menu, X, LogIn, UserPlus, LogOut, 
-  Settings, Trophy, User, ChevronDown, Calendar
+  Settings, Trophy, User, ChevronDown, Calendar, Search
 } from 'lucide-react';
+import CyberAnzenBrand from './CyberAnzenBrand';
 
 export default function Navbar({ user, onLogout }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -34,37 +35,14 @@ export default function Navbar({ user, onLogout }) {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-[#061329]/95 backdrop-blur-md border-b border-[#18385E] shadow-xl">
+    <header className="sticky top-0 z-50 bg-[#030A16]/90 backdrop-blur-md border-b border-[#18385E] shadow-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         
         {/* Brand / Logo */}
-        <Link to={user ? (isAdmin ? "/admin" : "/events") : "/"} className="flex items-center space-x-3 group">
-          <div className="w-10 h-10 rounded-xl bg-[#0B1D38] border border-[#18385E] flex items-center justify-center group-hover:border-[#00CFFF] group-hover:shadow-[0_0_20px_rgba(0,207,255,0.3)] transition-all duration-300 overflow-hidden p-1">
-            <img 
-              src="/logo.png" 
-              alt="CyberAnzen Logo" 
-              className="w-full h-full object-contain"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'block';
-              }}
-            />
-            <Shield className="w-6 h-6 text-[#00CFFF] hidden" />
-          </div>
-          <div className="flex flex-col">
-            <div className="flex items-center space-x-1.5">
-              <span className="font-extrabold tracking-wider text-lg text-[#F2F7FF] font-mono">
-                CYBER<span className="text-[#00CFFF]">ANZEN</span>
-              </span>
-            </div>
-            <span className="text-[9px] text-[#A9BCD6] font-mono tracking-widest uppercase">
-              Secure · Learn · Compete
-            </span>
-          </div>
-        </Link>
+        <CyberAnzenBrand to={user ? (isAdmin ? "/admin" : "/events") : "/"} />
 
         {/* Primary Desktop Navigation: Only Events when signed in; Home, About, Creator for visitors */}
-        <nav className="hidden md:flex items-center space-x-1 lg:space-x-3">
+        <nav className="hidden md:flex items-center space-x-1 lg:space-x-4">
           {!user && (
             <>
               <Link
@@ -72,8 +50,8 @@ export default function Navbar({ user, onLogout }) {
                 onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors ${
                   location.pathname === '/' && !location.hash
-                    ? 'text-[#00CFFF] bg-[#0B1D38] border border-[#18385E]'
-                    : 'text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746]'
+                    ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
+                    : 'text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#07182B]'
                 }`}
               >
                 Home
@@ -81,14 +59,14 @@ export default function Navbar({ user, onLogout }) {
 
               <button
                 onClick={() => scrollToSection('about')}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#07182B] transition-colors"
               >
                 About
               </button>
 
               <button
                 onClick={() => scrollToSection('creator')}
-                className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#102746] transition-colors"
+                className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#07182B] transition-colors"
               >
                 Creator
               </button>
@@ -99,11 +77,10 @@ export default function Navbar({ user, onLogout }) {
             to="/events"
             className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
               location.pathname.startsWith('/events')
-                ? 'text-[#00CFFF] bg-[#0B1D38] border border-[#18385E]'
-                : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#102746]'
+                ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
+                : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#07182B]'
             }`}
           >
-            <Calendar className="w-3.5 h-3.5 text-[#00CFFF]" />
             <span>Events</span>
           </Link>
 
@@ -112,8 +89,8 @@ export default function Navbar({ user, onLogout }) {
               to="/admin"
               className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
                 location.pathname.startsWith('/admin')
-                  ? 'text-[#00CFFF] bg-[#0B1D38] border border-[#18385E]'
-                  : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#102746]'
+                  ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
+                  : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#07182B]'
               }`}
             >
               <Settings className="w-3.5 h-3.5 text-[#00CFFF]" />
@@ -124,11 +101,21 @@ export default function Navbar({ user, onLogout }) {
 
         {/* User Account / Sign In & Sign Up Controls */}
         <div className="hidden md:flex items-center space-x-3">
+          {/* Search Button */}
+          <button
+            onClick={() => navigate('/events')}
+            className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF] hover:border-[#00CFFF]/40 transition-colors"
+            title="Search competitions"
+            aria-label="Search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+
           {user ? (
             <div className="relative">
               <button
                 onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/50 transition-colors"
+                className="flex items-center space-x-2.5 px-3 py-1.5 rounded-xl bg-[#07182B] border border-[#18385E] hover:border-[#00CFFF]/50 transition-colors"
               >
                 <div className="w-6 h-6 rounded bg-[#087FFF]/20 text-[#00CFFF] flex items-center justify-center font-mono text-xs font-bold border border-[#087FFF]/40">
                   {user.username?.[0]?.toUpperCase()}
@@ -146,7 +133,7 @@ export default function Navbar({ user, onLogout }) {
 
               {/* Dropdown Menu */}
               {userDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-2xl p-2 z-50 font-sans animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-[#07182B] border border-[#18385E] shadow-2xl p-2 z-50 font-sans animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="px-3 py-2 border-b border-[#18385E] mb-1">
                     <span className="text-[10px] font-mono text-[#00CFFF] uppercase tracking-wider block font-bold">
                       CLEARANCE: {user.role?.toUpperCase()}
@@ -187,16 +174,16 @@ export default function Navbar({ user, onLogout }) {
               )}
             </div>
           ) : (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-3">
               <Link
                 to="/login"
-                className="px-4 py-2 rounded-xl text-xs font-semibold font-mono text-[#F2F7FF] bg-[#0B1D38] hover:bg-[#102746] border border-[#18385E] hover:border-[#00CFFF]/40 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold font-mono text-[#F2F7FF] hover:text-[#00CFFF] transition-colors"
               >
                 Sign In
               </Link>
               <Link
                 to="/register"
-                className="px-4 py-2 rounded-xl text-xs font-semibold font-mono text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_15px_rgba(0,207,255,0.4)] transition-all font-bold"
+                className="px-5 py-2 rounded-xl text-xs font-semibold font-mono text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_20px_rgba(0,207,255,0.4)] transition-all font-bold"
               >
                 Sign Up
               </Link>
@@ -204,11 +191,18 @@ export default function Navbar({ user, onLogout }) {
           )}
         </div>
 
-        {/* Mobile Menu Toggle Button */}
-        <div className="flex md:hidden">
+        {/* Mobile Action Controls */}
+        <div className="flex md:hidden items-center space-x-2">
+          <button
+            onClick={() => navigate('/events')}
+            className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#00CFFF]"
+            aria-label="Search"
+          >
+            <Search className="w-4 h-4" />
+          </button>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-xl bg-[#0B1D38] border border-[#18385E] text-[#A9BCD6] hover:text-[#F2F7FF]"
+            className="p-2 rounded-xl bg-[#07182B] border border-[#18385E] text-[#A9BCD6] hover:text-[#F2F7FF]"
             aria-label="Toggle Navigation"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -218,7 +212,7 @@ export default function Navbar({ user, onLogout }) {
 
       {/* Mobile Collapsible Navigation Menu */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#0B1D38] border-b border-[#18385E] px-4 pt-3 pb-6 space-y-3 font-sans">
+        <div className="md:hidden bg-[#07182B] border-b border-[#18385E] px-4 pt-3 pb-6 space-y-3 font-sans animate-in fade-in slide-in-from-top-2 duration-150">
           {!user && (
             <>
               <Link
