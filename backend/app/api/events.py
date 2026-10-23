@@ -130,17 +130,38 @@ def list_events(
     events = query.order_by(Event.start_time.asc().nulls_last()).all()
     return [serialize_event(e, current_user, db) for e in events]
 
+def resolve_event(db: Session, event_id: object) -> Optional[Event]:
+    if not event_id:
+        return None
+    raw_id = str(event_id).strip()
+    if raw_id.isdigit():
+        ev = db.query(Event).filter(Event.id == int(raw_id)).first()
+        if ev:
+            return ev
+
+    # Exact slug match
+    ev = db.query(Event).filter(Event.slug == raw_id).first()
+    if ev:
+        return ev
+
+    # Normalization & alias resolution (e.g. demo-event1, demo-event-1, demoevent1, demo1 -> demo-1)
+    cleaned = raw_id.lower().replace("_", "-")
+    for alias in ("demo-event-1", "demo-event1", "demoevent1", "demo1"):
+        cleaned = cleaned.replace(alias, "demo-1")
+    ev = db.query(Event).filter(Event.slug == cleaned).first()
+    if ev:
+        return ev
+
+    # Substring / title match fallback
+    return db.query(Event).filter(Event.title.ilike(f"%{raw_id.replace('-', ' ')}%")).first()
+
 @router.get("/{event_id}")
 def get_event_detail(
     event_id: str,
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event competition not found.")
 
@@ -148,12 +169,12 @@ def get_event_detail(
 
 @router.post("/{event_id}/register")
 def register_for_event(
-    event_id: int,
+    event_id: str,
     req: Optional[RegisterEventRequest] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    event = db.query(Event).filter(Event.id == event_id).first()
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event competition not found.")
 
@@ -232,11 +253,7 @@ def get_event_workspace_config(
     Centralized event configuration and dynamic navigation resolver.
     Returns module flags and navigation tabs tailored strictly to event settings.
     """
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event competition not found.")
 
@@ -316,11 +333,7 @@ def get_event_dsa_questions(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -465,11 +478,7 @@ def get_event_ctf_challenges(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -512,11 +521,7 @@ def get_event_mcqs(
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -567,8 +572,8 @@ def get_event_mcqs(
 # ==============================================================================
 
 @router.get("/{event_id}/leaderboard")
-def get_event_leaderboard(event_id: int, db: Session = Depends(get_db)):
-    event = db.query(Event).filter(Event.id == event_id).first()
+def get_event_leaderboard(event_id: str, db: Session = Depends(get_db)):
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event competition not found.")
 
@@ -627,11 +632,7 @@ def get_event_submissions(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -667,11 +668,7 @@ def log_event_activity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -714,11 +711,7 @@ def get_my_event_activity(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -764,11 +757,7 @@ def get_participant_activity_admin(
     if not is_admin:
         raise HTTPException(status_code=403, detail="Only platform administrators and auditors can inspect participant audit logs.")
 
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
@@ -801,11 +790,7 @@ def complete_event_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if event_id.isdigit():
-        event = db.query(Event).filter(Event.id == int(event_id)).first()
-    else:
-        event = db.query(Event).filter(Event.slug == event_id).first()
-
+    event = resolve_event(db, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found.")
 
