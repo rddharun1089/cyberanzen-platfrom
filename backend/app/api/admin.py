@@ -48,6 +48,17 @@ class DSACreateRequest(BaseModel):
     reference_solution: Optional[str] = ""
     status: Optional[str] = "published"
     allow_copy_paste: Optional[bool] = False
+    enable_mentor: Optional[bool] = True
+
+class EventDSAControlsUpdateRequest(BaseModel):
+    clipboard_policy: Optional[str] = None  # "allowed" or "restricted"
+    allow_copy_paste: Optional[bool] = None
+    enable_mentor: Optional[bool] = None
+    apply_to_questions: Optional[bool] = False
+
+class QuestionDSAControlsUpdateRequest(BaseModel):
+    allow_copy_paste: Optional[bool] = None
+    enable_mentor: Optional[bool] = None
 
 class DSATestCaseRequest(BaseModel):
     test_type: str  # public_sample | hidden_test
@@ -1157,6 +1168,7 @@ def admin_create_dsa(req: DSACreateRequest, db: Session = Depends(get_db), admin
         reference_solution=req.reference_solution,
         status=req.status or ChallengeStatus.PUBLISHED.value,
         allow_copy_paste=bool(req.allow_copy_paste),
+        enable_mentor=bool(req.enable_mentor if req.enable_mentor is not None else True),
         created_by_id=admin.id
     )
     db.add(q)
@@ -1205,6 +1217,7 @@ def admin_list_dsa(event_id: Optional[int] = None, db: Session = Depends(get_db)
             "points": q.points,
             "status": q.status,
             "allow_copy_paste": q.allow_copy_paste,
+            "enable_mentor": getattr(q, "enable_mentor", True),
             "judge_enabled": q.judge_enabled,
             "test_count": len(q.test_cases),
             "assigned_events": assigned_events,
@@ -1250,6 +1263,7 @@ def admin_get_dsa_detail(id: int, db: Session = Depends(get_db), admin: User = D
         "reference_solution": q.reference_solution,
         "status": q.status,
         "allow_copy_paste": q.allow_copy_paste,
+        "enable_mentor": getattr(q, "enable_mentor", True),
         "test_cases": [
             {
                 "id": tc.id,
@@ -1834,6 +1848,138 @@ def admin_batch_anti_cheat(
         "success": True,
         "affected_questions": len(questions),
         "allow_copy_paste": req.allow_copy_paste
+    }
+
+# ==============================================================================
+# DSA CONTROLS & CUSTOMIZATION (EVENT-WISE & QUESTION-WISE)
+# ==============================================================================
+
+@router.get("/dsa-controls-matrix")
+def admin_get_dsa_controls_matrix(
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    events = db.query(Event).order_by(Event.id.asc()).all()
+    matrix = []
+
+    for ev in events:
+        # Get assigned DSA questions via EventDSAQuestion
+        assigned_q_ids = [
+            link.question_id for link in db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == ev.id).all()
+        ]
+        # Also direct foreign-key assignments
+        direct_q_ids = [
+            q.id for q in db.query(DSAQuestion.id).filter(DSAQuestion.event_id == ev.id).all()
+        ]
+        all_q_ids = list(dict.fromkeys(assigned_q_ids + direct_q_ids))
+
+        questions = db.query(DSAQuestion).filter(DSAQuestion.id.in_(all_q_ids)).order_by(DSAQuestion.id.asc()).all() if all_q_ids else []
+
+        q_list = [
+            {
+                "id": q.id,
+                "title": q.title,
+                "slug": q.slug,
+                "difficulty": q.difficulty,
+                "points": q.points,
+                "category": q.category,
+                "allow_copy_paste": bool(q.allow_copy_paste),
+                "enable_mentor": bool(getattr(q, "enable_mentor", True)),
+                "test_count": len(q.test_cases)
+            }
+            for q in questions
+        ]
+
+        matrix.append({
+            "event_id": ev.id,
+            "title": ev.title,
+            "slug": ev.slug,
+            "status": ev.status,
+            "event_type": ev.event_type,
+            "clipboard_policy": ev.clipboard_policy or "restricted",
+            "allow_copy_paste": ev.clipboard_policy in ("allow", "allowed"),
+            "enable_mentor": bool(getattr(ev, "enable_mentor", True)),
+            "total_questions": len(q_list),
+            "questions": q_list
+        })
+
+    return matrix
+
+@router.patch("/events/{event_id}/dsa-controls")
+def admin_update_event_dsa_controls(
+    event_id: int,
+    req: EventDSAControlsUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_event_admin)
+):
+    ev = db.query(Event).filter(Event.id == event_id).first()
+    if not ev:
+        raise HTTPException(status_code=404, detail="Event not found.")
+
+    if req.clipboard_policy is not None:
+        ev.clipboard_policy = req.clipboard_policy
+    elif req.allow_copy_paste is not None:
+        ev.clipboard_policy = "allowed" if req.allow_copy_paste else "restricted"
+
+    if req.enable_mentor is not None:
+        ev.enable_mentor = req.enable_mentor
+
+    affected_questions = 0
+    if req.apply_to_questions:
+        assigned_q_ids = [
+            link.question_id for link in db.query(EventDSAQuestion).filter(EventDSAQuestion.event_id == ev.id).all()
+        ]
+        direct_q_ids = [
+            q.id for q in db.query(DSAQuestion.id).filter(DSAQuestion.event_id == ev.id).all()
+        ]
+        all_q_ids = list(dict.fromkeys(assigned_q_ids + direct_q_ids))
+        if all_q_ids:
+            questions = db.query(DSAQuestion).filter(DSAQuestion.id.in_(all_q_ids)).all()
+            for q in questions:
+                if req.allow_copy_paste is not None:
+                    q.allow_copy_paste = req.allow_copy_paste
+                elif req.clipboard_policy is not None:
+                    q.allow_copy_paste = (req.clipboard_policy in ("allow", "allowed"))
+                if req.enable_mentor is not None:
+                    q.enable_mentor = req.enable_mentor
+                affected_questions += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "event_id": ev.id,
+        "title": ev.title,
+        "clipboard_policy": ev.clipboard_policy,
+        "allow_copy_paste": ev.clipboard_policy in ("allow", "allowed"),
+        "enable_mentor": ev.enable_mentor,
+        "affected_questions": affected_questions
+    }
+
+@router.patch("/dsa/{question_id}/controls")
+def admin_update_question_dsa_controls(
+    question_id: int,
+    req: QuestionDSAControlsUpdateRequest,
+    db: Session = Depends(get_db),
+    admin: User = Depends(get_current_admin)
+):
+    q = db.query(DSAQuestion).filter(DSAQuestion.id == question_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="DSA Question not found.")
+
+    if req.allow_copy_paste is not None:
+        q.allow_copy_paste = req.allow_copy_paste
+    if req.enable_mentor is not None:
+        q.enable_mentor = req.enable_mentor
+
+    db.commit()
+
+    return {
+        "success": True,
+        "question_id": q.id,
+        "title": q.title,
+        "allow_copy_paste": q.allow_copy_paste,
+        "enable_mentor": getattr(q, "enable_mentor", True)
     }
 
 # ==============================================================================

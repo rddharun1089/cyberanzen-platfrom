@@ -6,7 +6,7 @@ import {
   Calendar, Upload, Sparkles, Trophy, BarChart2, ChevronLeft, ChevronRight, Menu,
   Layers, Shuffle, Lock, Unlock, Eye, Activity, Award, UserCheck, UserX, Database,
   Sliders, Search, ArrowRight, ExternalLink, Image as ImageIcon, Terminal, X, Copy,
-  Check, Download, AlertCircle, Clock, Zap, Flag, Filter, CheckSquare
+  Check, Download, AlertCircle, Clock, Zap, Flag, Filter, CheckSquare, Brain
 } from 'lucide-react';
 import Editor from '@monaco-editor/react';
 import { adminService, authService, dsaService } from '../services/api';
@@ -26,6 +26,7 @@ export default function AdminStudio({ user, defaultView = null }) {
     if (view) return view.toLowerCase();
     const path = location.pathname.toLowerCase();
     if (path.includes('competition-development')) return 'competition_dev';
+    if (path.includes('dsa-controls') || path.includes('dsa-customization')) return 'dsa_controls';
     if (path.includes('/events/new')) return 'events_new';
     if (path.includes('/events')) return 'events';
     if (path.includes('/questions')) return 'questions';
@@ -116,6 +117,80 @@ export default function AdminStudio({ user, defaultView = null }) {
       console.error('Failed to fetch participant activity logs:', err);
     } finally {
       setLoadingParticipantLogs(false);
+    }
+  };
+
+  // DSA Controls & Customization State (Event-wise & Question-wise)
+  const [dsaControlsMatrix, setDsaControlsMatrix] = useState([]);
+  const [dsaControlSelectedEventId, setDsaControlSelectedEventId] = useState('all');
+  const [dsaControlUpdating, setDsaControlUpdating] = useState({});
+  const [dsaControlSuccessMsg, setDsaControlSuccessMsg] = useState('');
+  const [dsaControlSearch, setDsaControlSearch] = useState('');
+
+  const loadDsaControlsMatrix = async () => {
+    try {
+      const data = await adminService.getDSAControlsMatrix();
+      setDsaControlsMatrix(data || []);
+    } catch (err) {
+      console.error('Failed to load DSA controls matrix:', err);
+    }
+  };
+
+  const handleToggleEventControl = async (eventId, field, currentValue) => {
+    const key = `event_${eventId}_${field}`;
+    setDsaControlUpdating(prev => ({ ...prev, [key]: true }));
+    try {
+      const payload = {};
+      if (field === 'allow_copy_paste') {
+        payload.allow_copy_paste = !currentValue;
+      } else if (field === 'enable_mentor') {
+        payload.enable_mentor = !currentValue;
+      }
+      await adminService.updateEventDSAControls(eventId, payload);
+      setDsaControlSuccessMsg(`Updated event policies successfully.`);
+      setTimeout(() => setDsaControlSuccessMsg(''), 3000);
+      await loadDsaControlsMatrix();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to update event control.');
+    } finally {
+      setDsaControlUpdating(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleBulkPropagateEventControls = async (eventId, field = null, value = null) => {
+    const key = `event_${eventId}_bulk`;
+    setDsaControlUpdating(prev => ({ ...prev, [key]: true }));
+    try {
+      let payload = { apply_to_questions: true };
+      if (field === 'allow_copy_paste') {
+        payload.allow_copy_paste = value;
+      } else if (field === 'enable_mentor') {
+        payload.enable_mentor = value;
+      }
+      await adminService.updateEventDSAControls(eventId, payload);
+      setDsaControlSuccessMsg(`Propagated settings to all assigned questions.`);
+      setTimeout(() => setDsaControlSuccessMsg(''), 3000);
+      await loadDsaControlsMatrix();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to propagate controls.');
+    } finally {
+      setDsaControlUpdating(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleToggleQuestionControl = async (questionId, field, currentValue) => {
+    const key = `question_${questionId}_${field}`;
+    setDsaControlUpdating(prev => ({ ...prev, [key]: true }));
+    try {
+      const payload = { [field]: !currentValue };
+      await adminService.updateQuestionDSAControls(questionId, payload);
+      setDsaControlSuccessMsg(`Updated question #${questionId} ${field.replace('_', ' ')}.`);
+      setTimeout(() => setDsaControlSuccessMsg(''), 3000);
+      await loadDsaControlsMatrix();
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Failed to update question control.');
+    } finally {
+      setDsaControlUpdating(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -240,6 +315,10 @@ export default function AdminStudio({ user, defaultView = null }) {
           const lb = await adminService.getEventLeaderboard(targetId);
           setEventLeaderboardData(lb);
         }
+      }
+      if (tab === 'dsa_controls' || tab === 'dashboard') {
+        const matrix = await adminService.getDSAControlsMatrix();
+        setDsaControlsMatrix(matrix || []);
       }
       if (tab === 'audits' || tab === 'dashboard') {
         const a = await adminService.getAuditLogs();
@@ -691,6 +770,7 @@ int main() {
       items: [
         { id: 'events', label: 'All Events', icon: Calendar, badge: metrics.eventsCount },
         { id: 'events_new', label: 'Create Event', icon: Plus },
+        { id: 'dsa_controls', label: 'DSA Customization & Controls', icon: Sliders },
         { id: 'competition_dev', label: 'Competition Development', icon: Cpu },
         { id: 'questions', label: 'Question Bank', icon: Code2, badge: metrics.dsaCount + metrics.ctfCount + metrics.mcqCount },
         { id: 'imports', label: 'Import Questions', icon: Upload }
@@ -1071,6 +1151,426 @@ int main() {
             preselectedTemplate={preselectedTemplate}
           />
         )}
+
+        {/* =======================================================================
+            VIEW 2.5: DSA CUSTOMIZATION & CONTROLS (EVENT-WISE & QUESTION-WISE)
+            ======================================================================= */}
+        {activeTab === 'dsa_controls' && (() => {
+          const filteredMatrix = dsaControlsMatrix.filter(ev => {
+            if (dsaControlSelectedEventId !== 'all' && String(ev.event_id) !== String(dsaControlSelectedEventId)) {
+              return false;
+            }
+            return true;
+          });
+
+          const getEventFilteredQuestions = (ev) => {
+            if (!dsaControlSearch.trim()) return ev.questions || [];
+            const term = dsaControlSearch.toLowerCase();
+            return (ev.questions || []).filter(q =>
+              q.title.toLowerCase().includes(term) ||
+              q.slug.toLowerCase().includes(term) ||
+              String(q.id).includes(term)
+            );
+          };
+
+          return (
+            <div className="space-y-6 animate-fade-in font-mono text-xs">
+              {/* Top Header Card */}
+              <div className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-xl space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#18385E] pb-4">
+                  <div>
+                    <h3 className="text-white font-bold text-base md:text-lg flex items-center space-x-2">
+                      <Sliders className="w-5 h-5 text-[#00CFFF]" />
+                      <span>DSA CUSTOMIZATION &amp; CONTROLS // POLICY MATRIX</span>
+                    </h3>
+                    <p className="text-slate-400 text-xs mt-1 font-sans">
+                      Granular tournament and question-level policies: control candidate Copy-Paste restrictions (Exam Anti-Cheat) and AI Diagnostic Debugging Mentor permissions.
+                    </p>
+                  </div>
+
+                  {/* Scope Filter & Refresh */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center space-x-2 bg-[#061329] border border-[#18385E] px-3 py-1.5 rounded-xl">
+                      <Filter className="w-3.5 h-3.5 text-[#00CFFF]" />
+                      <span className="text-[#A9BCD6] text-[10px] uppercase font-bold">Scope Event:</span>
+                      <select
+                        value={dsaControlSelectedEventId}
+                        onChange={(e) => setDsaControlSelectedEventId(e.target.value)}
+                        className="bg-transparent text-white text-xs font-bold focus:outline-none"
+                      >
+                        <option value="all" className="bg-[#08172B]">All Events ({dsaControlsMatrix.length})</option>
+                        {dsaControlsMatrix.map(ev => (
+                          <option key={ev.event_id} value={ev.event_id} className="bg-[#08172B]">
+                            {ev.title} (#{ev.event_id})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="Search questions..."
+                        value={dsaControlSearch}
+                        onChange={(e) => setDsaControlSearch(e.target.value)}
+                        className="pl-8 pr-3 py-1.5 rounded-xl bg-[#061329] border border-[#18385E] text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-[#00CFFF]"
+                      />
+                    </div>
+
+                    <button
+                      onClick={loadDsaControlsMatrix}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-[#102746] hover:bg-[#18385E] text-[#00CFFF] border border-[#18385E]"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Refresh</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Toast Message */}
+                {dsaControlSuccessMsg && (
+                  <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/50 text-emerald-300 text-xs flex items-center space-x-2 animate-fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                    <span>{dsaControlSuccessMsg}</span>
+                  </div>
+                )}
+
+                {/* Policy Architecture Key Info */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-[11px] font-sans">
+                  <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] space-y-1">
+                    <div className="flex items-center space-x-1.5 text-white font-bold font-mono text-xs">
+                      <Copy className="w-4 h-4 text-[#00CFFF]" />
+                      <span>Copy-Paste Anti-Cheat</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      When enabled, participants can copy and paste code in the Monaco editor. When restricted, strict exam lockdown monitors keyboard shortcuts and issues security audit incidents.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] space-y-1">
+                    <div className="flex items-center space-x-1.5 text-white font-bold font-mono text-xs">
+                      <Brain className="w-4 h-4 text-amber-400" />
+                      <span>AI Debugging Mentor</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      When enabled, candidates who fail test cases (Wrong Answer, TLE, Compile Error) can request pedagogical AI diagnostics with root cause, hints, and code fixes.
+                    </p>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[#061329] border border-[#18385E] space-y-1">
+                    <div className="flex items-center space-x-1.5 text-white font-bold font-mono text-xs">
+                      <Zap className="w-4 h-4 text-purple-400" />
+                      <span>Dual-Tier Separation</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] leading-relaxed">
+                      Settings are fully separated: apply policies globally at the Event level, or customize individual DSA challenges with question-specific overrides.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Matrix Content */}
+              {filteredMatrix.length === 0 ? (
+                <div className="p-16 rounded-2xl bg-[#0B1D38] border border-[#18385E] text-center space-y-3">
+                  <AlertTriangle className="w-10 h-10 text-amber-400 mx-auto" />
+                  <h4 className="text-white font-bold text-sm">No Events Found</h4>
+                  <p className="text-slate-400 text-xs max-w-md mx-auto">
+                    Create an event or clear your search/scope filter to view the DSA customization matrix.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {filteredMatrix.map(ev => {
+                    const qList = getEventFilteredQuestions(ev);
+                    const isUpdatingEventCP = Boolean(dsaControlUpdating[`event_${ev.event_id}_allow_copy_paste`]);
+                    const isUpdatingEventMentor = Boolean(dsaControlUpdating[`event_${ev.event_id}_enable_mentor`]);
+                    const isUpdatingBulk = Boolean(dsaControlUpdating[`event_${ev.event_id}_bulk`]);
+
+                    return (
+                      <div key={ev.event_id} className="p-6 rounded-2xl bg-[#0B1D38] border border-[#18385E] shadow-2xl space-y-6">
+                        
+                        {/* =======================================================
+                            LEVEL 1: EVENT-WISE CONTROLS
+                            ======================================================= */}
+                        <div className="p-5 rounded-xl bg-[#061329] border border-[#00CFFF]/30 space-y-4">
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#18385E]/70 pb-3">
+                            <div className="flex items-center space-x-2.5">
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-[#102746] text-[#00CFFF] border border-[#18385E]">
+                                Event #{ev.event_id}
+                              </span>
+                              <span className="text-white font-bold text-base">{ev.title}</span>
+                              <span className="text-slate-400 text-xs">({ev.slug})</span>
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                ev.status === 'active' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-slate-800 text-slate-300'
+                              }`}>
+                                {ev.status}
+                              </span>
+                            </div>
+
+                            <div className="text-[11px] text-[#A9BCD6]">
+                              Assigned DSA Questions: <strong className="text-white">{ev.total_questions}</strong>
+                            </div>
+                          </div>
+
+                          {/* Event Toggles Row */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                            
+                            {/* Event Copy-Paste Toggle */}
+                            <div className="p-3.5 rounded-xl bg-[#08172B] border border-[#18385E] space-y-2 flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#A9BCD6] text-[10px] uppercase font-bold">Event Copy-Paste Policy</span>
+                                  <Copy className="w-3.5 h-3.5 text-slate-400" />
+                                </div>
+                                <span className="text-[11px] text-slate-300 font-sans block mt-1">
+                                  {ev.allow_copy_paste ? 'Clipboard allowed globally for all event challenges.' : 'Restricted by strict exam anti-cheat lockdown.'}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => handleToggleEventControl(ev.event_id, 'allow_copy_paste', ev.allow_copy_paste)}
+                                disabled={isUpdatingEventCP}
+                                className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 border ${
+                                  ev.allow_copy_paste
+                                    ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/50 text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                                    : 'bg-rose-950/70 hover:bg-rose-900 border-rose-500/50 text-rose-300'
+                                }`}
+                              >
+                                {isUpdatingEventCP ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : ev.allow_copy_paste ? (
+                                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                ) : (
+                                  <X className="w-3.5 h-3.5 text-rose-400" />
+                                )}
+                                <span>{ev.allow_copy_paste ? 'Copy-Paste: TURNED ON' : 'Copy-Paste: RESTRICTED (OFF)'}</span>
+                              </button>
+                            </div>
+
+                            {/* Event AI Mentor Toggle */}
+                            <div className="p-3.5 rounded-xl bg-[#08172B] border border-[#18385E] space-y-2 flex flex-col justify-between">
+                              <div>
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[#A9BCD6] text-[10px] uppercase font-bold">Event AI Mentor Policy</span>
+                                  <Brain className="w-3.5 h-3.5 text-purple-400" />
+                                </div>
+                                <span className="text-[11px] text-slate-300 font-sans block mt-1">
+                                  {ev.enable_mentor ? 'AI diagnostic mentor active for candidate test failures.' : 'AI mentor locked and disabled for candidates.'}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => handleToggleEventControl(ev.event_id, 'enable_mentor', ev.enable_mentor)}
+                                disabled={isUpdatingEventMentor}
+                                className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center space-x-1.5 border ${
+                                  ev.enable_mentor
+                                    ? 'bg-purple-950/80 hover:bg-purple-900 border-purple-500/50 text-purple-200 shadow-[0_0_15px_rgba(168,85,247,0.2)]'
+                                    : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-400'
+                                }`}
+                              >
+                                {isUpdatingEventMentor ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                ) : ev.enable_mentor ? (
+                                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                ) : (
+                                  <X className="w-3.5 h-3.5 text-slate-500" />
+                                )}
+                                <span>{ev.enable_mentor ? 'AI Mentor: TURNED ON' : 'AI Mentor: DISABLED (OFF)'}</span>
+                              </button>
+                            </div>
+
+                            {/* Bulk Question Sync 1 */}
+                            <div className="p-3.5 rounded-xl bg-[#08172B] border border-[#18385E] space-y-2 flex flex-col justify-between">
+                              <div>
+                                <span className="text-[#A9BCD6] text-[10px] uppercase font-bold block">Bulk Copy-Paste Actions</span>
+                                <span className="text-[11px] text-slate-400 font-sans block mt-1">
+                                  Apply copy-paste setting to all {ev.total_questions} questions in this event.
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                <button
+                                  onClick={() => handleBulkPropagateEventControls(ev.event_id, 'allow_copy_paste', true)}
+                                  disabled={isUpdatingBulk}
+                                  className="py-1.5 px-2 rounded-lg bg-emerald-950/60 hover:bg-emerald-900 border border-emerald-800 text-emerald-300 text-[10px] font-bold flex items-center justify-center space-x-1"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  <span>All ON</span>
+                                </button>
+                                <button
+                                  onClick={() => handleBulkPropagateEventControls(ev.event_id, 'allow_copy_paste', false)}
+                                  disabled={isUpdatingBulk}
+                                  className="py-1.5 px-2 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800 text-rose-300 text-[10px] font-bold flex items-center justify-center space-x-1"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>All OFF</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Bulk Question Sync 2 */}
+                            <div className="p-3.5 rounded-xl bg-[#08172B] border border-[#18385E] space-y-2 flex flex-col justify-between">
+                              <div>
+                                <span className="text-[#A9BCD6] text-[10px] uppercase font-bold block">Bulk AI Mentor Actions</span>
+                                <span className="text-[11px] text-slate-400 font-sans block mt-1">
+                                  Apply AI mentor setting to all {ev.total_questions} questions in this event.
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                <button
+                                  onClick={() => handleBulkPropagateEventControls(ev.event_id, 'enable_mentor', true)}
+                                  disabled={isUpdatingBulk}
+                                  className="py-1.5 px-2 rounded-lg bg-purple-950/60 hover:bg-purple-900 border border-purple-800 text-purple-300 text-[10px] font-bold flex items-center justify-center space-x-1"
+                                >
+                                  <Brain className="w-3 h-3" />
+                                  <span>All ON</span>
+                                </button>
+                                <button
+                                  onClick={() => handleBulkPropagateEventControls(ev.event_id, 'enable_mentor', false)}
+                                  disabled={isUpdatingBulk}
+                                  className="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-bold flex items-center justify-center space-x-1"
+                                >
+                                  <X className="w-3 h-3" />
+                                  <span>All OFF</span>
+                                </button>
+                              </div>
+                            </div>
+
+                          </div>
+                        </div>
+
+                        {/* =======================================================
+                            LEVEL 2: QUESTION-WISE PRECISION CONTROLS
+                            ======================================================= */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-[#18385E] pb-2">
+                            <div className="flex items-center space-x-2">
+                              <Code2 className="w-4 h-4 text-[#00CFFF]" />
+                              <h4 className="text-white font-bold text-xs uppercase tracking-wider">
+                                Question-Wise Controls // {ev.title} ({qList.length} Questions)
+                              </h4>
+                            </div>
+                            <span className="text-[11px] text-slate-400">
+                              Fine-tune copy-paste &amp; AI mentor per individual DSA challenge
+                            </span>
+                          </div>
+
+                          {qList.length === 0 ? (
+                            <div className="p-6 rounded-xl bg-[#061329] border border-[#18385E] text-center text-slate-400">
+                              No DSA questions match the current filter in this event.
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-1 gap-3">
+                              {qList.map(q => {
+                                const isUpdatingQCP = Boolean(dsaControlUpdating[`question_${q.id}_allow_copy_paste`]);
+                                const isUpdatingQMentor = Boolean(dsaControlUpdating[`question_${q.id}_enable_mentor`]);
+
+                                return (
+                                  <div
+                                    key={q.id}
+                                    className="p-4 rounded-xl bg-[#061329] border border-[#18385E] hover:border-[#00CFFF]/40 transition-all flex flex-wrap items-center justify-between gap-4"
+                                  >
+                                    {/* Question Info */}
+                                    <div className="space-y-1 min-w-[260px] max-w-md">
+                                      <div className="flex items-center space-x-2">
+                                        <span className="text-slate-500 text-[10px]">#{q.id}</span>
+                                        <span className="text-white font-bold text-sm">{q.title}</span>
+                                        <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${
+                                          q.difficulty === 'Easy' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' :
+                                          q.difficulty === 'Medium' ? 'bg-amber-950 text-amber-400 border border-amber-800' :
+                                          'bg-rose-950 text-rose-400 border border-rose-800'
+                                        }`}>
+                                          {q.difficulty}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center space-x-3 text-[11px] text-[#A9BCD6]">
+                                        <span>Points: <strong className="text-white">{q.points}</strong></span>
+                                        <span>•</span>
+                                        <span>Test Cases: <strong className="text-white">{q.test_count}</strong></span>
+                                        <span>•</span>
+                                        <span className="truncate max-w-[150px]">{q.category}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Question Policy Switches */}
+                                    <div className="flex flex-wrap items-center gap-3">
+                                      
+                                      {/* Copy-Paste Toggle */}
+                                      <div className="space-y-1 text-center">
+                                        <span className="text-[10px] text-slate-400 font-mono block">Copy-Paste</span>
+                                        <button
+                                          onClick={() => handleToggleQuestionControl(q.id, 'allow_copy_paste', q.allow_copy_paste)}
+                                          disabled={isUpdatingQCP}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center space-x-1.5 ${
+                                            q.allow_copy_paste
+                                              ? 'bg-emerald-950/80 hover:bg-emerald-900 border-emerald-500/60 text-emerald-300'
+                                              : 'bg-[#08172B] hover:bg-[#102746] border-slate-700 text-slate-400'
+                                          }`}
+                                        >
+                                          {isUpdatingQCP ? (
+                                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                          ) : q.allow_copy_paste ? (
+                                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                                          ) : (
+                                            <X className="w-3.5 h-3.5 text-rose-400" />
+                                          )}
+                                          <span>{q.allow_copy_paste ? 'Copy-Paste ON' : 'Copy-Paste OFF'}</span>
+                                        </button>
+                                      </div>
+
+                                      {/* AI Mentor Toggle */}
+                                      <div className="space-y-1 text-center">
+                                        <span className="text-[10px] text-slate-400 font-mono block">AI Mentor</span>
+                                        <button
+                                          onClick={() => handleToggleQuestionControl(q.id, 'enable_mentor', q.enable_mentor)}
+                                          disabled={isUpdatingQMentor}
+                                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center space-x-1.5 ${
+                                            q.enable_mentor
+                                              ? 'bg-purple-950/80 hover:bg-purple-900 border-purple-500/60 text-purple-200'
+                                              : 'bg-[#08172B] hover:bg-[#102746] border-slate-700 text-slate-400'
+                                          }`}
+                                        >
+                                          {isUpdatingQMentor ? (
+                                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                          ) : q.enable_mentor ? (
+                                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                          ) : (
+                                            <X className="w-3.5 h-3.5 text-slate-500" />
+                                          )}
+                                          <span>{q.enable_mentor ? 'AI Mentor ON' : 'AI Mentor OFF'}</span>
+                                        </button>
+                                      </div>
+
+                                      {/* Interactive Test in Console */}
+                                      <div className="space-y-1 text-center pt-3 sm:pt-0">
+                                        <span className="text-[10px] text-transparent block select-none">Action</span>
+                                        <button
+                                          onClick={() => handleOpenCodingConsole(q)}
+                                          className="px-3 py-1.5 rounded-lg bg-[#102746] hover:bg-[#18385E] border border-[#18385E] text-[#00CFFF] text-xs font-bold flex items-center space-x-1"
+                                        >
+                                          <Terminal className="w-3.5 h-3.5" />
+                                          <span>Test Console</span>
+                                        </button>
+                                      </div>
+
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* =======================================================================
             VIEW 3: COMPETITION DEVELOPMENT STUDIO

@@ -2177,7 +2177,7 @@ export default function EventWorkspace({ user }) {
                                                 <span className="tracking-wider uppercase">CYBERANZEN MENTOR // DIAGNOSTIC ASSISTANT</span>
                                               </div>
 
-                                              {config?.enable_mentor !== false ? (
+                                              {config?.enable_mentor !== false && selectedQuestion?.enable_mentor !== false ? (
                                                 <button
                                                   onClick={() => handleRequestMentorGuidance(currentCase, selectedTestCaseIndex)}
                                                   disabled={mentorLoading}
@@ -2188,7 +2188,7 @@ export default function EventWorkspace({ user }) {
                                                 </button>
                                               ) : (
                                                 <span className="text-[10px] text-slate-500 font-mono italic">
-                                                  [Mentor disabled by event admin]
+                                                  {config?.enable_mentor === false ? '[Mentor disabled by event admin]' : '[Mentor disabled for this question]'}
                                                 </span>
                                               )}
                                             </div>

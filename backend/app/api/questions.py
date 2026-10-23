@@ -94,7 +94,8 @@ def list_questions(
             "time_limit_ms": q.time_limit_ms,
             "memory_limit_mb": q.memory_limit_mb,
             "supported_languages": json.loads(q.supported_languages) if q.supported_languages else ["python3", "cpp", "c"],
-            "allow_copy_paste": q.allow_copy_paste
+            "allow_copy_paste": q.allow_copy_paste,
+            "enable_mentor": getattr(q, "enable_mentor", True)
         }
         for q in questions
     ]
@@ -137,6 +138,7 @@ def get_question_detail(identifier: str, db: Session = Depends(get_db)):
             for s in samples
         ],
         "allow_copy_paste": q.allow_copy_paste,
+        "enable_mentor": getattr(q, "enable_mentor", True),
         "judge_enabled": q.judge_enabled
     }
 
@@ -407,6 +409,13 @@ def get_mentor_guidance(
                 status_code=403,
                 detail="The DSA AI Debugging Mentor has been disabled for this competition by the tournament administrator."
             )
+
+    # Check if mentor is disabled specifically for this question
+    if not getattr(q, "enable_mentor", True):
+        raise HTTPException(
+            status_code=403,
+            detail=f"The DSA AI Debugging Mentor has been disabled for question '{q.title}' by the tournament administrator."
+        )
 
     verdict = (req.verdict or "WRONG_ANSWER").upper()
     code = req.source_code or ""

@@ -73,6 +73,13 @@ def run_migrations():
         cursor.execute("ALTER TABLE event_registrations ADD COLUMN selected_mode VARCHAR(30) DEFAULT 'individual'")
         print("[MIGRATION] Added column 'event_registrations.selected_mode'")
 
+    # DSA questions table columns
+    cursor.execute("PRAGMA table_info(dsa_questions)")
+    dsa_cols = {r[1] for r in cursor.fetchall()}
+    if "enable_mentor" not in dsa_cols:
+        cursor.execute("ALTER TABLE dsa_questions ADD COLUMN enable_mentor BOOLEAN DEFAULT 1")
+        print("[MIGRATION] Added column 'dsa_questions.enable_mentor'")
+
     # Seed initial competition templates if none exist
     cursor.execute("SELECT COUNT(*) FROM competition_templates")
     template_count = cursor.fetchone()[0]

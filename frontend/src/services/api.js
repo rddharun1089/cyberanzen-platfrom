@@ -587,6 +587,20 @@ export const adminService = {
     return res.data;
   },
 
+  // DSA Controls & Customization Matrix (Event-Wise & Question-Wise)
+  async getDSAControlsMatrix() {
+    const res = await apiClient.get('/admin/dsa-controls-matrix');
+    return res.data;
+  },
+  async updateEventDSAControls(eventId, payload) {
+    const res = await apiClient.patch(`/admin/events/${eventId}/dsa-controls`, payload);
+    return res.data;
+  },
+  async updateQuestionDSAControls(questionId, payload) {
+    const res = await apiClient.patch(`/admin/dsa/${questionId}/controls`, payload);
+    return res.data;
+  },
+
   // Submissions & Rejudging
   async listSubmissions(params = {}) {
     const res = await apiClient.get('/admin/submissions', { params });

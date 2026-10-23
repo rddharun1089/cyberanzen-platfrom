@@ -177,6 +177,10 @@ export default function App() {
               element={isAdmin ? <AdminStudio user={user} defaultView="competition_dev" /> : <Navigate to="/login" />}
             />
             <Route
+              path="/admin/dsa-controls"
+              element={isAdmin ? <AdminStudio user={user} defaultView="dsa_controls" /> : <Navigate to="/login" />}
+            />
+            <Route
               path="/admin/events/new"
               element={isAdmin ? <AdminStudio user={user} defaultView="events_new" /> : <Navigate to="/login" />}
             />
