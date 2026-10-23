@@ -6,11 +6,11 @@ __pycache__/
 node_modules/
 frontend/node_modules/
 *.log
-cyberanzen.db
+*.db
+!cyberanzen.db
 cyberanzen.db-shm
 cyberanzen.db-wal
 cyberanzen.db.bak
-*.db
 *.db.bak
 *.sqlite
 *.sqlite3

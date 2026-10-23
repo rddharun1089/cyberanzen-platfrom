@@ -66,9 +66,15 @@ def run_cleanup():
         db.query(Solve).filter(Solve.event_id != demo_event_id).delete(synchronize_session=False)
         db.query(Submission).filter(Submission.event_id != demo_event_id).delete(synchronize_session=False)
 
-        # Ensure demo-1 has enable_mentor = True
+        # Ensure demo-1 has enable_mentor = True and copy-paste allowed
         demo_event.status = "active"
         demo_event.visibility = "public"
+        demo_event.enable_mentor = True
+        demo_event.clipboard_policy = "allowed"
+
+        for q in db.query(DSAQuestion).filter(DSAQuestion.id.in_(demo_question_ids)).all():
+            q.allow_copy_paste = True
+            q.enable_mentor = True
 
         db.commit()
 

@@ -36,7 +36,16 @@ def main():
     cmd = [pytest_bin] + test_files + ["-v"]
     env = os.environ.copy()
     env["PYTHONPATH"] = os.path.join(base_dir, "backend")
+    test_db = os.path.join(base_dir, "test_cyberanzen.db")
+    env["DATABASE_URL"] = f"sqlite:///{test_db}"
     res = subprocess.run(cmd, cwd=base_dir, env=env)
+
+    # Clean up test database file if created
+    if os.path.exists(test_db):
+        try:
+            os.remove(test_db)
+        except Exception:
+            pass
 
     print("=" * 70)
     if res.returncode == 0:
