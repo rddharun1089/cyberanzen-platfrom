@@ -3,9 +3,9 @@ import { Link } from 'react-router-dom';
 import { 
   Shield, ArrowRight, Github, Linkedin, 
   Instagram, Youtube, Target, BarChart2, Users,
-  ShieldCheck, ChevronRight
+  ShieldCheck, ChevronRight, Trophy, Calendar, Code2
 } from 'lucide-react';
-import { contentService } from '../services/api';
+import { contentService, eventService } from '../services/api';
 import AnimatedCyberShield from '../components/AnimatedCyberShield';
 import NetworkBackground from '../components/NetworkBackground';
 import CyberAnzenBrand from '../components/CyberAnzenBrand';
@@ -13,10 +13,21 @@ import CyberAnzenBrand from '../components/CyberAnzenBrand';
 export default function Landing({ user }) {
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [events, setEvents] = useState([]);
 
   useEffect(() => {
     loadContent();
+    loadEvents();
   }, []);
+
+  const loadEvents = async () => {
+    try {
+      const data = await eventService.listEvents();
+      setEvents(data || []);
+    } catch (err) {
+      console.error("Failed to load events on landing:", err);
+    }
+  };
 
   const loadContent = async () => {
     try {
@@ -221,6 +232,84 @@ export default function Landing({ user }) {
           })}
         </div>
 
+      </section>
+
+      {/* =========================================================================
+          LIVE COMPETITIONS & TOURNAMENT ARENA (DEMO 1 FEATURED)
+          ========================================================================= */}
+      <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 border-b border-[#18385E]/50">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center space-x-2 text-xs font-mono text-[#00CFFF] uppercase tracking-wider mb-1">
+              <Trophy className="w-4 h-4 text-[#F5B942]" />
+              <span>LIVE COMPETITIVE ARENA</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold font-orbitron text-white tracking-wider">
+              FEATURED TOURNAMENTS
+            </h2>
+          </div>
+          <Link
+            to="/events"
+            className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl text-xs font-mono font-bold text-[#00CFFF] bg-[#07182B] hover:bg-[#0B1D38] border border-[#18385E] hover:border-[#00CFFF]/50 transition-all"
+          >
+            <span>View All Competitions</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+
+        {events.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-[#07182B] border border-[#18385E] text-center text-[#A9BCD6] text-xs font-mono">
+            Loading active competitions...
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {events.map((ev) => (
+              <div
+                key={ev.id}
+                className="p-6 rounded-2xl bg-[#07182B] border border-[#18385E] hover:border-[#00CFFF]/60 shadow-xl transition-all duration-300 flex flex-col justify-between group relative overflow-hidden"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-[#00CFFF]/10 text-[#00CFFF] border border-[#00CFFF]/30">
+                      {ev.event_type?.toUpperCase() || 'DSA'} TOURNAMENT
+                    </span>
+                    <span className="flex items-center space-x-1 text-[11px] font-mono text-[#20C997] font-bold">
+                      <span className="w-2 h-2 rounded-full bg-[#20C997] animate-pulse" />
+                      <span>LIVE NOW</span>
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl font-bold font-mono text-white group-hover:text-[#00CFFF] transition-colors">
+                    {ev.title}
+                  </h3>
+
+                  <p className="text-xs text-[#A9BCD6] line-clamp-3 leading-relaxed font-sans">
+                    {ev.short_description || ev.description || 'Compete in high-intensity algorithmic problem solving and secure code implementation.'}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 pt-2 text-[11px] font-mono border-t border-[#18385E]/50">
+                    <div className="text-slate-400">
+                      Category: <strong className="text-white block">{ev.category || 'DSA'}</strong>
+                    </div>
+                    <div className="text-slate-400">
+                      Mode: <strong className="text-white block">{ev.participation_mode === 'individual' ? 'Solo' : 'Squad'}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-6 mt-4 border-t border-[#18385E]/50">
+                  <Link
+                    to={user ? `/events/${ev.id}` : `/events`}
+                    className="w-full inline-flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl font-bold font-mono text-xs text-slate-950 bg-[#00CFFF] hover:bg-cyan-300 shadow-[0_0_15px_rgba(0,207,255,0.35)] transition-all"
+                  >
+                    <span>Enter {ev.title}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* =========================================================================

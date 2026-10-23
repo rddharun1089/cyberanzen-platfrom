@@ -291,6 +291,7 @@ def get_event_workspace_config(
         "banner_url": event.banner_url,
         "tabs": tabs,
         "clipboard_policy": event.clipboard_policy,
+        "allow_copy_paste": event.clipboard_policy in ("allow", "allowed"),
         "scoring_policy": event.scoring_policy,
         "allowed_languages": json.loads(event.allowed_languages) if event.allowed_languages else ["python3", "cpp", "c"],
         "question_navigation_policy": event.question_navigation_policy or "free",
@@ -372,7 +373,8 @@ def get_event_dsa_questions(
                         for s in samples
                     ],
                     "order_index": a.order_index,
-                    "allow_copy_paste": q.allow_copy_paste
+                    "allow_copy_paste": bool(q.allow_copy_paste),
+                    "enable_mentor": bool(getattr(q, "enable_mentor", True))
                 })
     else:
         direct_q = db.query(DSAQuestion).filter(DSAQuestion.event_id == event.id, DSAQuestion.status == "published").all()
@@ -405,7 +407,8 @@ def get_event_dsa_questions(
                     for s in samples
                 ],
                 "order_index": idx,
-                "allow_copy_paste": q.allow_copy_paste
+                "allow_copy_paste": bool(q.allow_copy_paste),
+                "enable_mentor": bool(getattr(q, "enable_mentor", True))
             })
 
     # 3. Deterministic Stable Randomization per participant or team if configured

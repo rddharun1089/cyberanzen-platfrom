@@ -142,10 +142,10 @@ export default function App() {
             <Route path="/dsa/:identifier" element={<DSAWorkspace />} />
             <Route path="/mcq/:id" element={<MCQWorkspace />} />
 
-            {/* Competitions / Events - Protected, accessible only after signing in */}
+            {/* Competitions / Events - Publicly browseable */}
             <Route
               path="/events"
-              element={user ? <EventsHub user={user} /> : <Navigate to="/login" replace />}
+              element={<EventsHub user={user} />}
             />
             <Route
               path="/events/:eventId"

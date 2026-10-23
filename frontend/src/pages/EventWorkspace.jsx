@@ -79,10 +79,19 @@ export default function EventWorkspace({ user }) {
     ['super_admin', 'event_admin', 'challenge_author', 'admin'].includes(currentUser.role?.toLowerCase())
   ));
   const isCopyPasteAllowed = Boolean(
-    selectedQuestion?.allow_copy_paste || 
-    (config?.clipboard_policy === 'allow') || 
-    isAdmin
+    isAdmin ||
+    selectedQuestion?.allow_copy_paste === true || 
+    config?.allow_copy_paste === true || 
+    ['allow', 'allowed'].includes(String(config?.clipboard_policy || '').toLowerCase()) ||
+    ['allow', 'allowed'].includes(String(event?.clipboard_policy || '').toLowerCase())
   );
+  const isCopyPasteAllowedRef = useRef(isCopyPasteAllowed);
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+
+  useEffect(() => {
+    isCopyPasteAllowedRef.current = isCopyPasteAllowed;
+  }, [isCopyPasteAllowed]);
 
   // Live countdown timer
   useEffect(() => {
@@ -114,14 +123,10 @@ export default function EventWorkspace({ user }) {
 
   // Anti-cheat keyboard and clipboard listener
   useEffect(() => {
-    if (activeTab !== 'problems' || isCopyPasteAllowed) return;
-
-    const triggerWarning = () => {
-      setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted by event policy.');
-      setTimeout(() => setClipboardWarning(''), 4500);
-    };
+    if (activeTab !== 'problems') return;
 
     const handleKeyDownCapture = (e) => {
+      if (isCopyPasteAllowedRef.current) return;
       const isCtrlOrCmd = e.ctrlKey || e.metaKey;
       const key = e.key ? e.key.toLowerCase() : '';
 
@@ -134,15 +139,18 @@ export default function EventWorkspace({ user }) {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        triggerWarning();
+        setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted by event policy.');
+        setTimeout(() => setClipboardWarning(''), 4500);
       }
     };
 
     const handleClipboardEvent = (e) => {
+      if (isCopyPasteAllowedRef.current) return;
       e.preventDefault();
       e.stopPropagation();
       e.stopImmediatePropagation();
-      triggerWarning();
+      setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted by event policy.');
+      setTimeout(() => setClipboardWarning(''), 4500);
     };
 
     window.addEventListener('keydown', handleKeyDownCapture, true);
@@ -158,19 +166,27 @@ export default function EventWorkspace({ user }) {
       window.removeEventListener('cut', handleClipboardEvent, true);
       window.removeEventListener('drop', handleClipboardEvent, true);
     };
-  }, [activeTab, isCopyPasteAllowed]);
+  }, [activeTab]);
 
   const handleEditorMount = (editor, monaco) => {
-    if (!isCopyPasteAllowed) {
-      const showWarning = () => {
-        setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted.');
-        setTimeout(() => setClipboardWarning(''), 4500);
-      };
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV, showWarning);
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyC, showWarning);
-      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyX, showWarning);
-      editor.addCommand(monaco.KeyMod.Shift | monaco.KeyCode.Insert, showWarning);
-    }
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    editor.onKeyDown((e) => {
+      if (!isCopyPasteAllowedRef.current) {
+        const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+        if (
+          (isCtrlOrCmd && [monaco.KeyCode.KeyV, monaco.KeyCode.KeyC, monaco.KeyCode.KeyX].includes(e.keyCode)) ||
+          (e.shiftKey && e.keyCode === monaco.KeyCode.Insert) ||
+          (isCtrlOrCmd && e.keyCode === monaco.KeyCode.Insert)
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          setClipboardWarning('⚠️ EXAM SECURITY LOCKDOWN: Copying & pasting code is restricted by event policy.');
+          setTimeout(() => setClipboardWarning(''), 4500);
+        }
+      }
+    });
   };
 
   useEffect(() => {
@@ -1892,6 +1908,32 @@ export default function EventWorkspace({ user }) {
                         >
                           <RotateCcw className="w-4 h-4" />
                         </button>
+
+                        {isCopyPasteAllowed && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const text = await navigator.clipboard.readText();
+                                if (text) {
+                                  handleCodeChange(text);
+                                  setClipboardWarning('✓ Code successfully pasted into editor.');
+                                  setTimeout(() => setClipboardWarning(''), 3000);
+                                }
+                              } catch (err) {
+                                const text = prompt('Paste your code here:');
+                                if (text) {
+                                  handleCodeChange(text);
+                                }
+                              }
+                            }}
+                            title="Paste code directly into the editor"
+                            className="px-2.5 py-1 rounded-xl border text-xs text-[#00CFFF] bg-[#102746] border-[#00CFFF]/40 hover:bg-[#18385E] flex items-center space-x-1 transition-all"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                            <span className="text-[10px] font-mono">Paste</span>
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex items-center space-x-2">

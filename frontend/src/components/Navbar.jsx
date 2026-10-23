@@ -43,22 +43,33 @@ export default function Navbar({ user, onLogout }) {
         {/* Brand / Logo */}
         <CyberAnzenBrand to={user ? (isAdmin ? "/admin" : "/events") : "/"} />
 
-        {/* Primary Desktop Navigation: Only Events when signed in; Home, About, Creator for visitors */}
+        {/* Primary Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-1 lg:space-x-4">
+          <Link
+            to="/"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors ${
+              location.pathname === '/' && !location.hash
+                ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
+                : 'text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#07182B]'
+            }`}
+          >
+            Home
+          </Link>
+
+          <Link
+            to="/events"
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
+              location.pathname.startsWith('/events')
+                ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
+                : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#07182B]'
+            }`}
+          >
+            <span>Events</span>
+          </Link>
+
           {!user && (
             <>
-              <Link
-                to="/"
-                onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors ${
-                  location.pathname === '/' && !location.hash
-                    ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
-                    : 'text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#07182B]'
-                }`}
-              >
-                Home
-              </Link>
-
               <button
                 onClick={() => scrollToSection('about')}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium font-sans text-[#A9BCD6] hover:text-[#F2F7FF] hover:bg-[#07182B] transition-colors"
@@ -73,19 +84,6 @@ export default function Navbar({ user, onLogout }) {
                 Creator
               </button>
             </>
-          )}
-
-          {user && (
-            <Link
-              to="/events"
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium font-sans transition-colors flex items-center space-x-1.5 ${
-                location.pathname.startsWith('/events')
-                  ? 'text-[#00CFFF] bg-[#07182B] border border-[#18385E]'
-                  : 'text-[#A9BCD6] hover:text-[#00CFFF] hover:bg-[#07182B]'
-              }`}
-            >
-              <span>Events</span>
-            </Link>
           )}
 
           {user && isAdmin && (
@@ -232,6 +230,13 @@ export default function Navbar({ user, onLogout }) {
                 className="block px-3 py-2 rounded-xl text-sm font-medium text-[#F2F7FF] hover:bg-[#102746]"
               >
                 Home
+              </Link>
+              <Link
+                to="/events"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block px-3 py-2 rounded-xl text-sm font-medium text-[#00CFFF] hover:bg-[#102746]"
+              >
+                Events
               </Link>
               <button
                 onClick={() => scrollToSection('about')}
